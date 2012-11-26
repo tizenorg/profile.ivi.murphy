@@ -74,6 +74,9 @@ typedef struct {
     mrp_resource_client_t *resource_client;
     char *zone;
 
+    char *playback_resource;
+    char *recording_resource;
+
     mrp_htbl_t *requests;
     uint32_t current_request;
 
@@ -490,8 +493,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
                 d->rset = set;
 
-                mrp_resource_set_add_resource(set, "audio_playback", shared, NULL, TRUE);
-                mrp_resource_set_add_resource(set, "audio_record", shared, NULL, TRUE);
+                mrp_resource_set_add_resource(set, ctx->playback_resource, shared, NULL, TRUE);
+                mrp_resource_set_add_resource(set, ctx->recording_resource, shared, NULL, TRUE);
 
                 mrp_application_class_add_resource_set(resource, ctx->zone, set, 0);
 
@@ -896,6 +899,9 @@ static int asm_init(mrp_plugin_t *plugin)
     ctx->binary = args[ARG_ASM_BRIDGE].str;
     ctx->zone = args[ARG_ASM_ZONE].str;
 
+    ctx->playback_resource = args[ARG_ASM_PLAYBACK_RESOURCE].str;
+    ctx->recording_resource = args[ARG_ASM_RECORDING_RESOURCE].str;
+
     /* create the transport and put it to listen mode */
 
     if (!mrp_msg_register_type(&asm_to_lib_descr)) {
@@ -1047,6 +1053,8 @@ static mrp_plugin_arg_t args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ASM_BRIDGE, STRING, "asm_bridge", "/usr/sbin/asm-bridge"),
     MRP_PLUGIN_ARGIDX(ARG_ASM_ZONE, STRING, "zone", "default"),
     MRP_PLUGIN_ARGIDX(ARG_ASM_TPORT_ADDRESS, STRING, "tport_address", "unxs:/tmp/murphy/asm"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_PLAYBACK_RESOURCE, STRING, "playback_resource", "audio_playback"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_RECORDING_RESOURCE, STRING, "recording_resource", "audio_recording"),
 };
 
 
