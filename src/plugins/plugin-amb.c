@@ -670,7 +670,7 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
 {
     DBusMessageIter msg_iter;
     DBusMessageIter variant_iter;
-    const char *variant_sig;
+    char *variant_sig = NULL;
 
     if (!w || !msg)
         goto error;
@@ -686,6 +686,9 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     dbus_message_iter_recurse(&msg_iter, &variant_iter);
 
     variant_sig = dbus_message_iter_get_signature(&variant_iter);
+
+    if (!variant_sig)
+        goto error;
 
     /*
     mrp_log_info("iter sig: %s, expected: %s",
@@ -711,9 +714,13 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     /* call the handler function */
     lua_pcall(w->ctx->L, 2, 0, 0);
 
+    dbus_free(variant_sig);
+
     return;
 
 error:
+    if (variant_sig)
+        dbus_free(variant_sig);
     mrp_log_error("failed to process an incoming D-Bus message");
 }
 
@@ -1110,12 +1117,8 @@ static int amb_init(mrp_plugin_t *plugin)
 
     ctx->dbus = mrp_dbus_connect(plugin->ctx->ml, "system", NULL);
 
-    mrp_log_info("amb: 1");
-
     if (!ctx->dbus)
         goto error;
-
-    mrp_log_info("amb: 2");
 
     /* initialize lua support */
 
@@ -1127,8 +1130,6 @@ static int amb_init(mrp_plugin_t *plugin)
 
     if (!ctx->L)
         goto error;
-
-    mrp_log_info("amb: 3");
 
     mrp_lua_create_object_class(ctx->L, MRP_LUA_CLASS(amb, property));
 
