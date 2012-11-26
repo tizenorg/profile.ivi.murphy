@@ -1130,6 +1130,28 @@ endif
 endif
 endif
 
+# automotive message broker plugin
+if DBUS_ENABLED
+AMB_PLUGIN_SOURCES = plugins/plugin-amb.c
+AMB_PLUGIN_CFLAGS  = $(DBUS_CFLAGS)
+AMB_PLUGIN_LIBS    = libmurphy-dbus.la
+
+if !DISABLED_PLUGIN_AMB
+if BUILTIN_PLUGIN_AMB
+BUILTIN_PLUGINS += $(AMB_PLUGIN_SOURCES)
+BUILTIN_CFLAGS  += $(AMB_PLUGIN_CFLAGS)
+BUILTIN_LIBS    += $(AMB_PLUGIN_LIBS)
+else
+plugin_amb_la_SOURCES = $(AMB_PLUGIN_SOURCES)
+plugin_amb_la_CFLAGS  = $(AMB_PLUGIN_CFLAGS) $(MURPHY_CFLAGS) $(AM_CFLAGS)
+plugin_amb_la_LDFLAGS = -module -avoid-version
+plugin_amb_la_LIBADD  = $(AMB_PLUGIN_LIBS)
+
+plugin_LTLIBRARIES    += plugin-amb.la
+endif
+endif
+endif
+
 if GLIB_ENABLED
 # glib plugin
 GLIB_PLUGIN_SOURCES = plugins/plugin-glib.c
