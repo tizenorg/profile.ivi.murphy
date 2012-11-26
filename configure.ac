@@ -511,6 +511,29 @@ AC_SUBST(DLOG_ENABLED)
 AC_SUBST(DLOG_CFLAGS)
 AC_SUBST(DLOG_LIBS)
 
+# Check if Audio Session Manager plugin was enabled.
+AC_ARG_ENABLE(resource-asm,
+              [  --enable-resource-asm        build Murphy Audio Session Manager plugin],
+	      [enable_resource_asm=$enableval], [enable_resource_asm=no])
+
+if test "$enable_resource_asm" != "no"; then
+    PKG_CHECK_MODULES(AUDIO_SESSION_MANAGER, audio-session-mgr,
+                      [have_resource_asm=yes], [have_resource_asm=no])
+    if test "$have_resource_asm" = "no" -a "$enable_resource_asm" = "yes"; then
+        AC_MSG_ERROR([Audio Session Manager development libraries not found.])
+    fi
+    AC_SUBST(AUDIO_SESSION_MANAGER_CFLAGS)
+    AC_SUBST(AUDIO_SESSION_MANAGER_LIBS)
+    enable_resource_asm="$have_resource_asm"
+else
+    AC_MSG_NOTICE([Audio Session Manager support is disabled.])
+fi
+if test "$enable_resource_asm" = "yes"; then
+    AC_DEFINE([RESOURCE_ASM_ENABLED], 1, [Enable Audio Session Manager support ?])
+fi
+AM_CONDITIONAL(RESOURCE_ASM_ENABLED, [test "$enable_resource_asm" = "yes"])
+AC_SUBST(RESOURCE_ASM_ENABLED)
+
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
 MURPHY_LIBS=""
@@ -615,6 +638,7 @@ AM_CONDITIONAL(DISABLED_PLUGIN_DOMAIN_CONTROL,
                [check_if_disabled domain-control])
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMD,  [check_if_disabled systemd])
 AM_CONDITIONAL(DISABLED_PLUGIN_TELEPHONY, [check_if_disabled telephony])
+AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_ASM,     [check_if_disabled resource-asm])
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
@@ -629,6 +653,7 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_DOMAIN_CONTROL,
 AM_CONDITIONAL(BUILTIN_PLUGIN_LUA,      [check_if_internal lua])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMD,  [check_if_internal systemd])
 AM_CONDITIONAL(BUILTIN_PLUGIN_TELEPHONY, [check_if_internal telephony])
+AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_ASM,      [check_if_internal resource-asm])
 
 # Check for Check (unit test framework).
 PKG_CHECK_MODULES(CHECK, 
@@ -742,6 +767,7 @@ AC_CONFIG_FILES([build-aux/shave
 		 src/resolver/murphy-resolver.pc
 		 src/resolver/tests/Makefile
 		 src/plugins/domain-control/murphy-domain-controller.pc
+		 src/plugins/resource-asm/Makefile
 		 doc/Makefile
 		 doc/plugin-developer-guide/Makefile
 		 doc/plugin-developer-guide/db/Makefile
