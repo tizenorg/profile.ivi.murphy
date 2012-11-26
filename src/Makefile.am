@@ -1547,6 +1547,32 @@ plugin_LTLIBRARIES    += plugin-telephony.la
 endif
 endif
 
+# Audio Session Manager plugin
+RESOURCE_ASM_PLUGIN_SOURCES = plugins/plugin-resource-asm.c
+RESOURCE_ASM_PLUGIN_CFLAGS  = $(AUDIO_SESSION_MANAGER_CFLAGS)
+RESOURCE_ASM_PLUGIN_LIBS    = # no library support needed
+
+if RESOURCE_ASM_ENABLED
+
+if !DISABLED_PLUGIN_RESOURCE_ASM
+
+if BUILTIN_PLUGIN_RESOURCE_ASM
+BUILTIN_PLUGINS += $(RESOURCE_ASM_PLUGIN_SOURCES)
+BUILTIN_CFLAGS  += $(RESOURCE_ASM_PLUGIN_CFLAGS)
+BUILTIN_LIBS    += $(RESOURCE_ASM_PLUGIN_LIBS)
+else
+plugin_resource_asm_la_SOURCES = $(RESOURCE_ASM_PLUGIN_SOURCES)
+plugin_resource_asm_la_CFLAGS  = $(RESOURCE_ASM_PLUGIN_CFLAGS) $(MURPHY_CFLAGS) $(AM_CFLAGS)
+plugin_resource_asm_la_LDFLAGS = -module -avoid-version
+plugin_resource_asm_la_LIBADD  = $(RESOURCE_ASM_PLUGIN_LIBS)
+
+plugin_LTLIBRARIES    += plugin-resource-asm.la
+endif
+SUBDIRS += plugins/resource-asm
+endif
+
+endif
+
 ###################################
 # murphy daemon
 #
