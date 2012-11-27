@@ -1436,6 +1436,36 @@ endif
 endif
 
 
+
+# telephony plugin
+TELEPHONY_PLUGIN_SOURCES =  plugins/plugin-telephony.c \
+                            plugins/telephony/telephony.c \
+                            plugins/telephony/ofono.c \
+                            plugins/telephony/telephony.h \
+                            plugins/telephony/ofono.h
+#TELEPHONY_PLUGIN_HEADERS =  plugins/telephony/telephony.h
+TELEPHONY_PLUGIN_CFLAGS  =
+TELEPHONY_PLUGIN_LIBS    =
+#TELEPHONY_PLUGINdir     = $(includedir)/murphy/telephony
+
+if TELEPHONY_ENABLED
+if BUILTIN_PLUGIN_TELEPHONY
+BUILTIN_PLUGINS += $(TELEPHONY_PLUGIN_SOURCES)
+BUILTIN_CFLAGS  += $(TELEPHONY_PLUGIN_CFLAGS)
+BUILTIN_LIBS    += $(TELEPHONY_PLUGIN_LIBS)
+else
+plugin_telephony_la_SOURCES = $(TELEPHONY_PLUGIN_SOURCES)
+#plugin_telephony_la_HEADERS = $(TELEPHONY_PLUGIN_HEADERS)
+plugin_telephony_la_CFLAGS  = $(TELEPHONY_PLUGIN_CFLAGS) $(MURPHY_CFLAGS) $(AM_CFLAGS)
+plugin_telephony_la_LDFLAGS = -module -Wl,-version-script=linker-script.plugin-telephony \
+                               -version-info @MURPHY_VERSION_INFO@
+plugin_telephony_la_LIBADD  = $(TELEPHONY_PLUGIN_LIBS)
+plugin_telephony_ladir      = $(TELEPHONY_PLUGINdir)
+
+plugin_LTLIBRARIES    += plugin-telephony.la
+endif
+endif
+
 ###################################
 # murphy daemon
 #
