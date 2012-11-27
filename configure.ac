@@ -424,6 +424,29 @@ fi
 AM_CONDITIONAL(GAM_CONTROL_ENABLED, [test "$enable_gam_control" = "yes"])
 AC_SUBST(GAM_CONTROL_ENABLED)
 
+# Check if telephony was enabled.
+AC_ARG_ENABLE(telephony,
+              [  --enable-telephony           enable telephony support],
+	      [enable_telephony=$enableval], [enable_telephony=no])
+
+if test "$enable_telephony" = "yes"; then
+    if test "$enable_gpl" = "no"; then
+        AC_MSG_ERROR([Telephony support requires the --enable-gpl option.])
+    fi
+    PKG_CHECK_MODULES(OFONO, ofono >= 1.3)
+else
+    AC_MSG_NOTICE([Telephony support is disabled.])
+fi
+
+if test "$enable_telephony" = "yes"; then
+    AC_DEFINE([TELEPHONY_ENABLED], 1, [Enable D-BUS support ?])
+fi
+
+AM_CONDITIONAL(TELEPHONY_ENABLED, [test "$enable_telephony" = "yes"])
+AC_SUBST(TELEPHONY_ENABLED)
+AC_SUBST(TELEPHONY_CFLAGS)
+AC_SUBST(TELEPHONY_LIBS)
+
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
 MURPHY_LIBS=""
@@ -527,7 +550,11 @@ AM_CONDITIONAL(DISABLED_PLUGIN_DOMAIN_CONTROL,
                [check_if_disabled domain-control])
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMD,  [check_if_disabled systemd])
 AM_CONDITIONAL(DISABLED_PLUGIN_IMMELMANN,  [check_if_disabled immelmann])
+
 AM_CONDITIONAL(DISABLED_PLUGIN_GAM_CONTROL, [check_if_disabled gam-control])
+
+AM_CONDITIONAL(DISABLED_PLUGIN_TELEPHONY, [check_if_disabled telephony])
+
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
@@ -541,7 +568,11 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_DOMAIN_CONTROL,
 AM_CONDITIONAL(BUILTIN_PLUGIN_LUA,      [check_if_internal lua])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMD,  [check_if_internal systemd])
 AM_CONDITIONAL(BUILTIN_PLUGIN_IMMELMANN,  [check_if_internal immelmann])
+
 AM_CONDITIONAL(BUILTIN_PLUGIN_GAM_CONTROL, [check_if_internal gam-control])
+
+AM_CONDITIONAL(BUILTIN_PLUGIN_TELEPHONY, [check_if_internal telephony])
+
 
 # Check for Check (unit test framework).
 PKG_CHECK_MODULES(CHECK, 
@@ -680,6 +711,7 @@ echo "Murphy console plugin and client: $enable_console"
 echo "Resource management support: $with_resources"
 echo "Websockets support: $enable_websockets"
 echo "systemd support: $enable_systemd"
+echo "Telephony support: $enable_telephony"
 echo "Plugins:"
 echo "  - linked-in:"
 for plugin in ${INTERNAL_PLUGINS:-none}; do
