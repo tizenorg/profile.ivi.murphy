@@ -1,4 +1,4 @@
-AM_CFLAGS = $(WARNING_CFLAGS) -I$(top_builddir)
+AM_CFLAGS = $(WARNING_CFLAGS) -I$(top_builddir) -DUSE_SECURITY
 
 sbin_PROGRAMS  = asm-bridge
 
