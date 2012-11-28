@@ -84,6 +84,11 @@ static void *wait_queue (void *arg) {
         if (ret < 0) {
             /* FIXME: proper error handling */
             mrp_log_error("error receiving a message: '%s'!", strerror(errno));
+            if (errno == E2BIG) {
+
+                /* remove message from queue */
+                msgrcv(asm_rcv_msgid, &msg, sizeof(msg.data), 0, MSG_NOERROR);
+            }
             continue;
         }
 
@@ -110,8 +115,8 @@ static void dump_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
     {
         int i;
 
-        mrp_log_info("     cookie: ")
-        for (i = 0; i < COOKIE_SIZE, i++) {
+        mrp_log_info("     cookie: ");
+        for (i = 0; i < COOKIE_SIZE; i++) {
             mrp_log_info("0x%02x ", msg->data.cookie[i]);
         }
         mrp_log_info("\n");
@@ -124,6 +129,7 @@ static int process_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
 {
     lib_to_asm_t res;
     uint8_t cookie_arr[] = {};
+    uint8_t *cookie = cookie_arr;
     int cookie_len = 0;
 
     dump_msg(msg, ctx);
@@ -137,16 +143,13 @@ static int process_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
     res.system_resource = msg->data.system_resource;
 #ifdef USE_SECURITY
     {
-        cookie_len = strlen(msg->data.cookie);
-        cookie_arr = msg->data.cookie;
-
-        res.n_cookie_bytes = cookie_len;
-        res.cookie = cookie_arr;
+        cookie_len = COOKIE_SIZE;
+        cookie = msg->data.cookie;
     }
 #endif
 
     res.n_cookie_bytes = cookie_len;
-    res.cookie = cookie_arr;
+    res.cookie = cookie;
 
     if (!mrp_transport_senddata(ctx->mt, &res, lib_to_asm_descr.tag)) {
         mrp_log_error("Failed to send message to murphy");
@@ -241,7 +244,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
 
     wr_fd = open(wr_filename, O_NONBLOCK | O_WRONLY);
     if (wr_fd < 0) {
-        mrp_log_error("failed to open file '%s' for writing", wr_filename);
+        mrp_log_error("failed to open file '%s' for writing: '%s'", wr_filename,
+                strerror(errno));
         goto error;
     }
 
@@ -251,7 +255,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
             msg->instance_id, msg->handle);
         rd_fd = open(wr_filename, O_NONBLOCK | O_RDONLY);
         if (rd_fd < 0) {
-            mrp_log_error("failed to open file '%s' for reading", rd_filename);
+            mrp_log_error("failed to open file '%s' for reading: '%s'",
+                    rd_filename, strerror(errno));
             goto error;
         }
 
@@ -458,7 +463,7 @@ int main (int argc, char **argv)
     void *res;
     int pipes[2];
     int thread_arg[2];
-    mrp_io_watch_t *iow;
+    mrp_io_watch_t *iow = NULL;
     mrp_io_event_t events = MRP_IO_EVENT_IN;
 
     int asm_snd_msgid = msgget((key_t)4102, 0666 | IPC_CREAT);
@@ -502,7 +507,9 @@ int main (int argc, char **argv)
 
     /* create a pipe for communicating with the ASM thread */
 
-    pipe(pipes);
+    if (pipe(pipes) == -1) {
+        goto end;
+    }
 
     /* pass the message queue and the pipe writing end to the thread */
 
