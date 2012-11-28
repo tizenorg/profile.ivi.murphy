@@ -111,6 +111,8 @@ enum {
     ARG_ASM_BRIDGE,
     ARG_ASM_ZONE,
     ARG_ASM_TPORT_ADDRESS,
+    ARG_ASM_PLAYBACK_RESOURCE,
+    ARG_ASM_RECORDING_RESOURCE,
 };
 
 static int tport_setup(const char *address, asm_data_t *ctx);
@@ -895,7 +897,7 @@ static int asm_init(mrp_plugin_t *plugin)
     }
 
     ctx->ctx = plugin->ctx;
-    ctx->address = args[ARG_TPORT_ADDRESS].str;
+    ctx->address = args[ARG_ASM_TPORT_ADDRESS].str;
     ctx->binary = args[ARG_ASM_BRIDGE].str;
     ctx->zone = args[ARG_ASM_ZONE].str;
 
