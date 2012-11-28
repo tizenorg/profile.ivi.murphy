@@ -32,6 +32,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
+#include <errno.h>
 
 #include <pthread.h>
 
@@ -81,7 +83,7 @@ static void *wait_queue (void *arg) {
 
         if (ret < 0) {
             /* FIXME: proper error handling */
-            mrp_log_error("error receiving a message!");
+            mrp_log_error("error receiving a message: '%s'!", strerror(errno));
             continue;
         }
 
