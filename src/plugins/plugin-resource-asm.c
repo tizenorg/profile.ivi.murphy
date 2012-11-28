@@ -288,7 +288,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             d->rtype = request_type_server_event;
 
             reply.instance_id = d->pid;
-            reply.check_privilege = FALSE;
+            reply.check_privilege = TRUE;
             reply.alloc_handle = d->handle;
             reply.cmd_handle = d->handle;
 
@@ -315,7 +315,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             d->rtype = request_type_server_event;
 
             reply.instance_id = d->pid;
-            reply.check_privilege = FALSE;
+            reply.check_privilege = TRUE;
             reply.alloc_handle = d->handle;
             reply.cmd_handle = d->handle;
 
@@ -362,7 +362,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
     reply = mrp_allocz(sizeof(asm_to_lib_t));
 
     reply->instance_id = pid;
-    reply->check_privilege = FALSE;
+    reply->check_privilege = TRUE;
 
     reply->alloc_handle = msg->handle;
     reply->cmd_handle = msg->handle;
@@ -386,7 +386,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 client = create_client(pid);
                 mrp_htbl_insert(ctx->clients, u_to_p(pid), client);
             }
-#if 1
+#if 0
             else {
                 /* From Murphy point of view this is actually an error case,
                  * since the application can only belong to one class. This is
@@ -451,6 +451,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     break;
                 case ASM_EVENT_EARJACK_UNPLUG:
                     mrp_log_info("earjack unplug event");
+                    resource = "player";
+                    shared = TRUE;
                     break;
                 case ASM_EVENT_ALARM:
                     shared = FALSE;
@@ -460,6 +462,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     shared = FALSE;
                     break;
                 case ASM_EVENT_MONITOR:
+                    mrp_log_info("monitor request");
+                    resource = "player";
+                    shared = TRUE;
                     break;
                 case ASM_EVENT_RICH_CALL:
                     resource = "phone";
@@ -581,6 +586,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                         break;
                     }
                     case ASM_STATE_STOP:
+                    case ASM_STATE_PAUSE:
                     {
                         d->rtype = request_type_release;
 
