@@ -84,11 +84,8 @@ static void *wait_queue (void *arg) {
         if (ret < 0) {
             /* FIXME: proper error handling */
             mrp_log_error("error receiving a message: '%s'!", strerror(errno));
-            if (errno == E2BIG) {
-
-                /* remove message from queue */
-                msgrcv(asm_rcv_msgid, &msg, sizeof(msg.data), 0, MSG_NOERROR);
-            }
+            /* remove message from queue */
+            msgrcv(asm_rcv_msgid, &msg, sizeof(msg.data), 0, MSG_NOERROR);
             continue;
         }
 
