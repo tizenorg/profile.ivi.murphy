@@ -54,6 +54,8 @@ typedef struct {
     mrp_htbl_t *sets;
     uint32_t n_sets;
     uint32_t current_handle;
+
+    bool monitor; /* if the client has set up a monitor resource */
 } client_t;
 
 
@@ -103,6 +105,9 @@ typedef struct {
 
     /* mutable */
     request_type_t rtype;
+
+    bool monitor;
+    bool earjack;
 } resource_set_data_t;
 
 
@@ -277,7 +282,6 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             mrp_get_resource_set_advice(d->rset),
             mrp_get_resource_set_grant(d->rset));
 
-
     switch(d->rtype) {
         case request_type_acquire:
         {
@@ -336,6 +340,12 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             reply.instance_id = d->pid;
             reply.handle = d->handle;
             reply.callback_expected = FALSE;
+
+            /* TODO: get the client and see if there is the monitor
+             * resource present. If yes, tell the availability state changes
+             * through it. */
+
+            /* TODO: check if the d->rset state has actually changed */
 
             if (mrp_get_resource_set_grant(d->rset))
                 reply.sound_command = ASM_COMMAND_PLAY;
@@ -450,8 +460,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     shared = FALSE;
                     break;
                 case ASM_EVENT_EARJACK_UNPLUG:
-                    mrp_log_info("earjack unplug event");
-                    resource = "player";
+                    resource = "earjack";
                     shared = TRUE;
                     break;
                 case ASM_EVENT_ALARM:
@@ -462,8 +471,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     shared = FALSE;
                     break;
                 case ASM_EVENT_MONITOR:
-                    mrp_log_info("monitor request");
-                    resource = "player";
+                    resource = "monitor";
                     shared = TRUE;
                     break;
                 case ASM_EVENT_RICH_CALL:
@@ -478,10 +486,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 mrp_log_error("unknown resource type: %d", msg->sound_event);
                 goto error;
             }
-
             else {
                 uint32_t handle = client->current_handle++;
-                mrp_resource_set_t *set;
                 resource_set_data_t *d = mrp_allocz(sizeof(resource_set_data_t));
 
                 d->handle = handle;
@@ -490,20 +496,52 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 d->rtype = request_type_server_event;
                 d->request_id = 0;
 
-                set  = mrp_resource_set_create(ctx->resource_client, 0, 0,
-                                    event_cb, d);
-
-                if (!set) {
-                    mrp_log_error("Failed to create resource set!");
-                    goto error;
+                if (strcmp(resource, "earjack") == 0) {
+                    mrp_log_info("earjack status request was received");
+                    d->earjack = TRUE;
                 }
+                else if (strcmp(resource, "monitor") == 0) {
+                    mrp_log_info("monitor resource was received");
+                    /* TODO: tell the available state changes to this pid
+                     * via the monitor resource. */
+                    client->monitor = TRUE;
+                    d->monitor = TRUE;
+                }
+                else {
+                    /* a normal resource request */
 
-                d->rset = set;
+                    d->rset = mrp_resource_set_create(ctx->resource_client, 0,
+                            0, event_cb, d);
 
-                mrp_resource_set_add_resource(set, ctx->playback_resource, shared, NULL, TRUE);
-                mrp_resource_set_add_resource(set, ctx->recording_resource, shared, NULL, TRUE);
+                    if (!d->rset) {
+                        mrp_log_error("Failed to create resource set!");
+                        goto error;
+                    }
 
-                mrp_application_class_add_resource_set(resource, ctx->zone, set, 0);
+                    if (mrp_resource_set_add_resource(d->rset,
+                            ctx->playback_resource, shared, NULL, TRUE) < 0) {
+                        mrp_log_error("Failed to add playback resource!");
+                        mrp_resource_set_destroy(d->rset);
+                        mrp_free(d);
+                        goto error;
+                    }
+
+                    if (mrp_resource_set_add_resource(d->rset,
+                            ctx->recording_resource, shared, NULL, TRUE) < 0) {
+                        mrp_log_error("Failed to add recording resource!");
+                        mrp_resource_set_destroy(d->rset);
+                        mrp_free(d);
+                        goto error;
+                    }
+
+                    if (mrp_application_class_add_resource_set(resource,
+                            ctx->zone, d->rset, 0) < 0) {
+                        mrp_log_error("Failed to put the rset in a class!");
+                        mrp_resource_set_destroy(d->rset);
+                        mrp_free(d);
+                        goto error;
+                    }
+                }
 
                 mrp_htbl_insert(client->sets, u_to_p(handle), d);
                 client->n_sets++;
@@ -530,6 +568,16 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     if (!d || !d->rset) {
                         mrp_log_error("set '%u.%u' not found", pid, msg->handle);
                         goto error;
+                    }
+
+                    if (!d->rset) {
+                        /* this is a resource request with no associated
+                         * murphy resource, meaning a monitor or earjack. */
+
+                        if (d->monitor)
+                            client->monitor = FALSE;
+
+                        /* TODO: what to do with the earjack unregister case? */
                     }
 
                     /* the resource set id destroyed when it's removed from the
@@ -649,6 +697,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
     return reply;
 
 error:
+    /* TODO: need to write some sort of message back? */
+
 noreply:
 
     mrp_free(reply);
