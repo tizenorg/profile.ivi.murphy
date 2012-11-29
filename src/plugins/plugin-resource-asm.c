@@ -237,7 +237,8 @@ static void htbl_free_set(void *key, void *object)
 
     MRP_UNUSED(key);
 
-    mrp_resource_set_destroy(d->rset);
+    if (d->rset)
+        mrp_resource_set_destroy(d->rset);
 
     mrp_free(d);
 }
@@ -565,7 +566,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     resource_set_data_t *d;
 
                     d = mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
-                    if (!d || !d->rset) {
+                    if (!d) {
                         mrp_log_error("set '%u.%u' not found", pid, msg->handle);
                         goto error;
                     }
@@ -573,6 +574,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     if (!d->rset) {
                         /* this is a resource request with no associated
                          * murphy resource, meaning a monitor or earjack. */
+
+                        mrp_log_info("unregistering special resource %s",
+                                d->monitor ? "monitor" : "earjack");
 
                         if (d->monitor)
                             client->monitor = FALSE;
