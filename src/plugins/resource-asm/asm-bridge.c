@@ -240,12 +240,6 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
     if (ret <= 0 || ret == ASM_FILENAME_SIZE)
         goto error;
 
-    if (access(wr_filename, F_OK) < 0) {
-        mrp_log_error("error accessing file created by ASM client library: %s",
-                strerror(errno));
-        goto error;
-    }
-
     mrp_log_info("writing client preemption to file %s", wr_filename);
 
     wr_fd = open(wr_filename, O_NONBLOCK | O_WRONLY);
@@ -306,8 +300,6 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
                 msg->instance_id, msg->handle);
         goto error;
     }
-
-    mrp_log_error("Wrote data 0x%08x successfully to client", data);
 
     close(wr_fd);
 
