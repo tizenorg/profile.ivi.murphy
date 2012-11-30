@@ -90,11 +90,12 @@ test_handler = function (self, property)
     print("d.property : " .. d.property)
     print("d.signature: " .. d.signature)
 
-    self.basic_table_name = "foo"
-
     table = self.outputs.test_table
 
     print("table name: " .. table.name)
+
+    table:replace({ test_value = property })
+
 end
 
 amb.property {
@@ -106,7 +107,7 @@ amb.property {
             index = { "test_value" },
             create = true,
             columns = {
-                { "test_value", mdb.unsigned },
+                { "test_value", mdb.string, 32 },
             }
         }
     },
