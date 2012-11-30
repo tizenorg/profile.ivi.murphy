@@ -234,8 +234,17 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
 
     struct watched_file *wf = NULL;
 
-    snprintf(wr_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%d.%u",
+    ret = snprintf(wr_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%d.%u",
             msg->instance_id, msg->handle);
+
+    if (ret <= 0 || ret == ASM_FILENAME_SIZE)
+        goto error;
+
+    if (access(wr_filename, F_OK) < 0) {
+        mrp_log_error("error accessing file created by ASM client library: %s",
+                strerror(errno));
+        goto error;
+    }
 
     mrp_log_info("writing client preemption to file %s", wr_filename);
 
@@ -248,8 +257,12 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
 
     if (msg->callback_expected) {
 
-        snprintf(rd_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%d.%ur",
+        ret = snprintf(rd_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%d.%ur",
             msg->instance_id, msg->handle);
+
+        if (ret <= 0 || ret == ASM_FILENAME_SIZE)
+            goto error;
+
         rd_fd = open(wr_filename, O_NONBLOCK | O_RDONLY);
         if (rd_fd < 0) {
             mrp_log_error("failed to open file '%s' for reading: '%s'",
