@@ -721,7 +721,7 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
 error:
     if (variant_sig)
         dbus_free(variant_sig);
-    mrp_log_error("failed to process an incoming D-Bus message");
+    mrp_log_error("amb: failed to process an incoming D-Bus message");
 }
 
 
