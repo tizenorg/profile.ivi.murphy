@@ -329,6 +329,9 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 
             d->rtype = request_type_server_event;
 
+            /* stop processing server_events */
+            d->request_id = 0;
+
             dump_outgoing_msg(&reply, ctx);
             mrp_transport_senddata(d->ctx->t, &reply, TAG_ASM_TO_LIB);
             break;
@@ -346,7 +349,14 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
              * resource present. If yes, tell the availability state changes
              * through it. */
 
-            /* TODO: check if the d->rset state has actually changed */
+            if (d->request_id == 0) {
+                /* We either haven't requested any resources or have
+                 * given up the resources. Filter out events. */
+                break;
+            }
+
+            /* TODO: check if the d->rset state has actually changed -> only
+             * process server side notifications in that case */
 
             if (mrp_get_resource_set_grant(d->rset))
                 reply.sound_command = ASM_COMMAND_PLAY;
