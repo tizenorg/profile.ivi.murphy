@@ -343,7 +343,6 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 
             reply.instance_id = d->pid;
             reply.handle = d->handle;
-            reply.callback_expected = FALSE;
 
             /* TODO: get the client and see if there is the monitor
              * resource present. If yes, tell the availability state changes
@@ -358,10 +357,15 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             /* TODO: check if the d->rset state has actually changed -> only
              * process server side notifications in that case */
 
-            if (mrp_get_resource_set_grant(d->rset))
+            if (mrp_get_resource_set_grant(d->rset)) {
                 reply.sound_command = ASM_COMMAND_RESUME;
-            else
+                /* ASM doesn't send callback to RESUME commands */
+                reply.callback_expected = FALSE;
+            }
+            else {
                 reply.sound_command = ASM_COMMAND_PAUSE;
+                reply.callback_expected = TRUE;
+            }
 
             /* FIXME: the player-player case needs to be solved here? */
             reply.event_source = ASM_EVENT_SOURCE_OTHER_PLAYER_APP;
