@@ -359,12 +359,12 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
              * process server side notifications in that case */
 
             if (mrp_get_resource_set_grant(d->rset))
-                reply.sound_command = ASM_COMMAND_PLAY;
+                reply.sound_command = ASM_COMMAND_RESUME;
             else
-                reply.sound_command = ASM_COMMAND_STOP;
+                reply.sound_command = ASM_COMMAND_PAUSE;
 
             /* FIXME: the player-player case needs to be solved here? */
-            reply.event_source = ASM_EVENT_SOURCE_RESOURCE_CONFLICT;
+            reply.event_source = ASM_EVENT_SOURCE_OTHER_PLAYER_APP;
 
             mrp_transport_senddata(d->ctx->t, &reply, TAG_ASM_TO_LIB_CB);
 
