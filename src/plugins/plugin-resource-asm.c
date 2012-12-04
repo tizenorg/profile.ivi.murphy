@@ -386,6 +386,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
     reply = mrp_allocz(sizeof(asm_to_lib_t));
 
+    if (!reply)
+        return NULL;
+
     reply->instance_id = pid;
     reply->check_privilege = TRUE;
 
@@ -505,6 +508,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 uint32_t handle = client->current_handle++;
                 resource_set_data_t *d = mrp_allocz(sizeof(resource_set_data_t));
 
+                if (!d)
+                    goto error;
+
                 d->handle = handle;
                 d->ctx = ctx;
                 d->pid = pid;
@@ -530,6 +536,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
                     if (!d->rset) {
                         mrp_log_error("Failed to create resource set!");
+                        mrp_free(d);
                         goto error;
                     }
 
@@ -1061,6 +1068,9 @@ static int asm_init(mrp_plugin_t *plugin)
     return TRUE;
 
 error:
+
+    if (!ctx)
+        return FALSE;
 
     if (ctx->pid) {
         kill(ctx->pid, SIGTERM);
