@@ -55,6 +55,11 @@ else
     m:info("No domain-control plugin found...")
 end
 
+if m:plugin_exists('resource-asm') then
+    m:load_plugin('resource-asm', { zone = "driver" })
+else
+    m:info("No audio session manager plugin found...")
+end
 
 -- define application classes
 application_class { name = "navigator", priority = 4 }
