@@ -139,10 +139,8 @@ static int process_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
     res.sound_state = msg->data.sound_state;
     res.system_resource = msg->data.system_resource;
 #ifdef USE_SECURITY
-    {
-        cookie_len = COOKIE_SIZE;
-        cookie = msg->data.cookie;
-    }
+    cookie_len = COOKIE_SIZE;
+    cookie = msg->data.cookie;
 #endif
 
     res.n_cookie_bytes = cookie_len;
@@ -273,8 +271,10 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
                     msg->instance_id, msg->handle);
         }
         else {
-
             wf = mrp_allocz(sizeof(struct watched_file));
+
+            if (!wf)
+                goto error;
 
             wf->watched_file = mrp_strdup(rd_filename);
             wf->ctx = ctx;
@@ -474,6 +474,7 @@ int main (int argc, char **argv)
     mrp_htbl_config_t watches_conf;
 
     ctx_t ctx;
+    ctx.watched_files = NULL;
 
     /* set up the signal handling */
 
