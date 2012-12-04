@@ -204,7 +204,7 @@ static int amb_constructor(lua_State *L)
     size_t field_name_len;
     const char *field_name;
     data_t *ctx = global_ctx;
-    dbus_property_watch_t *w;
+    dbus_property_watch_t *w = NULL;
 
     MRP_LUA_ENTER;
 
@@ -300,11 +300,17 @@ static int amb_constructor(lua_State *L)
 
     w = mrp_allocz(sizeof(dbus_property_watch_t));
 
+    if (!w)
+        goto error;
+
     w->ctx = ctx;
     w->lua_prop = prop;
     w->prop.initialized = FALSE;
-    w->prop.name = mrp_strdup(w->lua_prop->dbus_data.name);
     w->prop.type = DBUS_TYPE_INVALID;
+    w->prop.name = mrp_strdup(w->lua_prop->dbus_data.name);
+
+    if (!w->prop.name)
+        goto error;
 
     if (prop->handler_ref == LUA_NOREF) {
         basic_table_data_t *tdata;
