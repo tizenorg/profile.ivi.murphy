@@ -38,6 +38,7 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <wait.h>
+#include <fcntl.h>
 
 #include <audio-session-manager.h>
 
@@ -966,6 +967,43 @@ static void htbl_free_client(void *key, void *object)
     mrp_free(client);
 }
 
+static int close_fds()
+{
+    int maxfd;
+    int i;
+    int newin, newout, newerr;
+
+    /* Closing all file descriptors in a protable way is tricky, so improve
+       this function as we go. */
+
+    maxfd = sysconf(_SC_OPEN_MAX);
+
+    for (i = 0; i < maxfd; i++) {
+        if (i != fileno(stdin) && i != fileno(stdout) && i != fileno(stderr))
+            close(i);
+    }
+
+    /* redirect the streams to /dev/null */
+
+    newin = open("/dev/null", O_RDONLY);
+    newout = open("/dev/null", O_WRONLY);
+    newerr = open("/dev/null", O_WRONLY);
+
+    if (newin < 0 || newout < 0 || newerr < 0)
+        return -1;
+
+    if (dup2(newin, fileno(stdin)) < 0 ||
+        dup2(newout, fileno(stdout)) < 0 ||
+        dup2(newerr, fileno(stderr)) < 0)
+        return -1;
+
+    close(newin);
+    close(newout);
+    close(newerr);
+
+    return 0;
+}
+
 static int asm_init(mrp_plugin_t *plugin)
 {
     mrp_plugin_arg_t *args = plugin->args;
@@ -1054,6 +1092,10 @@ static int asm_init(mrp_plugin_t *plugin)
     }
     else if (pid == 0) {
         /* child */
+        if (close_fds() < 0) {
+            mrp_log_error("close_fds() failed");
+            exit(1);
+        }
         execl(ctx->binary, ctx->binary, ctx->address, NULL);
         exit(1);
     }
