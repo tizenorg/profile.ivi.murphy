@@ -65,6 +65,7 @@ struct watched_file {
     ctx_t *ctx;
 };
 
+
 static void *wait_queue (void *arg) {
     ASM_msg_lib_to_asm_t msg;
 
@@ -423,13 +424,6 @@ static int connect_to_murphy(char *address, ctx_t *ctx)
         mrp_log_error("Failed to create the transport");
         goto error;
     }
-
-#if 0
-    if (!mrp_transport_bind(ctx->mt, &addr, alen)) {
-        mrp_log_error("Failed to bind the transport to address '%s'", address);
-        goto error;
-    }
-#endif
 
     if (!mrp_transport_connect(ctx->mt, &addr, alen)) {
         mrp_log_error("Failed to connect the transport");
