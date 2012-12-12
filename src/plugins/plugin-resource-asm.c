@@ -104,6 +104,8 @@ typedef struct {
     uint32_t request_id;
     asm_data_t *ctx;
 
+    ASM_sound_states_t requested_state;
+
     /* mutable */
     request_type_t rtype;
 
@@ -205,6 +207,19 @@ static void dump_outgoing_msg(asm_to_lib_t *msg, asm_data_t *ctx)
             msg->check_privilege ? "TRUE" : "FALSE");
 }
 
+
+static void dump_outgoing_cb_msg(asm_to_lib_cb_t *msg, asm_data_t *ctx)
+{
+    MRP_UNUSED(ctx);
+
+    mrp_log_info(" <--   client id:       %u", msg->instance_id);
+    mrp_log_info(" <--   handle:          %d", msg->handle);
+    mrp_log_info(" <--   expect callback: %d", msg->callback_expected);
+    mrp_log_info(" <--   sound command:   0x%04x", msg->sound_command);
+    mrp_log_info(" <--   event source:    0x%04x", msg->event_source);
+}
+
+
 #if 0
 static uint32_t encode_pid_handle(uint32_t pid, uint32_t handle) {
 
@@ -298,16 +313,17 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             reply.alloc_handle = d->handle;
             reply.cmd_handle = d->handle;
 
-            reply.result_sound_command = ASM_COMMAND_NONE;
+            reply.result_sound_state = ASM_STATE_IGNORE;
 
             /* TODO: check the mask properly */
             if (mrp_get_resource_set_grant(d->rset))
-                reply.result_sound_state = ASM_STATE_PLAYING;
+                reply.result_sound_command = ASM_COMMAND_PLAY;
             else
-                reply.result_sound_state = ASM_STATE_STOP;
+                reply.result_sound_command = ASM_COMMAND_STOP;
 
             d->rtype = request_type_server_event;
 
+            /* FIXME: only send reply when "PLAYING" state was requested? */
             dump_outgoing_msg(&reply, ctx);
             mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
             break;
@@ -333,8 +349,11 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             /* stop processing server_events */
             d->request_id = 0;
 
+#if 0
+            /* no response needed for moving to state other than PLAYING */
             dump_outgoing_msg(&reply, ctx);
             mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
+#endif
             break;
         }
         case request_type_server_event:
@@ -361,7 +380,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             if (mrp_get_resource_set_grant(d->rset)) {
                 reply.sound_command = ASM_COMMAND_RESUME;
                 /* ASM doesn't send callback to RESUME commands */
-                reply.callback_expected = FALSE;
+                reply.callback_expected = TRUE;
             }
             else {
                 reply.sound_command = ASM_COMMAND_PAUSE;
@@ -371,7 +390,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             /* FIXME: the player-player case needs to be solved here? */
             reply.event_source = ASM_EVENT_SOURCE_OTHER_PLAYER_APP;
 
-            dump_outgoing_msg(reply, ctx);
+            dump_outgoing_cb_msg(&reply, ctx);
             mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB_CB);
 
             break;
@@ -649,10 +668,12 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 }
 
                 d->request_id = ++ctx->current_request;
+                d->requested_state = msg->sound_state;
 
                 switch(msg->sound_state) {
                     case ASM_STATE_PLAYING:
                     {
+                        /* requests done for "PLAYING" state need a reply, others don't */
                         d->rtype = request_type_acquire;
 
                         mrp_log_info("requesting acquisition of playback rights"
