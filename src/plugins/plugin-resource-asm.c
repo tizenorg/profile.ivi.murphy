@@ -462,9 +462,11 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     shared = TRUE;
                     break;
                 case ASM_EVENT_SHARE_OPENAL:
+                    resource = "sound";
                     shared = TRUE;
                     break;
                 case ASM_EVENT_SHARE_AVSYSTEM:
+                    resource = "sound";
                     shared = TRUE;
                     break;
                 case ASM_EVENT_EXCLUSIVE_MMPLAYER:
@@ -480,12 +482,15 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     shared = FALSE;
                     break;
                 case ASM_EVENT_EXCLUSIVE_OPENAL:
+                    resource = "sound";
                     shared = FALSE;
                     break;
                 case ASM_EVENT_EXCLUSIVE_AVSYSTEM:
+                    resource = "sound";
                     shared = FALSE;
                     break;
                 case ASM_EVENT_NOTIFY:
+                    resource = "notify";
                     shared = FALSE;
                     break;
                 case ASM_EVENT_CALL:
@@ -493,9 +498,11 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     shared = FALSE;
                     break;
                 case ASM_EVENT_SHARE_FMRADIO:
+                    resource = "player";
                     shared = TRUE;
                     break;
                 case ASM_EVENT_EXCLUSIVE_FMRADIO:
+                    resource = "player";
                     shared = FALSE;
                     break;
                 case ASM_EVENT_EARJACK_UNPLUG:
@@ -503,6 +510,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     shared = TRUE;
                     break;
                 case ASM_EVENT_ALARM:
+                    resource = "alarm";
                     shared = FALSE;
                     break;
                 case ASM_EVENT_VIDEOCALL:
@@ -640,9 +648,6 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     }
                 }
 
-                /* TODO: free memory and check if the resource set is empty when
-                 * the resource library supports it */
-
                 /* no reply needed! */
                 goto noreply;
 
@@ -749,6 +754,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
 error:
     /* TODO: need to write some sort of message back? */
+    return reply;
 
 noreply:
 
