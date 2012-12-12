@@ -49,6 +49,7 @@
 
 #include "asm-bridge.h"
 
+FILE *logfile;
 
 typedef struct ctx_s {
     mrp_mainloop_t *ml;
@@ -66,6 +67,44 @@ struct watched_file {
 };
 
 
+static int log_init(const char *filename)
+{
+    logfile = fopen(filename, "w");
+
+    if (!logfile)
+        return -1;
+
+    return 0;
+}
+
+static void log_write(char *format, ...)
+{
+    va_list ap;
+
+    if (!logfile)
+        return;
+
+    va_start(ap, format);
+    vfprintf(logfile, format, ap);
+    va_end(ap);
+
+    fflush(logfile);
+    fdatasync(fileno(logfile));
+}
+
+static int log_close()
+{
+    if (!logfile)
+        return -1;
+
+    fclose(logfile);
+
+    logfile = NULL;
+
+    return 0;
+}
+
+
 static void *wait_queue (void *arg) {
     ASM_msg_lib_to_asm_t msg;
 
@@ -75,7 +114,7 @@ static void *wait_queue (void *arg) {
     int fd = arg_thread[1];
 
     if (asm_rcv_msgid == -1) {
-        mrp_log_error("failed to create the receive message queue\n");
+        log_write("failed to create the receive message queue\n");
         exit(1);
     }
 
@@ -84,7 +123,7 @@ static void *wait_queue (void *arg) {
 
         if (ret < 0) {
             /* FIXME: proper error handling */
-            mrp_log_error("error receiving a message: '%s'!", strerror(errno));
+            log_write("error receiving a message: '%s'!\n", strerror(errno));
             /* remove message from queue */
             msgrcv(asm_rcv_msgid, &msg, sizeof(msg.data), 0, MSG_NOERROR);
             continue;
@@ -102,22 +141,22 @@ static void dump_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
 {
     MRP_UNUSED(ctx);
 
-    mrp_log_info("Message id %ld:", msg->instance_id);
+    log_write("Message id %ld:\n", msg->instance_id);
 
-    mrp_log_info("Data handle: %d", msg->data.handle);
-    mrp_log_info("     request id:      0x%04x", msg->data.request_id);
-    mrp_log_info("     sound event:     0x%04x", msg->data.sound_event);
-    mrp_log_info("     sound state:     0x%04x", msg->data.sound_state);
-    mrp_log_info("     system resource: 0x%04x", msg->data.system_resource);
+    log_write("Data handle: %d\n", msg->data.handle);
+    log_write("     request id:      0x%04x\n", msg->data.request_id);
+    log_write("     sound event:     0x%04x\n", msg->data.sound_event);
+    log_write("     sound state:     0x%04x\n", msg->data.sound_state);
+    log_write("     system resource: 0x%04x\n", msg->data.system_resource);
 #ifdef USE_SECURITY
     {
         int i;
 
-        mrp_log_info("     cookie: ");
+        log_write("     cookie: ");
         for (i = 0; i < COOKIE_SIZE; i++) {
-            mrp_log_info("0x%02x ", msg->data.cookie[i]);
+            log_write("0x%02x ", msg->data.cookie[i]);
         }
-        mrp_log_info("\n");
+        log_write("\n");
     }
 #endif
 }
@@ -148,7 +187,7 @@ static int process_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
     res.cookie = cookie;
 
     if (!mrp_transport_senddata(ctx->mt, &res, lib_to_asm_descr.tag)) {
-        mrp_log_error("Failed to send message to murphy");
+        log_write("Failed to send message to murphy\n");
         return -1;
     }
 
@@ -171,14 +210,14 @@ static void pipe_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
     bytes = read(fd, &msg, sizeof(ASM_msg_lib_to_asm_t));
 
     if (bytes != sizeof(ASM_msg_lib_to_asm_t)) {
-        mrp_log_error("failed to read from the pipe");
+        log_write("failed to read from the pipe\n");
         return;
     }
 
     ret = process_msg(&msg, ctx);
 
     if (ret < 0) {
-        mrp_log_error("error parsing or proxying message");
+        log_write("error parsing or proxying message\n");
     }
 }
 
@@ -205,14 +244,17 @@ static void read_watch_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
             msg.handle = wf->handle;
             msg.cb_result = buf;
 
+            log_write("read 0x%08x from client %u.%d\n",
+                    msg.cb_result, msg.instance_id, msg.handle);
+
             if (!mrp_transport_senddata(ctx->mt, &msg, lib_to_asm_cb_descr.tag)) {
-                mrp_log_error("Failed to send message to murphy");
+                log_write("Failed to send message to murphy\n");
             }
         }
     }
     if (events & MRP_IO_EVENT_HUP) {
         /* can we assume that the client went away? */
-        mrp_log_error("HUP event from client");
+        log_write("HUP event from client\n");
     }
 
     mrp_htbl_remove(ctx->watched_files, wf->watched_file, TRUE);
@@ -239,11 +281,11 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
     if (ret <= 0 || ret == ASM_FILENAME_SIZE)
         goto error;
 
-    mrp_log_info("writing client preemption to file %s", wr_filename);
+    log_write("writing client preemption to file %s\n", wr_filename);
 
     wr_fd = open(wr_filename, O_NONBLOCK | O_WRONLY);
     if (wr_fd < 0) {
-        mrp_log_error("failed to open file '%s' for writing: '%s'", wr_filename,
+        log_write("failed to open file '%s' for writing: '%s'", wr_filename,
                 strerror(errno));
         goto error;
     }
@@ -256,9 +298,9 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
         if (ret <= 0 || ret == ASM_FILENAME_SIZE)
             goto error;
 
-        rd_fd = open(wr_filename, O_NONBLOCK | O_RDONLY);
+        rd_fd = open(rd_filename, O_NONBLOCK | O_RDONLY);
         if (rd_fd < 0) {
-            mrp_log_error("failed to open file '%s' for reading: '%s'",
+            log_write("failed to open file '%s' for reading: '%s'\n",
                     rd_filename, strerror(errno));
             goto error;
         }
@@ -268,10 +310,13 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
         if (wf) {
             /* already watched, this is a bad thing */
 
-            mrp_log_error("client %d.%u missed a callback notification",
+            log_write("client %d.%u missed a callback notification\n",
                     msg->instance_id, msg->handle);
         }
         else {
+            log_write("starting to listen file '%s' for callback answers\n",
+                    rd_filename);
+
             wf = mrp_allocz(sizeof(struct watched_file));
 
             if (!wf)
@@ -297,10 +342,12 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
     ret = write(wr_fd, &data, sizeof(uint32_t));
 
     if (ret < (int) sizeof(uint32_t)) {
-        mrp_log_error("failed to write callback data to %d.%u",
+        log_write("failed to write callback data to %d.%u\n",
                 msg->instance_id, msg->handle);
         goto error;
     }
+
+    log_write("wrote 0x%08x to %s\n", data, wr_filename);
 
     close(wr_fd);
 
@@ -350,7 +397,7 @@ static void recvfrom_murphy(mrp_transport_t *t, void *data, uint16_t tag,
 
                 if (msgsnd(ctx->snd_msgq, (void *) &msg,
                             sizeof(msg.data), 0) < 0) {
-                    mrp_log_error("failed to send message to client");
+                    log_write("failed to send message to client\n");
                 }
                 break;
             }
@@ -358,13 +405,13 @@ static void recvfrom_murphy(mrp_transport_t *t, void *data, uint16_t tag,
         case TAG_ASM_TO_LIB_CB:
             {
                 if (send_callback_to_client(data, ctx) < 0) {
-                    mrp_log_error("failed to send callback message to client");
+                    log_write("failed to send callback message to client\n");
                 }
                 break;
             }
 
         default:
-            mrp_log_error("Unknown message received!");
+            log_write("Unknown message received!\n");
             break;
     }
 }
@@ -383,7 +430,7 @@ static void closed_evt(mrp_transport_t *t, int error, void *user_data)
     MRP_UNUSED(t);
     MRP_UNUSED(error);
 
-    mrp_log_error("server closed the connection");
+    log_write("server closed the connection\n");
 
     mrp_mainloop_quit(ctx->ml, 0);
 }
@@ -406,14 +453,14 @@ static int connect_to_murphy(char *address, ctx_t *ctx)
             !mrp_msg_register_type(&asm_to_lib_descr) ||
             !mrp_msg_register_type(&asm_to_lib_cb_descr) ||
             !mrp_msg_register_type(&lib_to_asm_cb_descr)) {
-        mrp_log_error("Failed to register message types");
+        log_write("Failed to register message types\n");
         goto error;
     }
 
     alen = mrp_transport_resolve(NULL, address, &addr, sizeof(addr), &atype);
 
     if (alen <= 0) {
-        mrp_log_error("Error resolving transport address");
+        log_write("Error resolving transport address\n");
         goto error;
     }
 
@@ -421,12 +468,12 @@ static int connect_to_murphy(char *address, ctx_t *ctx)
             MRP_TRANSPORT_MODE_CUSTOM | MRP_TRANSPORT_NONBLOCK);
 
     if (ctx->mt == NULL) {
-        mrp_log_error("Failed to create the transport");
+        log_write("Failed to create the transport\n");
         goto error;
     }
 
     if (!mrp_transport_connect(ctx->mt, &addr, alen)) {
-        mrp_log_error("Failed to connect the transport");
+        log_write("Failed to connect the transport\n");
         goto error;
     }
 
@@ -473,10 +520,16 @@ int main (int argc, char **argv)
     ctx_t ctx;
     ctx.watched_files = NULL;
 
+#if 0
+    log_init("/tmp/asm-bridge-log");
+#else
+    logfile = NULL;
+#endif
+
     /* set up the signal handling */
 
     if (asm_snd_msgid == -1 || asm_rcv_msgid == -1) {
-        mrp_log_error("failed to create the message queues\n");
+        log_write("failed to create the message queues\n");
         goto end;
     }
 
@@ -485,9 +538,11 @@ int main (int argc, char **argv)
     ctx.snd_msgq = asm_snd_msgid;
 
     if (argc != 2 || strncmp(argv[1], "unxs", 4) != 0) {
-        mrp_log_error("Usage: asm-bridge <socket_name>");
+        log_write("Usage: asm-bridge <socket_name>\n");
         goto end;
     }
+
+    log_write("Started ASM bridge (%s)\n", argv[1]);
 
     watches_conf.comp = mrp_string_comp;
     watches_conf.hash = mrp_string_hash;
@@ -530,7 +585,7 @@ int main (int argc, char **argv)
 
     mrp_mainloop_run(ctx.ml);
 
-    mrp_log_warning("shutting down asm-bridge");
+    log_write("shutting down asm-bridge\n");
 
 end:
     if (iow)
@@ -549,6 +604,9 @@ end:
 
     msgctl(asm_snd_msgid, IPC_RMID, 0);
     msgctl(asm_rcv_msgid, IPC_RMID, 0);
+    msgctl(asm_cb_msgid, IPC_RMID, 0);
+
+    log_close();
 
     exit(0);
 }
