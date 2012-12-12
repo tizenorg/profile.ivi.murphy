@@ -462,8 +462,11 @@ int main (int argc, char **argv)
     mrp_io_watch_t *iow = NULL;
     mrp_io_event_t events = MRP_IO_EVENT_IN;
 
+    /* asm_cb_msgid isn't used for anything, but the clients still check it */
+
     int asm_snd_msgid = msgget((key_t)4102, 0666 | IPC_CREAT);
     int asm_rcv_msgid = msgget((key_t)2014, 0666 | IPC_CREAT);
+    int asm_cb_msgid = msgget((key_t)2014, 0666 | IPC_CREAT);
 
     mrp_htbl_config_t watches_conf;
 
