@@ -1,0 +1,16 @@
+{
+    global:
+        brl_add_history;
+        brl_create;
+        brl_destroy;
+        brl_hide_prompt;
+        brl_limit_history;
+        brl_read_line;
+        brl_s;
+        brl_set_allocator;
+        brl_set_prompt;
+        brl_show_prompt;
+        brl_use_mainloop;
+    local:
+        *;
+};
