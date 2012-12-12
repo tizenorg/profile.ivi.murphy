@@ -170,12 +170,12 @@ static void dump_incoming_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 {
     MRP_UNUSED(ctx);
 
-    mrp_log_info(" --> client id:       %u", msg->instance_id);
-    mrp_log_info(" --> data handle:     %d", msg->handle);
-    mrp_log_info(" --> request id:      0x%04x", msg->request_id);
-    mrp_log_info(" --> sound event:     0x%04x", msg->sound_event);
-    mrp_log_info(" --> system resource: 0x%04x", msg->system_resource);
-    mrp_log_info(" --> state:           0x%04x", msg->sound_state);
+    mrp_log_info("   --> client id:       %u", msg->instance_id);
+    mrp_log_info("   --> data handle:     %d", msg->handle);
+    mrp_log_info("   --> request id:      0x%04x", msg->request_id);
+    mrp_log_info("   --> sound event:     0x%04x", msg->sound_event);
+    mrp_log_info("   --> system resource: 0x%04x", msg->system_resource);
+    mrp_log_info("   --> state:           0x%04x", msg->sound_state);
 #ifdef USE_SECURITY
     {
         int n_cookie = msg->n_cookie_bytes;
@@ -196,13 +196,13 @@ static void dump_outgoing_msg(asm_to_lib_t *msg, asm_data_t *ctx)
 {
     MRP_UNUSED(ctx);
 
-    mrp_log_info(" <-- client id:       %u", msg->instance_id);
-    mrp_log_info(" <-- alloc handle:    %d", msg->alloc_handle);
-    mrp_log_info(" <-- command handle:  %d", msg->cmd_handle);
-    mrp_log_info(" <-- sound command:   0x%04x", msg->result_sound_command);
-    mrp_log_info(" <-- state:           0x%04x", msg->result_sound_state);
-    mrp_log_info(" <-- check privilege: %s",
-                            msg->check_privilege ? "TRUE" : "FALSE");
+    mrp_log_info(" <--   client id:       %u", msg->instance_id);
+    mrp_log_info(" <--   alloc handle:    %d", msg->alloc_handle);
+    mrp_log_info(" <--   command handle:  %d", msg->cmd_handle);
+    mrp_log_info(" <--   sound command:   0x%04x", msg->result_sound_command);
+    mrp_log_info(" <--   state:           0x%04x", msg->result_sound_state);
+    mrp_log_info(" <--   check privilege: %s",
+            msg->check_privilege ? "TRUE" : "FALSE");
 }
 
 #if 0
@@ -309,7 +309,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             d->rtype = request_type_server_event;
 
             dump_outgoing_msg(&reply, ctx);
-            mrp_transport_senddata(d->ctx->t, &reply, TAG_ASM_TO_LIB);
+            mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
             break;
         }
         case request_type_release:
@@ -334,7 +334,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             d->request_id = 0;
 
             dump_outgoing_msg(&reply, ctx);
-            mrp_transport_senddata(d->ctx->t, &reply, TAG_ASM_TO_LIB);
+            mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
             break;
         }
         case request_type_server_event:
@@ -371,7 +371,8 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             /* FIXME: the player-player case needs to be solved here? */
             reply.event_source = ASM_EVENT_SOURCE_OTHER_PLAYER_APP;
 
-            mrp_transport_senddata(d->ctx->t, &reply, TAG_ASM_TO_LIB_CB);
+            dump_outgoing_msg(reply, ctx);
+            mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB_CB);
 
             break;
         }
@@ -532,6 +533,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 else {
                     /* a normal resource request */
 
+                    /* we have to do a separate resource set for each request
+                     * (even originating from the same client), since they are
+                     * of the same resource type (audio_playback). */
                     d->rset = mrp_resource_set_create(ctx->resource_client, 0,
                             0, event_cb, d);
 
