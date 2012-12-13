@@ -197,7 +197,8 @@ static uint32_t int_hash(const void *key)
 }
 
 
-static rset_class_data_t *map_slp_media_type_to_murphy(ASM_sound_events_t media_type)
+static const rset_class_data_t *map_slp_media_type_to_murphy(
+        ASM_sound_events_t media_type)
 {
     if (media_type < 0 || media_type >= ASM_EVENT_MAX)
         /* error case */
@@ -378,11 +379,8 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
         }
         case request_type_release:
         {
+#if 0
             asm_to_lib_t reply;
-            mrp_log_info("callback for release request %u", request_id);
-
-            /* expecting next server events */
-            d->rtype = request_type_server_event;
 
             reply.instance_id = d->pid;
             reply.check_privilege = TRUE;
@@ -392,16 +390,18 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             reply.result_sound_command = ASM_COMMAND_NONE;
             reply.result_sound_state = ASM_STATE_STOP;
 
-            d->rtype = request_type_server_event;
-
-            /* stop processing server_events */
-            d->request_id = 0;
-
-#if 0
             /* no response needed for moving to state other than PLAYING */
             dump_outgoing_msg(&reply, ctx);
             mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
 #endif
+            mrp_log_info("callback for release request %u", request_id);
+
+            /* expecting next server events */
+            d->rtype = request_type_server_event;
+
+            /* set up event filtering */
+            d->request_id = 0;
+
             break;
         }
         case request_type_server_event:
@@ -473,7 +473,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             uint32_t handle;
             resource_set_data_t *d;
             client_t *client;
-            rset_class_data_t *rset_data;
+            const rset_class_data_t *rset_data;
 
             mrp_log_info("REQUEST: REGISTER");
 
@@ -679,15 +679,21 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 }
 
                 goto noreply;
+            }
+        case ASM_REQUEST_GETSTATE:
+            {
+                const rset_class_data_t *rset_data;
+
+                rset_data = map_slp_media_type_to_murphy(msg->sound_event);
+
+                mrp_log_info("REQUEST: GET STATE for %s",
+                        rset_data ? rset_data->rset_class : "NULL");
+
+                /* TODO: get the status for rset_data->rset_class . */
+                reply->result_sound_state = ASM_STATE_IGNORE;
 
                 break;
             }
-        case ASM_REQUEST_GETSTATE:
-            mrp_log_info("REQUEST: GET STATE");
-            /* TODO: get the current resource state for msg->sound_event (which
-             * is the application class). Put it to reply->result_sound_state
-             * field. */
-            break;
         case ASM_REQUEST_GETMYSTATE:
             {
                 client_t *client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
@@ -723,7 +729,6 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 mrp_htbl_remove(ctx->clients, u_to_p(pid), TRUE);
 
                 goto noreply;
-                break;
             }
         case ASM_REQUEST_SET_SUBSESSION:
             mrp_log_info("REQUEST: SET SUBSESSION");
