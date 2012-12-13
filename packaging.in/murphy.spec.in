@@ -335,6 +335,7 @@ cp packaging.in/murphyd.init $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
 chmod a+x $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
+mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
 cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
 
@@ -372,6 +373,7 @@ ldconfig
 %{_sbindir}/asm-bridge
 %endif
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
+%{_sysconfdir}/dbus-1/system.d
 %{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
 
