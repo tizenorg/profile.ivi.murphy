@@ -1,0 +1,6 @@
+{
+    global:
+        mrp_linkedin_plugin_domain_control_symbol;
+    local:
+        *;
+};
