@@ -60,7 +60,6 @@ typedef struct {
 } client_t;
 
 
-
 typedef struct {
     /* configuration */
     const char *address;
@@ -105,6 +104,7 @@ typedef struct {
     asm_data_t *ctx;
 
     ASM_sound_states_t requested_state;
+    ASM_sound_states_t granted_state;
 
     /* mutable */
     request_type_t rtype;
@@ -112,7 +112,6 @@ typedef struct {
     bool monitor;
     bool earjack;
 } resource_set_data_t;
-
 
 
 enum {
@@ -123,7 +122,36 @@ enum {
     ARG_ASM_RECORDING_RESOURCE,
 };
 
-static int tport_setup(const char *address, asm_data_t *ctx);
+
+typedef struct {
+    char *rset_class;
+    bool mandatory;
+    bool shared;
+} rset_class_data_t;
+
+
+static const rset_class_data_t type_map[] = {
+    { "player",  TRUE,   TRUE   }, /* ASM_EVENT_SHARE_MMPLAYER */
+    { "camera",  TRUE,   TRUE   }, /* ASM_EVENT_SHARE_MMCAMCORDER */
+    { "event",   TRUE,   TRUE   }, /* ASM_EVENT_SHARE_MMSOUND */
+    { "game",    TRUE,   TRUE   }, /* ASM_EVENT_SHARE_OPENAL */
+    { "event",   TRUE,   TRUE   }, /* ASM_EVENT_SHARE_AVSYSTEM */
+    { "player",  TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_MMPLAYER */
+    { "camera",  TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_MMCAMCORDER */
+    { "event",   TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_MMSOUND */
+    { "game",    TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_OPENAL */
+    { "event",   TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_AVSYSTEM */
+    { "event",   TRUE,   FALSE  }, /* ASM_EVENT_NOTIFY */
+    { "phone",   TRUE,   FALSE  }, /* ASM_EVENT_CALL */
+    { "radio",   TRUE,   TRUE   }, /* ASM_EVENT_SHARE_FMRADIO */
+    { "radio",   TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_FMRADIO */
+    { "earjack", TRUE,   TRUE   }, /* ASM_EVENT_EARJACK_UNPLUG */
+    { "alert",   TRUE,   FALSE  }, /* ASM_EVENT_ALARM */
+    { "phone",   TRUE,   FALSE  }, /* ASM_EVENT_VIDEOCALL */
+    { "monitor", TRUE,   TRUE   }, /* ASM_EVENT_MONITOR */
+    { "phone",   TRUE,   FALSE  }, /* ASM_EVENT_RICH_CALL */
+};
+
 
 static void *u_to_p(uint32_t u)
 {
@@ -138,6 +166,7 @@ static void *u_to_p(uint32_t u)
 #endif
     return (void *) o;
 }
+
 
 static uint32_t p_to_u(const void *p)
 {
@@ -165,6 +194,22 @@ static int int_comp(const void *key1, const void *key2)
 static uint32_t int_hash(const void *key)
 {
     return p_to_u(key);
+}
+
+
+static const rset_class_data_t *map_slp_media_type_to_murphy(
+        ASM_sound_events_t media_type)
+{
+    if (media_type < 0 || media_type >= ASM_EVENT_MAX)
+        /* error case */
+        return NULL;
+
+    /* check if the header has changed */
+
+    if (ASM_EVENT_MAX != 19)
+        return NULL;
+
+    return &type_map[media_type];
 }
 
 
@@ -316,25 +361,26 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             reply.result_sound_state = ASM_STATE_IGNORE;
 
             /* TODO: check the mask properly */
-            if (mrp_get_resource_set_grant(d->rset))
+            if (mrp_get_resource_set_grant(d->rset)) {
                 reply.result_sound_command = ASM_COMMAND_PLAY;
-            else
+                d->granted_state = d->requested_state;
+            }
+            else {
                 reply.result_sound_command = ASM_COMMAND_STOP;
+            }
 
             d->rtype = request_type_server_event;
 
-            /* FIXME: only send reply when "PLAYING" state was requested? */
+            /* only send reply when "PLAYING" state was requested ->
+             * this happens when acquire request is done */
             dump_outgoing_msg(&reply, ctx);
             mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
             break;
         }
         case request_type_release:
         {
+#if 0
             asm_to_lib_t reply;
-            mrp_log_info("callback for release request %u", request_id);
-
-            /* expecting next server events */
-            d->rtype = request_type_server_event;
 
             reply.instance_id = d->pid;
             reply.check_privilege = TRUE;
@@ -344,16 +390,18 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             reply.result_sound_command = ASM_COMMAND_NONE;
             reply.result_sound_state = ASM_STATE_STOP;
 
-            d->rtype = request_type_server_event;
-
-            /* stop processing server_events */
-            d->request_id = 0;
-
-#if 0
             /* no response needed for moving to state other than PLAYING */
             dump_outgoing_msg(&reply, ctx);
             mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
 #endif
+            mrp_log_info("callback for release request %u", request_id);
+
+            /* expecting next server events */
+            d->rtype = request_type_server_event;
+
+            /* set up event filtering */
+            d->request_id = 0;
+
             break;
         }
         case request_type_server_event:
@@ -422,9 +470,10 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
     switch(msg->request_id) {
         case ASM_REQUEST_REGISTER:
         {
+            uint32_t handle;
+            resource_set_data_t *d;
             client_t *client;
-            bool shared = FALSE;
-            char *resource = "invalid";
+            const rset_class_data_t *rset_data;
 
             mrp_log_info("REQUEST: REGISTER");
 
@@ -446,167 +495,87 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             }
 #endif
 
-            switch (msg->sound_event) {
-                case ASM_EVENT_NONE:
-                    break;
-                case ASM_EVENT_SHARE_MMPLAYER:
-                    resource = "player";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_SHARE_MMCAMCORDER:
-                    resource = "camera";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_SHARE_MMSOUND:
-                    resource = "event";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_SHARE_OPENAL:
-                    resource = "game";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_SHARE_AVSYSTEM:
-                    resource = "event";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_EXCLUSIVE_MMPLAYER:
-                    resource = "player";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_EXCLUSIVE_MMCAMCORDER:
-                    resource = "camera";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_EXCLUSIVE_MMSOUND:
-                    resource = "event";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_EXCLUSIVE_OPENAL:
-                    resource = "game";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_EXCLUSIVE_AVSYSTEM:
-                    resource = "event";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_NOTIFY:
-                    resource = "event";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_CALL:
-                    resource = "phone";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_SHARE_FMRADIO:
-                    resource = "radio";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_EXCLUSIVE_FMRADIO:
-                    resource = "radio";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_EARJACK_UNPLUG:
-                    resource = "earjack";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_ALARM:
-                    resource = "alert";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_VIDEOCALL:
-                    resource = "phone";
-                    shared = FALSE;
-                    break;
-                case ASM_EVENT_MONITOR:
-                    resource = "monitor";
-                    shared = TRUE;
-                    break;
-                case ASM_EVENT_RICH_CALL:
-                    resource = "phone";
-                    shared = FALSE;
-                    break;
-                default:
-                    break;
-            }
+            rset_data = map_slp_media_type_to_murphy(msg->sound_event);
 
-            if (strcmp(resource, "invalid") == 0) {
+            if (!rset_data) {
                 mrp_log_error("unknown resource type: %d", msg->sound_event);
                 goto error;
             }
+
+            handle = client->current_handle++;
+            d = mrp_allocz(sizeof(resource_set_data_t));
+
+            if (!d)
+                goto error;
+
+            d->handle = handle;
+            d->ctx = ctx;
+            d->pid = pid;
+            d->rtype = request_type_server_event;
+            d->request_id = 0;
+            d->requested_state = ASM_STATE_WAITING;
+            d->granted_state = ASM_STATE_WAITING;
+
+            if (strcmp(rset_data->rset_class, "earjack") == 0) {
+                mrp_log_info("earjack status request was received");
+                d->earjack = TRUE;
+            }
+            else if (strcmp(rset_data->rset_class, "monitor") == 0) {
+                mrp_log_info("monitor resource was received");
+                /* TODO: tell the available state changes to this pid
+                 * via the monitor resource. */
+                client->monitor = TRUE;
+                d->monitor = TRUE;
+            }
             else {
-                uint32_t handle = client->current_handle++;
-                resource_set_data_t *d = mrp_allocz(sizeof(resource_set_data_t));
+                /* a normal resource request */
 
-                if (!d)
+                /* we have to do a separate resource set for each request
+                 * (even originating from the same client), since they are
+                 * of the same resource type (audio_playback). */
+                d->rset = mrp_resource_set_create(ctx->resource_client, 0,
+                        0, event_cb, d);
+
+                if (!d->rset) {
+                    mrp_log_error("Failed to create resource set!");
+                    mrp_free(d);
                     goto error;
-
-                d->handle = handle;
-                d->ctx = ctx;
-                d->pid = pid;
-                d->rtype = request_type_server_event;
-                d->request_id = 0;
-
-                if (strcmp(resource, "earjack") == 0) {
-                    mrp_log_info("earjack status request was received");
-                    d->earjack = TRUE;
-                }
-                else if (strcmp(resource, "monitor") == 0) {
-                    mrp_log_info("monitor resource was received");
-                    /* TODO: tell the available state changes to this pid
-                     * via the monitor resource. */
-                    client->monitor = TRUE;
-                    d->monitor = TRUE;
-                }
-                else {
-                    /* a normal resource request */
-
-                    /* we have to do a separate resource set for each request
-                     * (even originating from the same client), since they are
-                     * of the same resource type (audio_playback). */
-                    d->rset = mrp_resource_set_create(ctx->resource_client, 0,
-                            0, event_cb, d);
-
-                    if (!d->rset) {
-                        mrp_log_error("Failed to create resource set!");
-                        mrp_free(d);
-                        goto error;
-                    }
-
-                    if (mrp_resource_set_add_resource(d->rset,
-                            ctx->playback_resource, shared, NULL, TRUE) < 0) {
-                        mrp_log_error("Failed to add playback resource!");
-                        mrp_resource_set_destroy(d->rset);
-                        mrp_free(d);
-                        goto error;
-                    }
-
-                    if (mrp_resource_set_add_resource(d->rset,
-                            ctx->recording_resource, shared, NULL, TRUE) < 0) {
-                        mrp_log_error("Failed to add recording resource!");
-                        mrp_resource_set_destroy(d->rset);
-                        mrp_free(d);
-                        goto error;
-                    }
-
-                    if (mrp_application_class_add_resource_set(resource,
-                            ctx->zone, d->rset, 0) < 0) {
-                        mrp_log_error("Failed to put the rset in a class!");
-                        mrp_resource_set_destroy(d->rset);
-                        mrp_free(d);
-                        goto error;
-                    }
                 }
 
-                mrp_htbl_insert(client->sets, u_to_p(handle), d);
-                client->n_sets++;
+                if (mrp_resource_set_add_resource(d->rset,
+                            ctx->playback_resource, rset_data->shared, NULL,
+                            rset_data->mandatory) < 0) {
+                    mrp_log_error("Failed to add playback resource!");
+                    mrp_resource_set_destroy(d->rset);
+                    mrp_free(d);
+                    goto error;
+                }
 
-                reply->alloc_handle = handle;
-                reply->cmd_handle = reply->alloc_handle;
+                if (mrp_resource_set_add_resource(d->rset,
+                            ctx->recording_resource, rset_data->shared, NULL,
+                            rset_data->mandatory) < 0) {
+                    mrp_log_error("Failed to add recording resource!");
+                    mrp_resource_set_destroy(d->rset);
+                    mrp_free(d);
+                    goto error;
+                }
 
-                reply->result_sound_state = ASM_STATE_WAITING;
-                reply->result_sound_command = ASM_COMMAND_NONE;
+                if (mrp_application_class_add_resource_set(
+                            rset_data->rset_class, ctx->zone, d->rset, 0) < 0) {
+                    mrp_log_error("Failed to put the rset in a class!");
+                    mrp_resource_set_destroy(d->rset);
+                    mrp_free(d);
+                    goto error;
+                }
             }
 
+            mrp_htbl_insert(client->sets, u_to_p(handle), d);
+            client->n_sets++;
+
+            reply->alloc_handle = handle;
+            reply->cmd_handle = reply->alloc_handle;
+
+            reply->result_sound_state = ASM_STATE_WAITING;
             break;
         }
         case ASM_REQUEST_UNREGISTER:
@@ -709,20 +678,42 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 }
 
                 goto noreply;
+            }
+        case ASM_REQUEST_GETSTATE:
+            {
+                const rset_class_data_t *rset_data;
+
+                rset_data = map_slp_media_type_to_murphy(msg->sound_event);
+
+                mrp_log_info("REQUEST: GET STATE for %s",
+                        rset_data ? rset_data->rset_class : "NULL");
+
+                /* TODO: get the status for rset_data->rset_class . */
+                reply->result_sound_state = ASM_STATE_IGNORE;
 
                 break;
             }
-        case ASM_REQUEST_GETSTATE:
-            mrp_log_info("REQUEST: GET STATE");
-            /* TODO: get the current resource state for msg->sound_event (which
-             * is the application class). Put it to reply->result_sound_state
-             * field. */
-            break;
         case ASM_REQUEST_GETMYSTATE:
-            mrp_log_info("REQUEST: GET MY STATE");
-            /* TODO: get the current state for the process (resource set). Put
-             * it to reply->result_sound_state field. */
-            break;
+            {
+                client_t *client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
+                resource_set_data_t *d;
+
+                mrp_log_info("REQUEST: GET MY STATE");
+
+                if (!client) {
+                    mrp_log_error("client '%u' not found", pid);
+                    goto error;
+                }
+
+                d = mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
+                if (!d || !d->rset) {
+                    mrp_log_error("set '%u.%u' not found", pid, msg->handle);
+                    goto error;
+                }
+
+                reply->result_sound_state = d->granted_state;
+                break;
+            }
         case ASM_REQUEST_EMERGENT_EXIT:
             {
                 client_t *client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
@@ -737,7 +728,6 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 mrp_htbl_remove(ctx->clients, u_to_p(pid), TRUE);
 
                 goto noreply;
-                break;
             }
         case ASM_REQUEST_SET_SUBSESSION:
             mrp_log_info("REQUEST: SET SUBSESSION");
@@ -820,6 +810,7 @@ static void recvdatafrom_evt(mrp_transport_t *t, void *data, uint16_t tag,
                     dump_outgoing_msg(reply, ctx);
                     mrp_transport_senddata(t, reply, TAG_ASM_TO_LIB);
                 }
+                mrp_log_info("");
                 break;
             }
         case TAG_LIB_TO_ASM_CB:
@@ -829,6 +820,7 @@ static void recvdatafrom_evt(mrp_transport_t *t, void *data, uint16_t tag,
                 /* client tells us which state it entered after preemption */
 
                 process_cb_msg(msg, ctx);
+                mrp_log_info("");
                 break;
             }
 
