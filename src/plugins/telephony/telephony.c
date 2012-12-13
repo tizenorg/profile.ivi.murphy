@@ -33,6 +33,8 @@
 #include "murphy/plugins/telephony/telephony.h"
 #include "murphy/plugins/telephony/ofono.h"
 
+#include "resctl.h"
+
 
 #define TEL_CALLS_TABLE   "tel_calls"
 
@@ -72,6 +74,10 @@ static ofono_t     *ofono     = NULL;
 
 static mqi_handle_t tel_calls = MQI_HANDLE_INVALID;
 
+static resctl_t    *ctl       = NULL;
+
+static void check_resources(void);
+
 /**
  *
  */
@@ -105,6 +111,8 @@ int tel_start_listeners(mrp_mainloop_t *ml)
     ofono = ofono_watch(ml, tel_watcher);
     if (ofono == NULL)
         ret = FALSE;
+    else
+        ctl = resctl_init();
 
     mrp_debug(ret? "started listeners" : "failed starting listeners");
     return ret;
@@ -122,6 +130,9 @@ int tel_exit_listeners(void)
     /* leave the tables in MDB */
     ret = (mqi_close() == 0 ? TRUE : FALSE);
     tel_calls = MQI_HANDLE_INVALID;
+
+    resctl_exit(ctl);
+    ctl = NULL;
 
     mrp_debug(ret? "closed listeners" : "failed closing MDB");
     return ret;
@@ -219,4 +230,48 @@ void tel_watcher(int event, tel_call_t *call, void *data)
       default:
         mrp_log_error("corrupted telephony event");
     }
+
+    check_resources();
+}
+
+
+static void check_resources(void)
+{
+#if 0
+    static const char *disconn  = "disconnected";
+    static const char *incoming = "incoming";
+
+    MQI_WHERE_CLAUSE(where,
+                     MQI_NOT(MQI_EQUAL(MQI_COLUMN(5),
+                                       MQI_STRING_VAR(disconn )))  MQI_AND
+                     MQI_NOT(MQI_EQUAL(MQI_COLUMN(5),
+                                       MQI_STRING_VAR(incoming))) );
+#endif
+
+    MQI_COLUMN_SELECTION_LIST(select_columns,
+                              MQI_COLUMN_SELECTOR(1, tel_call_t, call_id),
+                              MQI_COLUMN_SELECTOR(5, tel_call_t, state  ));
+
+
+    tel_call_t calls[32];
+    int        n, need_audio, i;
+
+    n = MQI_SELECT(select_columns, tel_calls, NULL, calls);
+
+    need_audio = false;
+    for (i = 0; i < n; i++) {
+        if (strcmp(calls[i].state, "disconnected") ||
+            strcmp(calls[i].state, "incoming")) {
+            need_audio = true;
+            break;
+        }
+    }
+
+    if (need_audio) {
+        if (ctl == NULL)
+            ctl = resctl_init();
+        resctl_acquire(ctl);
+    }
+    else
+        resctl_release(ctl);
 }
