@@ -1440,11 +1440,11 @@ endif
 
 
 # telephony plugin
-TELEPHONY_PLUGIN_SOURCES =  plugins/plugin-telephony.c \
-                            plugins/telephony/telephony.c \
-                            plugins/telephony/ofono.c \
-                            plugins/telephony/telephony.h \
-                            plugins/telephony/ofono.h
+TELEPHONY_PLUGIN_SOURCES =  plugins/plugin-telephony.c		\
+                            plugins/telephony/telephony.c	\
+                            plugins/telephony/ofono.c		\
+			    plugins/telephony/resctl.c
+
 #TELEPHONY_PLUGIN_HEADERS =  plugins/telephony/telephony.h
 TELEPHONY_PLUGIN_CFLAGS  =
 TELEPHONY_PLUGIN_LIBS    =
