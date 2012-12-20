@@ -1,5 +1,8 @@
 m = murphy.get()
 
+-- try loading the dlog plugin
+m:try_load_plugin('dlog')
+
 -- try loading console plugin
 m:try_load_plugin('console')
 
