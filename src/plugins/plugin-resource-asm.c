@@ -809,6 +809,7 @@ static void recvdatafrom_evt(mrp_transport_t *t, void *data, uint16_t tag,
                 if (reply) {
                     dump_outgoing_msg(reply, ctx);
                     mrp_transport_senddata(t, reply, TAG_ASM_TO_LIB);
+                    mrp_free(reply);
                 }
                 mrp_log_info("");
                 break;
