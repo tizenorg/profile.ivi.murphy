@@ -486,6 +486,31 @@ AC_SUBST(TELEPHONY_ENABLED)
 AC_SUBST(TELEPHONY_CFLAGS)
 AC_SUBST(TELEPHONY_LIBS)
 
+# Check if dlog support was enabled.
+AC_ARG_ENABLE(dlog,
+              [  --enable-dlog           enable dlog support],
+	      [enable_dlog=$enableval], [enable_dlog=auto])
+
+if test "$enable_dlog" != "no"; then
+    PKG_CHECK_MODULES(DLOG, dlog,
+                      [have_dlog=yes], [have_dlog=no])
+    if test "$have_dlog" = "no" -a "$enable_dlog" = "yes"; then
+        AC_MSG_ERROR([dlog development libraries not found.])
+    fi
+
+    enable_dlog="$have_dlog"
+else
+    AC_MSG_NOTICE([dlog support is disabled.])
+fi
+
+if test "$enable_dlog" = "yes"; then
+    AC_DEFINE([DLOG_ENABLED], 1, [Enable dlog support ?])
+fi
+AM_CONDITIONAL(DLOG_ENABLED, [test "$enable_dlog" = "yes"])
+AC_SUBST(DLOG_ENABLED)
+AC_SUBST(DLOG_CFLAGS)
+AC_SUBST(DLOG_LIBS)
+
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
 MURPHY_LIBS=""
@@ -582,6 +607,7 @@ AM_CONDITIONAL(DISABLED_PLUGIN_TEST,     [check_if_disabled test])
 AM_CONDITIONAL(DISABLED_PLUGIN_DBUS,     [check_if_disabled dbus])
 AM_CONDITIONAL(DISABLED_PLUGIN_GLIB,     [check_if_disabled glib])
 AM_CONDITIONAL(DISABLED_PLUGIN_CONSOLE,  [check_if_disabled console])
+AM_CONDITIONAL(DISABLED_PLUGIN_DLOG,     [check_if_disabled dlog])
 AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_DBUS, [check_if_disabled resource-dbus])
 AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_WRT, [check_if_disabled resource-wrt])
 AM_CONDITIONAL(DISABLED_PLUGIN_AMB, [check_if_disabled amb])
@@ -594,6 +620,7 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
 AM_CONDITIONAL(BUILTIN_PLUGIN_GLIB,     [check_if_internal glib])
 AM_CONDITIONAL(BUILTIN_PLUGIN_CONSOLE,  [check_if_internal console])
+AM_CONDITIONAL(BUILTIN_PLUGIN_DLOG,     [check_if_internal dlog])
 AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_DBUS, [check_if_internal resource-dbus])
 AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_WRT, [check_if_internal resource-wrt])
 AM_CONDITIONAL(BUILTIN_PLUGIN_AMB, [check_if_internal amb])
