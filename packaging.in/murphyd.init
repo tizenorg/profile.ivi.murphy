@@ -20,7 +20,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="Murphy Daemon"
 NAME=murphyd
 DAEMON=/usr/bin/$NAME
-DAEMON_ARGS=""
+DAEMON_ARGS="-t dlog -vvv"
 SCRIPTNAME=/etc/init.d/$NAME
 
 # Exit if the package is not installed
