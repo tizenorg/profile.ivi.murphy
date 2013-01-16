@@ -50,9 +50,13 @@ else
 end
 
 -- define application classes
-application_class { name = "navigator", priority = 4 }
-application_class { name = "phone"    , priority = 3 }
-application_class { name = "game"     , priority = 2 }
+application_class { name = "navigator", priority = 8 }
+application_class { name = "event"    , priority = 7 }
+application_class { name = "phone"    , priority = 6 }
+application_class { name = "camera"   , priority = 5 }
+application_class { name = "alert"    , priority = 4 }
+application_class { name = "game"     , priority = 3 }
+application_class { name = "radio"    , priority = 2 }
 application_class { name = "player"   , priority = 1 }
 application_class { name = "implicit" , priority = 0 }
 
