@@ -330,6 +330,11 @@ popd >& /dev/null
 cp packaging.in/murphy-lua.conf $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.conf
 cp packaging.in/murphy.lua      $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.lua
 
+# Copy plugin configuration files in place.
+mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb
+cp packaging.in/amb-config.lua \
+    $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb/config.lua
+
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d
 cp packaging.in/murphyd.init $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
 chmod a+x $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
