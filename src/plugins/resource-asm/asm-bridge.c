@@ -465,7 +465,7 @@ static int connect_to_murphy(char *address, ctx_t *ctx)
     }
 
     ctx->mt = mrp_transport_create(ctx->ml, atype, &evt, ctx,
-            MRP_TRANSPORT_MODE_CUSTOM | MRP_TRANSPORT_NONBLOCK);
+            MRP_TRANSPORT_MODE_DATA | MRP_TRANSPORT_NONBLOCK);
 
     if (ctx->mt == NULL) {
         log_write("Failed to create the transport\n");
