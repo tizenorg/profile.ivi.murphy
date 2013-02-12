@@ -37,6 +37,8 @@
 
 #include <murphy/common.h>
 
+#define ASM_BRIDGE_LOG_ENVVAR "ASM_BRIDGE_LOGFILE"
+
 #define TAG_LIB_TO_ASM ((uint16_t) 0x100)
 #define TAG_ASM_TO_LIB ((uint16_t) 0x101)
 #define TAG_ASM_TO_LIB_CB ((uint16_t) 0x102)

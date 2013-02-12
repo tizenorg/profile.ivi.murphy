@@ -69,10 +69,14 @@ struct watched_file {
 
 static int log_init(const char *filename)
 {
-    logfile = fopen(filename, "w");
+    if (filename != NULL) {
+        logfile = fopen(filename, "w");
 
-    if (!logfile)
-        return -1;
+        if (!logfile)
+            return -1;
+    }
+    else
+        logfile = NULL;
 
     return 0;
 }
@@ -520,11 +524,7 @@ int main (int argc, char **argv)
     ctx_t ctx;
     ctx.watched_files = NULL;
 
-#if 0
-    log_init("/tmp/asm-bridge-log");
-#else
-    logfile = NULL;
-#endif
+    log_init(getenv(ASM_BRIDGE_LOG_ENVVAR));
 
     /* set up the signal handling */
 
