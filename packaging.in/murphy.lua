@@ -117,7 +117,8 @@ resource.class {
      name = "audio_playback",
      shareable = true,
      attributes = {
-         role = { mdb.string, "music", "rw" }
+         role = { mdb.string, "music"  , "rw" },
+         pid  = { mdb.string, "unknown", "rw" }
      }
 }
 
