@@ -64,6 +64,7 @@ typedef struct {
     /* configuration */
     const char *address;
     const char *binary;
+    const char *log;
 
     /* asm-bridge management */
     pid_t pid;
@@ -116,6 +117,7 @@ typedef struct {
 
 enum {
     ARG_ASM_BRIDGE,
+    ARG_ASM_BRIDGE_LOG,
     ARG_ASM_ZONE,
     ARG_ASM_TPORT_ADDRESS,
     ARG_ASM_PLAYBACK_RESOURCE,
@@ -450,6 +452,8 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 {
     pid_t pid = msg->instance_id;
+    mrp_attr_t attrs[2];
+    char pidbuf[32];
 
     asm_to_lib_t *reply;
 
@@ -542,8 +546,15 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     goto error;
                 }
 
+                snprintf(pidbuf, sizeof(pidbuf), "%u", d->pid);
+                attrs[0].type = mqi_string;
+                attrs[0].name = "pid";
+                attrs[0].value.string = pidbuf;
+                attrs[1].name = NULL;
+
                 if (mrp_resource_set_add_resource(d->rset,
-                            ctx->playback_resource, rset_data->shared, NULL,
+                            ctx->playback_resource, rset_data->shared,
+                            &attrs[0],
                             rset_data->mandatory) < 0) {
                     mrp_log_error("Failed to add playback resource!");
                     mrp_resource_set_destroy(d->rset);
@@ -1043,6 +1054,7 @@ static int asm_init(mrp_plugin_t *plugin)
     ctx->address = args[ARG_ASM_TPORT_ADDRESS].str;
     ctx->binary = args[ARG_ASM_BRIDGE].str;
     ctx->zone = args[ARG_ASM_ZONE].str;
+    ctx->log = args[ARG_ASM_BRIDGE_LOG].str;
 
     ctx->playback_resource = args[ARG_ASM_PLAYBACK_RESOURCE].str;
     ctx->recording_resource = args[ARG_ASM_RECORDING_RESOURCE].str;
@@ -1120,6 +1132,8 @@ static int asm_init(mrp_plugin_t *plugin)
             mrp_log_error("close_fds() failed");
             exit(1);
         }
+        if (ctx->log != NULL)
+            setenv(ASM_BRIDGE_LOG_ENVVAR, ctx->log, 1);
         execl(ctx->binary, ctx->binary, ctx->address, NULL);
         exit(1);
     }
@@ -1203,6 +1217,7 @@ static void asm_exit(mrp_plugin_t *plugin)
 
 static mrp_plugin_arg_t args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ASM_BRIDGE, STRING, "asm_bridge", "/usr/sbin/asm-bridge"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_BRIDGE_LOG, STRING, "asm_bridge_log", NULL),
     MRP_PLUGIN_ARGIDX(ARG_ASM_ZONE, STRING, "zone", "default"),
     MRP_PLUGIN_ARGIDX(ARG_ASM_TPORT_ADDRESS, STRING, "tport_address", "unxs:/tmp/murphy/asm"),
     MRP_PLUGIN_ARGIDX(ARG_ASM_PLAYBACK_RESOURCE, STRING, "playback_resource", "audio_playback"),
