@@ -8,4 +8,4 @@ generate_linker_scripts() {
         git commit -m "packaging: pre-generated linker scripts." $_ld_scripts
 }
 
-generate_linker_scripts
+#generate_linker_scripts
