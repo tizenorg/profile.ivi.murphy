@@ -925,7 +925,7 @@ static int tport_setup(const char *address, asm_data_t *ctx)
     }
 
     ctx->mt = mrp_transport_create(ctx->ctx->ml, atype, &evt, ctx,
-            MRP_TRANSPORT_MODE_CUSTOM | MRP_TRANSPORT_NONBLOCK);
+            MRP_TRANSPORT_MODE_DATA | MRP_TRANSPORT_NONBLOCK);
 
     if (ctx->mt == NULL) {
         mrp_log_error("Failed to create the transport");
