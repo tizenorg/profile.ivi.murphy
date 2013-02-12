@@ -16,6 +16,7 @@
 %{!?_with_dbus:%{!?_without_dbus:%define _with_dbus 1}}
 %{!?_with_telephony:%{!?_without_telephony:%define _with_telephony 1}}
 %{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
+%{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
 Summary: Murphy policy framework
@@ -59,6 +60,10 @@ BuildRequires: pkgconfig(ofono)
 %endif
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 BuildRequires: pkgconfig(audio-session-mgr)
+%endif
+%if %{?_with_websockets:1}%{!?_with_websockets:0}
+BuildRequires: libwebsockets-devel
+BuildRequires: pkgconfig(json)
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
@@ -288,6 +293,12 @@ DYNAMIC_PLUGINS="$DYNAMIC_PLUGINS,resource-asm"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-resource-asm"
 %endif
 
+%if %{?_with_websockets:1}%{!?_with_websockets:0}
+CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-websockets"
+%else
+CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-websockets"
+%endif
+
 NUM_CPUS="`cat /proc/cpuinfo | tr -s '\t' ' ' | \
                grep '^processor *:' | wc -l`"
 [ -z "$NUM_CPUS" ] && NUM_CPUS=1
@@ -380,6 +391,9 @@ ldconfig
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 %{_sysconfdir}/dbus-1/system.d
 %{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
+%endif
+%if %{?_with_websockets:1}%{!?_with_websockets:0}
+%{_datadir}/murphy/webconsole
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
