@@ -6,6 +6,10 @@ m:try_load_plugin('dlog')
 -- load the console plugin
 m:try_load_plugin('console')
 
+m:try_load_plugin('console.disabled', 'webconsole', {
+                  address = 'wsck:127.0.0.1:3000/murphy',
+                  httpdir = '/usr/share/murphy/webconsole' });
+
 -- load the dbus plugin
 if m:plugin_exists('dbus') then
     m:load_plugin('dbus')
