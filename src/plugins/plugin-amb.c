@@ -210,7 +210,7 @@ static int amb_constructor(lua_State *L)
 
     mrp_log_info("> amb_constructor, stack size: %d", lua_gettop(L));
 
-    prop = mrp_lua_create_object(L, PROPERTY_CLASS, NULL);
+    prop = mrp_lua_create_object(L, PROPERTY_CLASS, NULL, 0);
 
     prop->handler_ref = LUA_NOREF;
     prop->outputs_ref = LUA_NOREF;
