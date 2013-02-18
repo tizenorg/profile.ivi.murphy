@@ -48,21 +48,23 @@ end
 
 -- load the ASM resource plugin
 if m:plugin_exists('resource-asm') then
-    m:load_plugin('resource-asm', { zone = "driver" })
+    m:load_plugin('resource-asm', {
+        zone = "driver",
+    })
 else
     m:info("No audio session manager plugin found...")
 end
 
 -- define application classes
-application_class { name = "navigator", priority = 8 }
-application_class { name = "event"    , priority = 7 }
-application_class { name = "phone"    , priority = 6 }
-application_class { name = "camera"   , priority = 5 }
-application_class { name = "alert"    , priority = 4 }
-application_class { name = "game"     , priority = 3 }
-application_class { name = "radio"    , priority = 2 }
-application_class { name = "player"   , priority = 1 }
-application_class { name = "implicit" , priority = 0 }
+application_class { name="interrupt", priority=99, modal=true , share=false, order="fifo" }
+application_class { name="alert"    , priority=51, modal=false, share=false, order="fifo" }
+application_class { name="navigator", priority=50, modal=false, share=true , order="fifo" }
+application_class { name="phone"    , priority=6 , modal=false, share=true , order="lifo" }
+application_class { name="camera"   , priority=5 , modal=false, share=false, order="lifo" }
+application_class { name="event"    , priority=4 , modal=false, share=true , order="fifo" }
+application_class { name="game"     , priority=3 , modal=false, share=false, order="lifo" }
+application_class { name="player"   , priority=1 , modal=false, share=true , order="lifo" }
+application_class { name="implicit" , priority=0 , modal=false, share=false, order="lifo" }
 
 -- define zone attributes
 zone.attributes {
@@ -117,14 +119,20 @@ resource.class {
      name = "audio_playback",
      shareable = true,
      attributes = {
-         role = { mdb.string, "music"  , "rw" },
-         pid  = { mdb.string, "unknown", "rw" }
+         role   = { mdb.string, "music"    , "rw" },
+         pid    = { mdb.string, "<unknown>", "rw" },
+         policy = { mdb.string, "strict"   , "rw" }
      }
 }
 
 resource.class {
      name = "audio_recording",
-     shareable = true
+     shareable = true,
+     attributes = {
+         role   = { mdb.string, "music"    , "rw" },
+         pid    = { mdb.string, "<unknown>", "rw" },
+         policy = { mdb.string, "relaxed"  , "rw" }
+     }
 }
 
 resource.class {
@@ -137,15 +145,29 @@ resource.class {
      shareable = false
 }
 
+resource.method.veto = {
+    function(zone, rset, grant, owners)
+	rset_priority = application_class[rset.application_class].priority
+
+	owner_id = owners.audio_playback.resource_set
+	rset_id = rset.id
+
+        if (rset_priority >= 50 and owner_id ~= rset_id) then
+            print("*** resource-set "..rset_id.." - veto")
+            return false
+        end
+
+        return true
+    end
+}
+
 -- test for creating selections
---[[
 mdb.select {
            name = "audio_owner",
            table = "audio_playback_owner",
            columns = {"application_class"},
            condition = "zone_name = 'driver'"
 }
---]]
 
 mdb.select {
            name = "vehicle_speed",
