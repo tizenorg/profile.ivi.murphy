@@ -44,11 +44,13 @@
 
 #include <murphy/common.h>
 #include <murphy/core.h>
+#include <murphy/core/plugin.h>
 
 #include <murphy/resource/client-api.h>
 
 #include "resource-asm/asm-bridge.h"
 
+#define DEFAULT_TRANSPORT  "unxs:/tmp/murphy/asm"
 
 typedef struct {
     uint32_t pid;
@@ -77,8 +79,10 @@ typedef struct {
     mrp_resource_client_t *resource_client;
     char *zone;
 
-    char *playback_resource;
-    char *recording_resource;
+    char *audio_playback;
+    char *audio_recording;
+    char *video_playback;
+    char *video_recording;
 
     mrp_htbl_t *requests;
     uint32_t current_request;
@@ -120,39 +124,331 @@ enum {
     ARG_ASM_BRIDGE_LOG,
     ARG_ASM_ZONE,
     ARG_ASM_TPORT_ADDRESS,
-    ARG_ASM_PLAYBACK_RESOURCE,
-    ARG_ASM_RECORDING_RESOURCE,
+    ARG_ASM_AUDIO_PLAYBACK,
+    ARG_ASM_AUDIO_RECORDING,
+    ARG_ASM_VIDEO_PLAYBACK,
+    ARG_ASM_VIDEO_RECORDING,
+    ARG_ASM_EVENT_CONFIG,
 };
 
 
+/*
+ * mapping entry of a single ASM event to a resource set
+ *
+ * Notes:
+ *     Currently it is not possible to specify resource-specific
+ *     mandatory or shared flags; they will be applied to all resources
+ *     within the set. strict/relaxed policy attributes will be applied
+ *     only to audio playback/recording resources.
+ *
+ *     Although for the sake of completeness currently it is possible to
+ *     mark a resource in the mapping as optional, probably this never
+ *     makes any sense, as there is no notion or mechanism in the ASM API
+ *     to request or communicate any optionality to the client.
+ */
+
 typedef struct {
-    char *rset_class;
-    bool mandatory;
-    bool shared;
+    char *asm_event;                           /* ASM event as a string */
+    char *rset_class;                          /* mapped application class */
+    unsigned rset_mask;                        /* involved resources (A/V,P/R)*/
+    bool mandatory;                            /* requires resources ? */
+    bool shared;                               /* agrees to share access */
+    uint32_t priority;                         /* priority within class */
+    bool strict;                               /* strict or relaxed policy ? */
 } rset_class_data_t;
 
 
-static const rset_class_data_t type_map[] = {
-    { "player",  TRUE,   TRUE   }, /* ASM_EVENT_SHARE_MMPLAYER */
-    { "camera",  TRUE,   TRUE   }, /* ASM_EVENT_SHARE_MMCAMCORDER */
-    { "event",   TRUE,   TRUE   }, /* ASM_EVENT_SHARE_MMSOUND */
-    { "game",    TRUE,   TRUE   }, /* ASM_EVENT_SHARE_OPENAL */
-    { "event",   TRUE,   TRUE   }, /* ASM_EVENT_SHARE_AVSYSTEM */
-    { "player",  TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_MMPLAYER */
-    { "camera",  TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_MMCAMCORDER */
-    { "event",   TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_MMSOUND */
-    { "game",    TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_OPENAL */
-    { "event",   TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_AVSYSTEM */
-    { "event",   TRUE,   FALSE  }, /* ASM_EVENT_NOTIFY */
-    { "phone",   TRUE,   FALSE  }, /* ASM_EVENT_CALL */
-    { "radio",   TRUE,   TRUE   }, /* ASM_EVENT_SHARE_FMRADIO */
-    { "radio",   TRUE,   FALSE  }, /* ASM_EVENT_EXCLUSIVE_FMRADIO */
-    { "earjack", TRUE,   TRUE   }, /* ASM_EVENT_EARJACK_UNPLUG */
-    { "alert",   TRUE,   FALSE  }, /* ASM_EVENT_ALARM */
-    { "phone",   TRUE,   FALSE  }, /* ASM_EVENT_VIDEOCALL */
-    { "monitor", TRUE,   TRUE   }, /* ASM_EVENT_MONITOR */
-    { "phone",   TRUE,   FALSE  }, /* ASM_EVENT_RICH_CALL */
+#define EVENT_PREFIX "ASM_EVENT_"
+
+static const char *asm_event_name[] = {
+    "ASM_EVENT_SHARE_MMPLAYER",
+    "ASM_EVENT_SHARE_MMCAMCORDER",
+    "ASM_EVENT_SHARE_MMSOUND",
+    "ASM_EVENT_SHARE_OPENAL",
+    "ASM_EVENT_SHARE_AVSYSTEM",
+    "ASM_EVENT_EXCLUSIVE_MMPLAYER",
+    "ASM_EVENT_EXCLUSIVE_MMCAMCORDER",
+    "ASM_EVENT_EXCLUSIVE_MMSOUND",
+    "ASM_EVENT_EXCLUSIVE_OPENAL",
+    "ASM_EVENT_EXCLUSIVE_AVSYSTEM",
+    "ASM_EVENT_NOTIFY",
+    "ASM_EVENT_CALL",
+    "ASM_EVENT_SHARE_FMRADIO",
+    "ASM_EVENT_EXCLUSIVE_FMRADIO",
+    "ASM_EVENT_EARJACK_UNPLUG",
+    "ASM_EVENT_ALARM",
+    "ASM_EVENT_VIDEOCALL",
+    "ASM_EVENT_MONITOR",
+    "ASM_EVENT_RICH_CALL",
+    NULL
 };
+
+
+#define MAP_EVENT(_event, _class, _resmask, _shared, _strict)   \
+    [ASM_EVENT_##_event] = {                                    \
+    asm_event: #_event,                                         \
+    rset_class: _class,                                         \
+    rset_mask:  _resmask,                                       \
+    mandatory:  TRUE,                                           \
+    shared:     _shared,                                        \
+    strict:     _strict,                                        \
+    }
+
+#define MANDATORY TRUE
+#define SHARED    TRUE
+#define STRICT    TRUE
+
+#define NONE 0x0                               /* no resources */
+#define AP   0x1                               /* audio playback */
+#define AR   0x2                               /* audio recording */
+#define VP   0x4                               /* video playback */
+#define VR   0x8                               /* video recording */
+#define APR  (AP|AR)                           /* audio playback/recording */
+#define VPR  (VP|VR)                           /* video playback/recording */
+#define AVP  (AP|VP)                           /* audio/video playback */
+#define AVPR (AP|AR|VP|VR)                     /* audio/video playback/record */
+
+static rset_class_data_t type_map[] = {
+    MAP_EVENT(SHARE_MMPLAYER       , "player" , AVP ,  SHARED, !STRICT),
+    MAP_EVENT(SHARE_MMCAMCORDER    , "camera" , AVPR,  SHARED, !STRICT),
+    MAP_EVENT(SHARE_MMSOUND        , "event"  , AP  ,  SHARED, !STRICT),
+    MAP_EVENT(SHARE_OPENAL         , "game"   , AVP ,  SHARED, !STRICT),
+    MAP_EVENT(SHARE_AVSYSTEM       , "event"  , AP  ,  SHARED, !STRICT),
+    MAP_EVENT(EXCLUSIVE_MMPLAYER   , "player" , AVP , !SHARED, !STRICT),
+    MAP_EVENT(EXCLUSIVE_MMCAMCORDER, "camera" , AVPR, !SHARED, !STRICT),
+    MAP_EVENT(EXCLUSIVE_MMSOUND    , "event"  , AP  , !SHARED, !STRICT),
+    MAP_EVENT(EXCLUSIVE_OPENAL     , "game"   , AVP , !SHARED, !STRICT),
+    MAP_EVENT(EXCLUSIVE_AVSYSTEM   , "event"  , AP  , !SHARED, !STRICT),
+    MAP_EVENT(NOTIFY               , "event"  , AVP , !SHARED, !STRICT),
+    MAP_EVENT(CALL                 , "phone"  , APR , !SHARED, !STRICT),
+    MAP_EVENT(SHARE_FMRADIO        , "radio"  , AP  ,  SHARED, !STRICT),
+    MAP_EVENT(EXCLUSIVE_FMRADIO    , "radio"  , AP  , !SHARED, !STRICT),
+    MAP_EVENT(EARJACK_UNPLUG       , "earjack", NONE,  SHARED, !STRICT),
+    MAP_EVENT(ALARM                , "alert"  , AP  , !SHARED, !STRICT),
+    MAP_EVENT(VIDEOCALL            , "phone"  , AVPR, !SHARED, !STRICT),
+    MAP_EVENT(MONITOR              , "monitor", NONE,  SHARED, !STRICT),
+    MAP_EVENT(RICH_CALL            , "phone"  , AVPR, !SHARED, !STRICT),
+
+    { NULL, NULL, NONE, FALSE, FALSE, FALSE, 0 }
+};
+
+
+static int max_event_name;
+
+
+static int asm_event(const char *name, int len)
+{
+    const char *event;
+    int i;
+
+    if (!len)
+        len = strlen(name);
+
+    for (i = 0; asm_event_name[i] != NULL; i++) {
+        event = asm_event_name[i];
+
+        if (!strncasecmp(name, event, len) && event[len] == '\0')
+            return i;
+
+        event = asm_event_name[i] + sizeof(EVENT_PREFIX) - 1;
+
+        if (!strncasecmp(name, event, len) && event[len] == '\0')
+            return i;
+    }
+
+    return -1;
+}
+
+
+static int init_event_config(void)
+{
+    rset_class_data_t *data;
+    int i;
+
+    for (i = 0, data = type_map; data->asm_event != NULL; i++, data++) {
+        data->asm_event  = mrp_strdup(data->asm_event);
+        data->rset_class = mrp_strdup(data->rset_class);
+
+        if (data->asm_event == NULL || data->rset_class == NULL)
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+
+static int parse_config(rset_class_data_t *data, char *config)
+{
+    char *s, *colon, *f, *comma, *end;
+    int len;
+    unsigned int mask;
+
+    /*
+     * Parse a configuration entry of the form: 'class:flag1,...,flagn, where
+     * the possible flags are:
+     *
+     *     mandatory/optional: whether resources are mandatory
+     *     shared/exclusive: whether need exclusive resource ownership
+     *     strict/reaxed: apply strict or reaxed policies
+     *     priority: an integer priority between 0 and 255
+     *
+     * Eg. player:mandatory,exclusive,5,relaxed configures the ASM event to
+     *     use the player application class, take mandatory (audio) resources
+     *     in exclusive mode with priority 5, and ask relaxed policy.
+     */
+
+    s = config;
+
+    mrp_debug("parsing config entry %s = '%s'", data->asm_event, config);
+
+    colon = strchr(s, ':');
+
+    if (colon == NULL) {
+        mrp_log_error("Missing app. class name for ASM event '%s'.",
+                      data->asm_event);
+        return FALSE;
+    }
+
+    len = colon - (config) + 1;
+    mrp_free(data->rset_class);
+    data->rset_class = mrp_datadup(config, len - 1);
+    data->rset_class[len - 1] = '\0';
+
+    mrp_debug("class name: '%s'", data->rset_class);
+
+    f = colon + 1;
+    comma = strchr(f, ',');
+
+    mask = 0x80000000;
+    while (f != NULL) {
+#       define MATCHES(_f, _n, _l) ({                                   \
+                mrp_debug("comparing flag '%*.*s' to '%s'...",          \
+                          _l, _l, _f, _n);                              \
+                (!strncmp(_f, _n, _l) &&                                \
+                 (_f[_l] == '\0' || _f[_l] == ','));})
+
+        len = (comma ? comma - f : (int)strlen(f));
+
+        if      (MATCHES(f, "mandatory", len)) data->mandatory = TRUE;
+        else if (MATCHES(f, "optional" , len)) data->mandatory = FALSE;
+        else if (MATCHES(f, "shared"   , len)) data->shared    = TRUE;
+        else if (MATCHES(f, "exclusive", len)) data->shared    = FALSE;
+        else if (MATCHES(f, "strict",    len)) data->strict    = TRUE;
+        else if (MATCHES(f, "relaxed",   len)) data->strict    = FALSE;
+        else if (MATCHES(f, "none"   ,   len)) mask            = NONE;
+        else if (MATCHES(f, "AP"     ,   len)) mask           |= AP;
+        else if (MATCHES(f, "AR"     ,   len)) mask           |= AR;
+        else if (MATCHES(f, "VP"     ,   len)) mask           |= VP;
+        else if (MATCHES(f, "VR"     ,   len)) mask           |= VR;
+        else if (MATCHES(f, "APR"    ,   len)) mask           |= APR;
+        else if (MATCHES(f, "VPR"    ,   len)) mask           |= VPR;
+        else if (MATCHES(f, "AVP"    ,   len)) mask           |= AVP;
+        else if (MATCHES(f, "AVPR"   ,   len)) mask           |= AVPR;
+        else if (MATCHES(f, "audio_playback" , len)) mask     |= AP;
+        else if (MATCHES(f, "audio_recording", len)) mask     |= AR;
+        else if (MATCHES(f, "video_playback" , len)) mask     |= VP;
+        else if (MATCHES(f, "video_recording", len)) mask     |= VR;
+        else {
+            data->priority = strtoul(f, &end, 10);
+            if (end && *end && *end != ',' && *end != ';') {
+                mrp_log_error("Invalid flag or priority (%s) for event %s.",
+                              f, data->asm_event);
+                return FALSE;
+            }
+            if (data->priority > 256) {
+                mrp_log_error("Out of range priority (%d) for event %s.",
+                              data->priority, data->asm_event);
+            }
+        }
+
+        /* if at the end stop, otherwise go to the next flag */
+        f = (comma ? comma + 1 : NULL);
+        comma = (f ? strchr(f, ',') : NULL);
+
+#       undef IS_FLAG
+    }
+
+    if (mask != 0x80000000)
+        data->rset_mask = (mask & 0x0fffffff);
+
+    return TRUE;
+}
+
+
+static int parse_event_config(mrp_plugin_arg_t *events)
+{
+    rset_class_data_t *data;
+    mrp_plugin_arg_t  *cfg;
+    int                evt;
+
+    if (events == NULL || events->rest.args == NULL)
+        return TRUE;
+
+    mrp_plugin_foreach_undecl_arg(events, cfg) {
+        if (cfg->type != MRP_PLUGIN_ARG_TYPE_STRING) {
+            mrp_log_warning("Ignoring non-string configuration for '%s'.",
+                            cfg->key);
+            continue;
+        }
+
+        evt = asm_event(cfg->key, 0);
+
+        if (evt < 0) {
+            mrp_log_error("Ignoring configuration for unknown ASM event '%s'.",
+                          cfg->key);
+            continue;
+        }
+
+        data = type_map + evt;
+
+        if (!parse_config(data, cfg->str)) {
+            mrp_log_error("Failed to parse configuration '%s' for ASM event "
+                          "'%s'.", cfg->str, cfg->key);
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+
+static void dump_event_config(void)
+{
+    rset_class_data_t *data;
+    int i, l;
+    char resmask[16], *rmp;
+
+    if (max_event_name <= 0) {
+        for (i = 0, data = type_map; i < ASM_EVENT_MAX; i++, data++)
+            if (data->asm_event != NULL &&
+                (l = strlen(data->asm_event)) > max_event_name)
+                max_event_name = l;
+    }
+
+    mrp_debug("event mapping:");
+    for (i = 0, data = type_map; i < ASM_EVENT_MAX; i++, data++) {
+        rmp = resmask;
+        *rmp++ = 'A';
+        if (!(data->rset_mask & APR)) *rmp++ = '-';
+        else {
+            if (data->rset_mask & AP) *rmp++ = 'P';
+            if (data->rset_mask & AR) *rmp++ = 'R';
+        }
+        *rmp++ = '/';
+        *rmp++ = 'V';
+        if (!(data->rset_mask & VPR)) *rmp++ = '-';
+        else {
+            if (data->rset_mask & VP) *rmp++ = 'P';
+            if (data->rset_mask & VR) *rmp++ = 'R';
+        }
+        *rmp = '\0';
+        mrp_debug("%*.*s: %s (%s, prio %d, %s/%s, %s)",
+                  max_event_name, max_event_name, data->asm_event,
+                  data->rset_class, resmask, data->priority,
+                  data->mandatory ? "m" : "o", data->shared ? "s" : "e",
+                  data->strict ? "strict" : "relaxed");
+    }
+}
 
 
 static void *u_to_p(uint32_t u)
@@ -452,7 +748,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 {
     pid_t pid = msg->instance_id;
-    mrp_attr_t attrs[2];
+    mrp_attr_t attrs[3];
     char pidbuf[32];
 
     asm_to_lib_t *reply;
@@ -538,7 +834,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                  * (even originating from the same client), since they are
                  * of the same resource type (audio_playback). */
                 d->rset = mrp_resource_set_create(ctx->resource_client, 0,
-                        0, event_cb, d);
+                        rset_data->priority, event_cb, d);
 
                 if (!d->rset) {
                     mrp_log_error("Failed to create resource set!");
@@ -550,25 +846,59 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 attrs[0].type = mqi_string;
                 attrs[0].name = "pid";
                 attrs[0].value.string = pidbuf;
-                attrs[1].name = NULL;
+                attrs[1].type = mqi_string;
+                attrs[1].name = "policy";
+                attrs[1].value.string = rset_data->strict ? "strict":"relaxed";
+                attrs[2].name = NULL;
 
-                if (mrp_resource_set_add_resource(d->rset,
-                            ctx->playback_resource, rset_data->shared,
-                            &attrs[0],
-                            rset_data->mandatory) < 0) {
-                    mrp_log_error("Failed to add playback resource!");
-                    mrp_resource_set_destroy(d->rset);
-                    mrp_free(d);
-                    goto error;
+                if (rset_data->rset_mask & AP) {
+                    if (mrp_resource_set_add_resource(d->rset,
+                                ctx->audio_playback,
+                                rset_data->shared,
+                                &attrs[0],
+                                rset_data->mandatory) < 0) {
+                        mrp_log_error("Failed to add audio playback resource!");
+                        mrp_resource_set_destroy(d->rset);
+                        mrp_free(d);
+                        goto error;
+                    }
                 }
 
-                if (mrp_resource_set_add_resource(d->rset,
-                            ctx->recording_resource, rset_data->shared, NULL,
-                            rset_data->mandatory) < 0) {
-                    mrp_log_error("Failed to add recording resource!");
-                    mrp_resource_set_destroy(d->rset);
-                    mrp_free(d);
-                    goto error;
+                if (rset_data->rset_mask & AR) {
+                    if (mrp_resource_set_add_resource(d->rset,
+                                ctx->audio_recording, rset_data->shared,
+                                &attrs[0],
+                                rset_data->mandatory) < 0) {
+                        mrp_log_error("Failed to add audio record resource!");
+                        mrp_resource_set_destroy(d->rset);
+                        mrp_free(d);
+                        goto error;
+                    }
+                }
+
+                if (rset_data->rset_mask & VP) {
+                    if (mrp_resource_set_add_resource(d->rset,
+                                ctx->video_playback,
+                                rset_data->shared,
+                                &attrs[0],
+                                rset_data->mandatory) < 0) {
+                        mrp_log_error("Failed to add video playback resource!");
+                        mrp_resource_set_destroy(d->rset);
+                        mrp_free(d);
+                        goto error;
+                    }
+                }
+
+                if (rset_data->rset_mask & VR) {
+                    if (mrp_resource_set_add_resource(d->rset,
+                                ctx->video_recording, rset_data->shared,
+                                &attrs[0],
+                                rset_data->mandatory) < 0) {
+                        mrp_log_error("Failed to add video record resource!");
+                        mrp_resource_set_destroy(d->rset);
+                        mrp_free(d);
+                        goto error;
+                    }
                 }
 
                 if (mrp_application_class_add_resource_set(
@@ -1056,8 +1386,22 @@ static int asm_init(mrp_plugin_t *plugin)
     ctx->zone = args[ARG_ASM_ZONE].str;
     ctx->log = args[ARG_ASM_BRIDGE_LOG].str;
 
-    ctx->playback_resource = args[ARG_ASM_PLAYBACK_RESOURCE].str;
-    ctx->recording_resource = args[ARG_ASM_RECORDING_RESOURCE].str;
+    ctx->audio_playback = args[ARG_ASM_AUDIO_PLAYBACK].str;
+    ctx->audio_recording = args[ARG_ASM_AUDIO_RECORDING].str;
+    ctx->video_playback = args[ARG_ASM_VIDEO_PLAYBACK].str;
+    ctx->video_recording = args[ARG_ASM_VIDEO_RECORDING].str;
+
+    if (!init_event_config()) {
+        mrp_log_error("Failed to initialize event/class mapping.");
+        return FALSE;
+    }
+
+    if (!parse_event_config(&args[ARG_ASM_EVENT_CONFIG])) {
+        mrp_log_error("Failed to parse event mapping configuration.");
+        return FALSE;
+    }
+    else
+        dump_event_config();
 
     /* create the transport and put it to listen mode */
 
@@ -1219,9 +1563,12 @@ static mrp_plugin_arg_t args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ASM_BRIDGE, STRING, "asm_bridge", "/usr/sbin/asm-bridge"),
     MRP_PLUGIN_ARGIDX(ARG_ASM_BRIDGE_LOG, STRING, "asm_bridge_log", NULL),
     MRP_PLUGIN_ARGIDX(ARG_ASM_ZONE, STRING, "zone", "default"),
-    MRP_PLUGIN_ARGIDX(ARG_ASM_TPORT_ADDRESS, STRING, "tport_address", "unxs:/tmp/murphy/asm"),
-    MRP_PLUGIN_ARGIDX(ARG_ASM_PLAYBACK_RESOURCE, STRING, "playback_resource", "audio_playback"),
-    MRP_PLUGIN_ARGIDX(ARG_ASM_RECORDING_RESOURCE, STRING, "recording_resource", "audio_recording"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_TPORT_ADDRESS, STRING, "tport_address", DEFAULT_TRANSPORT),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_AUDIO_PLAYBACK, STRING, "audio_playback", "audio_playback"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_AUDIO_RECORDING, STRING, "audio_recording", "audio_recording"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_VIDEO_PLAYBACK, STRING, "video_playback", "video_playback"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_VIDEO_RECORDING, STRING, "video_recording", "video_recording"),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_EVENT_CONFIG, UNDECL, NULL, NULL)
 };
 
 
