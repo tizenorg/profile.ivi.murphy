@@ -50,6 +50,7 @@ end
 if m:plugin_exists('resource-asm') then
     m:load_plugin('resource-asm', {
         zone = "driver",
+        share_mmplayer = "player:AVP,mandatory,exclusive,relaxed"
     })
 else
     m:info("No audio session manager plugin found...")
