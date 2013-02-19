@@ -1,2 +1,5 @@
 * Tue Feb 19 21:55:42 EET 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.17
 - release: released 0.0.17 (git: 86f8ebd6f4e210617e8b93d916a8bc1b11addfd5).
+- basic websocket and websocket transport support, WRT resource API
+- more flexible resource configurability
+- numerous crash and other bug fixes
