@@ -155,6 +155,8 @@ void tel_watcher(int event, tel_call_t *call, void *data)
         return;
     }
 
+    trh = mqi_begin_transaction();
+
     mrp_debug("entering telephony watcher");
     switch (event) {
 
@@ -168,9 +170,7 @@ void tel_watcher(int event, tel_call_t *call, void *data)
             MQI_OPERATOR(end)
         };
 
-        trh = mqi_begin_transaction();
         n = MQI_DELETE(tel_calls, where);
-        mqi_commit_transaction(trh);
         mrp_debug("%d call on service/modem %s removed from Murphy DB",
                   service, n);
         break;
@@ -187,9 +187,7 @@ void tel_watcher(int event, tel_call_t *call, void *data)
 
         call_ptr_list[0] = call;
 
-        trh = mqi_begin_transaction();
         n = MQI_INSERT_INTO(tel_calls, tel_calls_columns, call_ptr_list);
-        mqi_commit_transaction(trh);
 
         mrp_debug("%d call inserted into Murphy DB", n);
         break;
@@ -205,9 +203,7 @@ void tel_watcher(int event, tel_call_t *call, void *data)
             MQI_OPERATOR(end)
         };
 
-        trh = mqi_begin_transaction();
         MQI_DELETE(tel_calls, where);
-        mqi_commit_transaction(trh);
 
         mrp_debug("call %s removed from Murphy DB", call->call_id);
         break;
@@ -220,9 +216,7 @@ void tel_watcher(int event, tel_call_t *call, void *data)
 
         call_ptr_list[0] = call;
 
-        trh = mqi_begin_transaction();
         MQI_REPLACE(tel_calls, tel_calls_columns, call_ptr_list);
-        mqi_commit_transaction(trh);
 
         mrp_debug("call changed in Murphy DB");
         break;
@@ -232,6 +226,8 @@ void tel_watcher(int event, tel_call_t *call, void *data)
     }
 
     check_resources();
+
+    mqi_commit_transaction(trh);
 }
 
 
