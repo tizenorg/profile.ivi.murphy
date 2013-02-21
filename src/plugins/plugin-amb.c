@@ -51,6 +51,7 @@ enum {
 #define AMB_OBJECT              "obj"
 #define AMB_INTERFACE           "interface"
 #define AMB_MEMBER              "property"
+#define AMB_SIGMEMBER           "notification"
 #define AMB_SIGNATURE           "signature"
 #define AMB_BASIC_TABLE_NAME    "basic_table_name"
 #define AMB_OUTPUTS             "outputs"
@@ -61,7 +62,7 @@ enum {
 signal sender=:1.117 -> dest=(null destination) serial=961
 path=/org/automotive/runningstatus/vehicleSpeed;
 interface=org.automotive.vehicleSpeed;
-member=VehicleSpeed
+member=VehicleSpeedChanged
    variant       int32 0
 
 
@@ -94,7 +95,8 @@ typedef struct {
         const char *obj;
         const char *iface;
         const char *name;
-        const char *sig;
+        const char *signame;
+        const char *signature;
     } dbus_data;
     const char *name;
     const char *basic_table_name;
@@ -246,10 +248,13 @@ static int amb_constructor(lua_State *L)
                     goto error;
 
                 if (strcmp(key, "signature") == 0) {
-                    prop->dbus_data.sig = mrp_strdup(value);
+                    prop->dbus_data.signature = mrp_strdup(value);
                 }
                 else if (strcmp(key, "property") == 0) {
                     prop->dbus_data.name = mrp_strdup(value);
+                }
+                else if (strcmp(key, "notification") == 0) {
+                    prop->dbus_data.signame = mrp_strdup(value);
                 }
                 else if (strcmp(key, "obj") == 0) {
                     prop->dbus_data.obj = mrp_strdup(value);
@@ -264,11 +269,15 @@ static int amb_constructor(lua_State *L)
                 lua_pop(L, 1);
             }
 
+            if (prop->dbus_data.signame == NULL)
+                prop->dbus_data.signame = mrp_strdup(prop->dbus_data.name);
+
             /* check that we have all necessary data */
-            if (prop->dbus_data.sig == NULL ||
+            if (prop->dbus_data.signature == NULL ||
                 prop->dbus_data.iface == NULL ||
                 prop->dbus_data.obj == NULL ||
-                prop->dbus_data.name == NULL) {
+                prop->dbus_data.name == NULL ||
+                prop->dbus_data.signame == NULL) {
                 goto error;
             }
         }
@@ -315,7 +324,7 @@ static int amb_constructor(lua_State *L)
     if (prop->handler_ref == LUA_NOREF) {
         basic_table_data_t *tdata;
 
-        w->prop.type = w->lua_prop->dbus_data.sig[0]; /* FIXME */
+        w->prop.type = w->lua_prop->dbus_data.signature[0]; /* FIXME */
 
         tdata = create_basic_property_table(prop->basic_table_name,
             prop->dbus_data.name, w->prop.type);
@@ -379,7 +388,7 @@ static int amb_getfield(lua_State *L)
     if (!prop)
         goto error;
 
-    mrp_log_info("> amb_getfield");
+    mrp_debug("> amb_getfield");
 
     if (strncmp(field_name, AMB_NAME, field_name_len) == 0) {
         if (prop->name)
@@ -408,8 +417,12 @@ static int amb_getfield(lua_State *L)
         lua_pushstring(L, prop->dbus_data.name);
         lua_settable(L, -3);
 
+        lua_pushstring(L, AMB_SIGMEMBER);
+        lua_pushstring(L, prop->dbus_data.signame);
+        lua_settable(L, -3);
+
         lua_pushstring(L, "signature");
-        lua_pushstring(L, prop->dbus_data.sig);
+        lua_pushstring(L, prop->dbus_data.signature);
         lua_settable(L, -3);
     }
     else if (strncmp(field_name, "basic_table_name", field_name_len) == 0) {
@@ -441,7 +454,7 @@ static int amb_setfield(lua_State *L)
 
     MRP_UNUSED(L);
 
-    mrp_log_info("> amb_setfield");
+    mrp_debug("> amb_setfield");
 
     MRP_LUA_LEAVE(0);
 }
@@ -698,11 +711,11 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
 
     /*
     mrp_log_info("iter sig: %s, expected: %s",
-            variant_sig, w->lua_prop->dbus_data.sig);
+            variant_sig, w->lua_prop->dbus_data.signature);
     */
 
     /* check if we got what we were expecting */
-    if (strcmp(variant_sig, w->lua_prop->dbus_data.sig) != 0)
+    if (strcmp(variant_sig, w->lua_prop->dbus_data.signature) != 0)
         goto error;
 
     if (w->lua_prop->handler_ref == LUA_NOREF)
@@ -813,7 +826,7 @@ static int property_signal_handler(mrp_dbus_t *dbus, DBusMessage *msg,
 
     MRP_UNUSED(dbus);
 
-    mrp_log_info("amb: received property signal");
+    mrp_debug("amb: received property signal");
 
     if (w->tdata) {
         basic_property_handler(msg, w);
@@ -832,7 +845,7 @@ static void property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
 
     MRP_UNUSED(dbus);
 
-    mrp_log_info("amb: received property method reply");
+    mrp_debug("amb: received property method reply");
 
     if (w->tdata) {
         basic_property_handler(msg, w);
@@ -847,12 +860,13 @@ static int subscribe_property(data_t *ctx, dbus_property_watch_t *w)
     const char *obj = w->lua_prop->dbus_data.obj;
     const char *iface = w->lua_prop->dbus_data.iface;
     const char *name = w->lua_prop->dbus_data.name;
+    const char *signame = w->lua_prop->dbus_data.signame;
 
     mrp_log_info("subscribing to signal '%s.%s' at '%s'",
-            iface, name, obj);
+            iface, signame, obj);
 
     mrp_dbus_subscribe_signal(ctx->dbus, property_signal_handler, w, NULL,
-            obj, iface, name, NULL);
+            obj, iface, signame, NULL);
 
     /* Ok, now we are listening to property changes. Let's get the initial
      * value. */
@@ -874,19 +888,19 @@ static void print_basic_property(dbus_basic_property_t *prop)
     switch (prop->type) {
         case DBUS_TYPE_INT32:
         case DBUS_TYPE_INT16:
-            mrp_log_info("Property %s : %i", prop->name, prop->value.i);
+            mrp_debug("Property %s : %i", prop->name, prop->value.i);
             break;
         case DBUS_TYPE_UINT32:
         case DBUS_TYPE_UINT16:
         case DBUS_TYPE_BOOLEAN:
         case DBUS_TYPE_BYTE:
-            mrp_log_info("Property %s : %u", prop->name, prop->value.u);
+            mrp_debug("Property %s : %u", prop->name, prop->value.u);
             break;
         case DBUS_TYPE_DOUBLE:
-            mrp_log_info("Property %s : %f", prop->name, prop->value.f);
+            mrp_debug("Property %s : %f", prop->name, prop->value.f);
             break;
         case DBUS_TYPE_STRING:
-            mrp_log_info("Property %s : %s", prop->name, prop->value.s);
+            mrp_debug("Property %s : %s", prop->name, prop->value.s);
             break;
         default:
             mrp_log_error("Unknown value in property");
@@ -902,7 +916,7 @@ static void basic_property_updated(dbus_basic_property_t *prop, void *userdata)
     basic_table_data_t *tdata = w->tdata;
     mqi_handle_t tx;
 
-    mrp_log_info("> basic_property_updated");
+    mrp_debug("> basic_property_updated");
 
     print_basic_property(prop);
 
@@ -971,8 +985,8 @@ static void basic_property_updated(dbus_basic_property_t *prop, void *userdata)
         r = mql_exec_statement(mql_result_string, tdata->update_operation);
     }
 
-    mrp_log_info("amb: %s", mql_result_is_success(r) ? "updated database" :
-            mql_result_error_get_message(r));
+    mrp_debug("amb: %s", mql_result_is_success(r) ? "updated database" :
+              mql_result_error_get_message(r));
 
     mql_result_free(r);
 
