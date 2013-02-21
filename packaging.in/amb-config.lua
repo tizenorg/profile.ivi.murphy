@@ -13,6 +13,7 @@ amb.property {
         obj = "/org/automotive/runningstatus/vehicleSpeed",
         interface = "org.automotive.vehicleSpeed",
         property = "VehicleSpeed",
+        notification = "VehicleSpeedChanged",
         signature = "i",
     },
 }
@@ -52,6 +53,7 @@ amb.property {
         obj = "/org/automotive/runningstatus/transmission",
         interface = "org.automotive.transmission",
         property = "ShiftPosition",
+        notification = "ShiftPositionChanged",
         signature = "y",
     },
 }
