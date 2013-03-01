@@ -30,6 +30,7 @@
 #include <murphy/common.h>
 #include <murphy/core.h>
 #include <murphy/common/dbus.h>
+#include <murphy/common/process.h>
 
 #include <murphy-db/mdb.h>
 #include <murphy-db/mqi.h>
@@ -42,7 +43,8 @@
 
 enum {
     ARG_AMB_DBUS_ADDRESS,
-    ARG_AMB_CONFIG_FILE
+    ARG_AMB_CONFIG_FILE,
+    ARG_AMB_ID,
 };
 
 #define AMB_NAME                "name"
@@ -108,6 +110,7 @@ typedef struct {
     mrp_dbus_t *dbus;
     const char *amb_addr;
     const char *config_file;
+    const char *amb_id;
     lua_State *L;
     mrp_list_hook_t lua_properties;
 } data_t;
@@ -458,19 +461,6 @@ static int amb_setfield(lua_State *L)
 
     MRP_LUA_LEAVE(0);
 }
-
-#if 0
-bool really_create_basic_handler(lua_State *L, void *data,
-                    const char *signature, mrp_funcbridge_value_t *args,
-                    char  *ret_type, mrp_funcbridge_value_t *ret_val)
-{
-    mrp_log_info("> really_create_basic_handler");
-
-
-
-    return true;
-}
-#endif
 
 /* lua config end */
 
@@ -912,7 +902,7 @@ static void basic_property_updated(dbus_basic_property_t *prop, void *userdata)
     char buf[512];
     int buflen;
     mql_result_t *r;
-    dbus_property_watch_t *w = userdata;
+    dbus_property_watch_t *w = (dbus_property_watch_t *) userdata;
     basic_table_data_t *tdata = w->tdata;
     mqi_handle_t tx;
 
@@ -1117,12 +1107,25 @@ static int load_config(lua_State *L, const char *path)
     }
 }
 
+
+static void amb_watch(const char *id, mrp_process_state_t state, void *data)
+{
+    data_t *ctx = (data_t *) data;
+
+    if (strcmp(id, ctx->amb_id) != 0)
+        return;
+
+    mrp_log_info("ambd state changed to %s",
+            state == MRP_PROCESS_STATE_READY ? "ready" : "not ready");
+}
+
+
 static int amb_init(mrp_plugin_t *plugin)
 {
     data_t *ctx;
     mrp_plugin_arg_t *args = plugin->args;
 
-    ctx = mrp_allocz(sizeof(data_t));
+    ctx = (data_t *) mrp_allocz(sizeof(data_t));
 
     if (!ctx)
         goto error;
@@ -1131,6 +1134,7 @@ static int amb_init(mrp_plugin_t *plugin)
 
     ctx->amb_addr = args[ARG_AMB_DBUS_ADDRESS].str;
     ctx->config_file = args[ARG_AMB_CONFIG_FILE].str;
+    ctx->amb_id = args[ARG_AMB_ID].str;
 
     mrp_log_info("amb dbus address: %s", ctx->amb_addr);
     mrp_log_info("amb config file: %s", ctx->config_file);
@@ -1156,11 +1160,6 @@ static int amb_init(mrp_plugin_t *plugin)
     /* TODO: create here a "manager" lua object and put that to the global
      * lua table? This one then has a pointer to the C context. */
 
-#if 0
-    mrp_funcbridge_create_cfunc(L, "create_basic_handler", "amb",
-                                really_create_basic_handler, (void *)0x1234);
-#endif
-
     /* 1. read the configuration file. The configuration must tell
             - target object (/org/automotive/runningstatus/vehicleSpeed)
             - target interface (org.automotive.vehicleSpeed)
@@ -1170,6 +1169,11 @@ static int amb_init(mrp_plugin_t *plugin)
      */
 
     load_config(ctx->L, ctx->config_file);
+
+    /* TODO: if loading the config failed, go to error */
+
+    if (mrp_process_set_watch(ctx->amb_id, plugin->ctx->ml, amb_watch, ctx) < 0)
+        goto error;
 
     return TRUE;
 
@@ -1181,7 +1185,7 @@ error:
 
 static void amb_exit(mrp_plugin_t *plugin)
 {
-    data_t *ctx = plugin->data;
+    data_t *ctx = (data_t *) plugin->data;
     mrp_list_hook_t *p, *n;
 
     /* for all subscribed properties, unsubscribe and free memory */
@@ -1206,6 +1210,7 @@ static mrp_plugin_arg_t args[] = {
             "org.automotive.message.broker"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_CONFIG_FILE, STRING, "config_file",
             "/etc/murphy/plugins/amb/config.lua"),
+    MRP_PLUGIN_ARGIDX(ARG_AMB_ID, STRING, "amb_id", "amb"),
 };
 
 
