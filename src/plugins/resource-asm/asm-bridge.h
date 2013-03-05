@@ -64,7 +64,8 @@ typedef struct {
     int32_t    alloc_handle;
     int32_t    cmd_handle;
     uint32_t   result_sound_command;
-    uint32_t   result_sound_state;
+    uint32_t   result_sound_state; /* ASM_sound_states_t */
+    int32_t    former_sound_event; /* ASM_sound_events_t */
     bool       check_privilege;
 } asm_to_lib_t;
 
@@ -105,6 +106,7 @@ MRP_DATA_DESCRIPTOR(asm_to_lib_descr, TAG_ASM_TO_LIB, asm_to_lib_t,
         MRP_DATA_MEMBER(asm_to_lib_t, cmd_handle, MRP_MSG_FIELD_INT32),
         MRP_DATA_MEMBER(asm_to_lib_t, result_sound_command, MRP_MSG_FIELD_UINT32),
         MRP_DATA_MEMBER(asm_to_lib_t, result_sound_state, MRP_MSG_FIELD_UINT32),
+        MRP_DATA_MEMBER(asm_to_lib_t, former_sound_event, MRP_MSG_FIELD_INT32),
         MRP_DATA_MEMBER(asm_to_lib_t, check_privilege, MRP_MSG_FIELD_BOOL));
 
 MRP_DATA_DESCRIPTOR(asm_to_lib_cb_descr, TAG_ASM_TO_LIB_CB, asm_to_lib_cb_t,
