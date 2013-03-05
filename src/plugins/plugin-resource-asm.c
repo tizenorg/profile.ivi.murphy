@@ -546,6 +546,7 @@ static void dump_outgoing_msg(asm_to_lib_t *msg, asm_data_t *ctx)
     mrp_log_info(" <--   command handle:  %d", msg->cmd_handle);
     mrp_log_info(" <--   sound command:   0x%04x", msg->result_sound_command);
     mrp_log_info(" <--   state:           0x%04x", msg->result_sound_state);
+    mrp_log_info(" <--   former event:    %d", msg->former_sound_event);
     mrp_log_info(" <--   check privilege: %s",
             msg->check_privilege ? "TRUE" : "FALSE");
 }
@@ -592,7 +593,7 @@ static uint32_t get_handle(uint32_t data) {
 
 static void htbl_free_set(void *key, void *object)
 {
-    resource_set_data_t *d = object;
+    resource_set_data_t *d = (resource_set_data_t *) object;
 
     MRP_UNUSED(key);
 
@@ -604,7 +605,7 @@ static void htbl_free_set(void *key, void *object)
 
 
 static client_t *create_client(uint32_t pid) {
-    client_t *client = mrp_allocz(sizeof(client_t));
+    client_t *client = (client_t *) mrp_allocz(sizeof(client_t));
     mrp_htbl_config_t set_conf;
 
     if (!client)
@@ -633,7 +634,7 @@ static client_t *create_client(uint32_t pid) {
 
 static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 {
-    resource_set_data_t *d = data;
+    resource_set_data_t *d = (resource_set_data_t *) data;
     asm_data_t *ctx = d->ctx;
 
     mrp_log_info("Event CB: id %u, set %p", request_id, set);
@@ -657,6 +658,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             reply.cmd_handle = d->handle;
 
             reply.result_sound_state = ASM_STATE_IGNORE;
+            reply.former_sound_event = ASM_EVENT_NONE;
 
             /* TODO: check the mask properly */
             if (mrp_get_resource_set_grant(d->rset)) {
@@ -687,6 +689,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 
             reply.result_sound_command = ASM_COMMAND_NONE;
             reply.result_sound_state = ASM_STATE_STOP;
+            reply.former_sound_event = ASM_EVENT_NONE;
 
             /* no response needed for moving to state other than PLAYING */
             dump_outgoing_msg(&reply, ctx);
@@ -753,7 +756,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
     asm_to_lib_t *reply;
 
-    reply = mrp_allocz(sizeof(asm_to_lib_t));
+    reply = (asm_to_lib_t *) mrp_allocz(sizeof(asm_to_lib_t));
 
     if (!reply)
         return NULL;
@@ -766,6 +769,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
     reply->result_sound_command = ASM_COMMAND_NONE;
     reply->result_sound_state = ASM_STATE_IGNORE;
+    reply->former_sound_event = ASM_EVENT_NONE;
 
     switch(msg->request_id) {
         case ASM_REQUEST_REGISTER:
@@ -778,7 +782,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             mrp_log_info("REQUEST: REGISTER");
 
             /* see if the process already has a client object */
-            client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
+            client = (client_t *) mrp_htbl_lookup(ctx->clients, u_to_p(pid));
 
             if (!client) {
                 client = create_client(pid);
@@ -803,7 +807,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             }
 
             handle = client->current_handle++;
-            d = mrp_allocz(sizeof(resource_set_data_t));
+            d = (resource_set_data_t *) mrp_allocz(sizeof(resource_set_data_t));
 
             if (!d)
                 goto error;
@@ -917,20 +921,24 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             reply->cmd_handle = reply->alloc_handle;
 
             reply->result_sound_state = ASM_STATE_WAITING;
+            reply->former_sound_event = ASM_EVENT_NONE;
             break;
         }
         case ASM_REQUEST_UNREGISTER:
             {
-                client_t *client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
+                client_t *client = (client_t *)
+                        mrp_htbl_lookup(ctx->clients, u_to_p(pid));
 
                 mrp_log_info("REQUEST: UNREGISTER");
 
                 if (client) {
                     resource_set_data_t *d;
 
-                    d = mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
+                    d = (resource_set_data_t *)
+                            mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
                     if (!d) {
-                        mrp_log_error("set '%u.%u' not found", pid, msg->handle);
+                        mrp_log_error("set '%u.%u' not found", pid,
+                                msg->handle);
                         goto error;
                     }
 
@@ -965,7 +973,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             }
         case ASM_REQUEST_SETSTATE:
             {
-                client_t *client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
+                client_t *client =
+                        (client_t *) mrp_htbl_lookup(ctx->clients, u_to_p(pid));
 
                 resource_set_data_t *d;
 
@@ -976,7 +985,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     goto error;
                 }
 
-                d = mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
+                d = (resource_set_data_t *)
+                        mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
                 if (!d || !d->rset) {
                     mrp_log_error("set '%u.%u' not found", pid, msg->handle);
                     goto error;
@@ -1024,19 +1034,22 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             {
                 const rset_class_data_t *rset_data;
 
-                rset_data = map_slp_media_type_to_murphy(msg->sound_event);
+                rset_data = (rset_class_data_t *)
+                        map_slp_media_type_to_murphy(msg->sound_event);
 
                 mrp_log_info("REQUEST: GET STATE for %s",
                         rset_data ? rset_data->rset_class : "NULL");
 
                 /* TODO: get the status for rset_data->rset_class . */
                 reply->result_sound_state = ASM_STATE_IGNORE;
+                reply->former_sound_event = ASM_EVENT_NONE;
 
                 break;
             }
         case ASM_REQUEST_GETMYSTATE:
             {
-                client_t *client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
+                client_t *client = (client_t *)
+                        mrp_htbl_lookup(ctx->clients, u_to_p(pid));
                 resource_set_data_t *d;
 
                 mrp_log_info("REQUEST: GET MY STATE");
@@ -1046,18 +1059,21 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     goto error;
                 }
 
-                d = mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
+                d = (resource_set_data_t *)
+                        mrp_htbl_lookup(client->sets, u_to_p(msg->handle));
                 if (!d || !d->rset) {
                     mrp_log_error("set '%u.%u' not found", pid, msg->handle);
                     goto error;
                 }
 
                 reply->result_sound_state = d->granted_state;
+                reply->former_sound_event = ASM_EVENT_NONE;
                 break;
             }
         case ASM_REQUEST_EMERGENT_EXIT:
             {
-                client_t *client = mrp_htbl_lookup(ctx->clients, u_to_p(pid));
+                client_t *client = (client_t *)
+                        mrp_htbl_lookup(ctx->clients, u_to_p(pid));
 
                 mrp_log_info("REQUEST: EMERGENCY EXIT");
 
@@ -1131,7 +1147,7 @@ static void process_cb_msg(lib_to_asm_cb_t *msg, asm_data_t *ctx)
 static void recvdatafrom_evt(mrp_transport_t *t, void *data, uint16_t tag,
                      mrp_sockaddr_t *addr, socklen_t addrlen, void *user_data)
 {
-    asm_data_t *ctx = user_data;
+    asm_data_t *ctx = (asm_data_t *) user_data;
 
     MRP_UNUSED(addr);
     MRP_UNUSED(addrlen);
@@ -1139,7 +1155,7 @@ static void recvdatafrom_evt(mrp_transport_t *t, void *data, uint16_t tag,
     switch (tag) {
         case TAG_LIB_TO_ASM:
             {
-                lib_to_asm_t *msg = data;
+                lib_to_asm_t *msg = (lib_to_asm_t *) data;
                 asm_to_lib_t *reply;
 
                 /* client requests something from us */
@@ -1157,7 +1173,7 @@ static void recvdatafrom_evt(mrp_transport_t *t, void *data, uint16_t tag,
             }
         case TAG_LIB_TO_ASM_CB:
             {
-                lib_to_asm_cb_t *msg = data;
+                lib_to_asm_cb_t *msg = (lib_to_asm_cb_t *) data;
 
                 /* client tells us which state it entered after preemption */
 
@@ -1185,7 +1201,7 @@ static void recvdata_evt(mrp_transport_t *t, void *data, uint16_t tag, void *use
 static void closed_evt(mrp_transport_t *t, int error, void *user_data)
 {
 #if 1
-    asm_data_t *ctx = user_data;
+    asm_data_t *ctx = (asm_data_t *) user_data;
 
     MRP_UNUSED(error);
 
@@ -1203,7 +1219,7 @@ static void closed_evt(mrp_transport_t *t, int error, void *user_data)
 
 static void connection_evt(mrp_transport_t *lt, void *user_data)
 {
-    asm_data_t *ctx = user_data;
+    asm_data_t *ctx = (asm_data_t *) user_data;
 
     mrp_log_info("connection!");
 
@@ -1219,7 +1235,6 @@ static void connection_evt(mrp_transport_t *lt, void *user_data)
     mrp_transport_destroy(lt);
     ctx->mt = NULL;
 }
-
 
 
 static int tport_setup(const char *address, asm_data_t *ctx)
@@ -1298,7 +1313,7 @@ error:
 static void signal_handler(mrp_mainloop_t *ml, mrp_sighandler_t *h,
                            int signum, void *user_data)
 {
-    asm_data_t *ctx = user_data;
+    asm_data_t *ctx = (asm_data_t *) user_data;
 
     MRP_UNUSED(ml);
     MRP_UNUSED(h);
@@ -1324,7 +1339,7 @@ static void htbl_free_client(void *key, void *object)
 {
     MRP_UNUSED(key);
 
-    client_t *client = object;
+    client_t *client = (client_t *) object;
 
     mrp_htbl_destroy(client->sets, TRUE);
 
@@ -1372,7 +1387,7 @@ static int close_fds()
 static int asm_init(mrp_plugin_t *plugin)
 {
     mrp_plugin_arg_t *args = plugin->args;
-    asm_data_t *ctx = mrp_allocz(sizeof(asm_data_t));
+    asm_data_t *ctx = (asm_data_t *) mrp_allocz(sizeof(asm_data_t));
     pid_t pid;
     mrp_htbl_config_t client_conf;
 
@@ -1518,7 +1533,7 @@ error:
 
 static void asm_exit(mrp_plugin_t *plugin)
 {
-    asm_data_t *ctx = plugin->data;
+    asm_data_t *ctx = (asm_data_t *) plugin->data;
 
     if (ctx->pid) {
         kill(ctx->pid, SIGTERM);
