@@ -112,7 +112,7 @@ static int log_close()
 static void *wait_queue (void *arg) {
     ASM_msg_lib_to_asm_t msg;
 
-    int *arg_thread = arg;
+    int *arg_thread = (int *) arg;
 
     int asm_rcv_msgid = arg_thread[0];
     int fd = arg_thread[1];
@@ -203,7 +203,7 @@ static void pipe_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
             mrp_io_event_t events, void *user_data)
 {
     ASM_msg_lib_to_asm_t msg;
-    ctx_t *ctx = user_data;
+    ctx_t *ctx = (ctx_t *) user_data;
     int bytes;
     int ret;
 
@@ -229,7 +229,7 @@ static void pipe_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
 static void read_watch_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
                                   mrp_io_event_t events, void *user_data)
 {
-    struct watched_file *wf = user_data;
+    struct watched_file *wf = (struct watched_file *) user_data;
     ctx_t *ctx = wf->ctx;
 
     MRP_UNUSED(ml);
@@ -309,7 +309,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
             goto error;
         }
 
-        wf = mrp_htbl_lookup(ctx->watched_files, rd_filename);
+        wf = (struct watched_file *)
+                mrp_htbl_lookup(ctx->watched_files, rd_filename);
 
         if (wf) {
             /* already watched, this is a bad thing */
@@ -321,7 +322,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
             log_write("starting to listen file '%s' for callback answers\n",
                     rd_filename);
 
-            wf = mrp_allocz(sizeof(struct watched_file));
+            wf = (struct watched_file *)
+                    mrp_allocz(sizeof(struct watched_file));
 
             if (!wf)
                 goto error;
@@ -378,7 +380,7 @@ error:
 static void recvfrom_murphy(mrp_transport_t *t, void *data, uint16_t tag,
                      mrp_sockaddr_t *addr, socklen_t addrlen, void *user_data)
 {
-    ctx_t *ctx = user_data;
+    ctx_t *ctx = (ctx_t *) user_data;
 
     MRP_UNUSED(t);
     MRP_UNUSED(addr);
@@ -387,7 +389,7 @@ static void recvfrom_murphy(mrp_transport_t *t, void *data, uint16_t tag,
     switch (tag) {
         case TAG_ASM_TO_LIB:
             {
-                asm_to_lib_t *res = data;
+                asm_to_lib_t *res = (asm_to_lib_t *) data;
                 ASM_msg_asm_to_lib_t msg;
 
                 msg.instance_id = res->instance_id;
@@ -395,6 +397,7 @@ static void recvfrom_murphy(mrp_transport_t *t, void *data, uint16_t tag,
                 msg.data.cmd_handle = res->cmd_handle;
                 msg.data.result_sound_command = res->result_sound_command;
                 msg.data.result_sound_state = res->result_sound_state;
+                msg.data.former_sound_event = res->former_sound_event;
 #ifdef USE_SECURITY
                 msg.data.check_privilege = res->check_privilege;
 #endif
@@ -429,7 +432,7 @@ static void recv_murphy(mrp_transport_t *t, void *data, uint16_t tag, void *user
 
 static void closed_evt(mrp_transport_t *t, int error, void *user_data)
 {
-    ctx_t *ctx = user_data;
+    ctx_t *ctx = (ctx_t *) user_data;
 
     MRP_UNUSED(t);
     MRP_UNUSED(error);
