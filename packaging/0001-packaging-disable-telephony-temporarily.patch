@@ -1,0 +1,46 @@
+From 59ae6ad5fcef6a284a3cda284d873f75534b4d07 Mon Sep 17 00:00:00 2001
+From: Ismo Puustinen <ismo.puustinen@intel.com>
+Date: Mon, 11 Mar 2013 14:48:09 +0200
+Subject: [PATCH] packaging: disable telephony temporarily.
+
+---
+ packaging.in/murphy.spec.in | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/packaging.in/murphy.spec.in b/packaging.in/murphy.spec.in
+index 978cc2d..bde98c4 100644
+--- a/packaging.in/murphy.spec.in
++++ b/packaging.in/murphy.spec.in
+@@ -14,7 +14,6 @@
+ %{!?_with_glib:%{!?_without_glib:%define _with_glib 1}}
+ %{!?_with_qt:%{!?_without_qt:%define _without_qt 1}}
+ %{!?_with_dbus:%{!?_without_dbus:%define _with_dbus 1}}
+-%{!?_with_telephony:%{!?_without_telephony:%define _with_telephony 1}}
+ %{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
+ %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
+ %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
+@@ -55,9 +54,6 @@ BuildRequires: pkgconfig(QtCore)
+ %if %{?_with_dbus:1}%{!?_with_dbus:0}
+ BuildRequires: pkgconfig(dbus-1)
+ %endif
+-%if %{?_with_telephony:1}%{!?_with_telephony:0}
+-BuildRequires: pkgconfig(ofono)
+-%endif
+ %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
+ BuildRequires: pkgconfig(audio-session-mgr)
+ %endif
+@@ -280,11 +276,7 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-dbus"
+ CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-dbus"
+ %endif
+ 
+-%if %{?_with_telephony:1}%{!?_with_telephony:0}
+-CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-telephony"
+-%else
+ CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-telephony"
+-%endif
+ 
+ %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
+ CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-resource-asm"
+-- 
+1.8.1.4
+

@@ -1,0 +1,26 @@
+From ef4805a96ab53a774fef6d7d55cecdb799d9079c Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <krisztian.litkey@intel.com>
+Date: Tue, 12 Feb 2013 20:20:33 +0200
+Subject: [PATCH 10/14] packaging: declare a pid audio playback attribute.
+
+---
+ packaging.in/murphy.lua | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/packaging.in/murphy.lua b/packaging.in/murphy.lua
+index ec31841..5613636 100644
+--- a/packaging.in/murphy.lua
++++ b/packaging.in/murphy.lua
+@@ -117,7 +117,8 @@ resource.class {
+      name = "audio_playback",
+      shareable = true,
+      attributes = {
+-         role = { mdb.string, "music", "rw" }
++         role = { mdb.string, "music"  , "rw" },
++         pid  = { mdb.string, "unknown", "rw" }
+      }
+ }
+ 
+-- 
+1.8.1.4
+

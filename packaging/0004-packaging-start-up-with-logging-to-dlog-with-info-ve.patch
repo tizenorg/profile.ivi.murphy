@@ -1,0 +1,40 @@
+From 03bd20fe2581396a5896e44300f405c576c76145 Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <kli@iki.fi>
+Date: Thu, 20 Dec 2012 22:20:28 +0200
+Subject: [PATCH 04/14] packaging: start up with logging to dlog with info
+ verbosity.
+
+---
+ packaging.in/murphy.lua   | 3 +++
+ packaging.in/murphyd.init | 2 +-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/packaging.in/murphy.lua b/packaging.in/murphy.lua
+index 2fcd157..7a06134 100644
+--- a/packaging.in/murphy.lua
++++ b/packaging.in/murphy.lua
+@@ -1,5 +1,8 @@
+ m = murphy.get()
+ 
++-- try loading the dlog plugin
++m:try_load_plugin('dlog')
++
+ -- try loading console plugin
+ m:try_load_plugin('console')
+ 
+diff --git a/packaging.in/murphyd.init b/packaging.in/murphyd.init
+index 5e9e773..3aa6707 100755
+--- a/packaging.in/murphyd.init
++++ b/packaging.in/murphyd.init
+@@ -20,7 +20,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
+ DESC="Murphy Daemon"
+ NAME=murphyd
+ DAEMON=/usr/bin/$NAME
+-DAEMON_ARGS=""
++DAEMON_ARGS="-t dlog -vvv"
+ SCRIPTNAME=/etc/init.d/$NAME
+ 
+ # Exit if the package is not installed
+-- 
+1.8.1.4
+

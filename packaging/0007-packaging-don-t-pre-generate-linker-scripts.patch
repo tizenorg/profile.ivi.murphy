@@ -1,0 +1,22 @@
+From 0f9200bf9c66eae72ef97019a2d4db5d1118ba5c Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <krisztian.litkey@intel.com>
+Date: Tue, 12 Feb 2013 08:59:27 +0200
+Subject: [PATCH 07/14] packaging: don't pre-generate linker scripts.
+
+---
+ build-aux/gbs-quirks | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/build-aux/gbs-quirks b/build-aux/gbs-quirks
+index d356460..f1add81 100644
+--- a/build-aux/gbs-quirks
++++ b/build-aux/gbs-quirks
+@@ -8,4 +8,4 @@ generate_linker_scripts() {
+         git commit -m "packaging: pre-generated linker scripts." $_ld_scripts
+ }
+ 
+-generate_linker_scripts
++#generate_linker_scripts
+-- 
+1.8.1.4
+

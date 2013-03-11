@@ -1,0 +1,25 @@
+From 5b19c1f46fad11a3f584f889a801c33c724de330 Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <krisztian.litkey@intel.com>
+Date: Tue, 19 Feb 2013 21:55:35 +0200
+Subject: [PATCH 12/14] packaging: override share_mmplayer to be exclusive
+ mm_player.
+
+---
+ packaging.in/murphy.lua | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/packaging.in/murphy.lua b/packaging.in/murphy.lua
+index eb04f41..483b05d 100644
+--- a/packaging.in/murphy.lua
++++ b/packaging.in/murphy.lua
+@@ -50,6 +50,7 @@ end
+ if m:plugin_exists('resource-asm') then
+     m:load_plugin('resource-asm', {
+         zone = "driver",
++        share_mmplayer = "player:AVP,mandatory,exclusive,relaxed"
+     })
+ else
+     m:info("No audio session manager plugin found...")
+-- 
+1.8.1.4
+

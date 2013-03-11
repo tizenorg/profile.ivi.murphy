@@ -1,0 +1,116 @@
+From 8145a3b3548a3b4006faa3eed6f3a99c061bdc20 Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <krisztian.litkey@intel.com>
+Date: Wed, 16 Jan 2013 11:57:37 +0200
+Subject: [PATCH 06/14] packaging: fixed lost application classes, added AMB
+ plugin config file.
+
+---
+ packaging.in/amb-config.lua | 57 +++++++++++++++++++++++++++++++++++++++++++++
+ packaging.in/murphy.lua     | 10 +++++---
+ packaging.in/murphy.spec.in |  5 ++++
+ 3 files changed, 69 insertions(+), 3 deletions(-)
+ create mode 100644 packaging.in/amb-config.lua
+
+diff --git a/packaging.in/amb-config.lua b/packaging.in/amb-config.lua
+new file mode 100644
+index 0000000..ad8a909
+--- /dev/null
++++ b/packaging.in/amb-config.lua
+@@ -0,0 +1,57 @@
++--[[
++    Vehicle speed property
++
++    This property has a basic type which is updated often, therefore use
++    the built-in handler.
++--]]
++
++
++amb.property {
++    name = "vehicle_speed",
++    basic_table_name = "amb_vehicle_speed", -- default: "amb_" + name
++    dbus_data = {
++        obj = "/org/automotive/runningstatus/vehicleSpeed",
++        interface = "org.automotive.vehicleSpeed",
++        property = "VehicleSpeed",
++        signature = "i",
++    },
++}
++
++
++--[[
++    Shift position property
++
++    Use custom handler for setting the stick status.
++--]]
++
++stick_handler = function (self, property)
++    -- insert or update the incoming data
++
++    print("shift position handler: " .. property)
++
++    table = self.outputs.test_table
++
++    table:replace({ id = 0, shift_position = property })
++end
++
++amb.property {
++    name = "stick_handler",
++    handler = stick_handler,
++    outputs = {
++        test_table = mdb.table {
++            name = "amb_shift_position",
++            index = { "id" },
++            create = true,
++            columns = {
++                { "id", mdb.unsigned },
++                { "shift_position", mdb.unsigned },
++            }
++        }
++    },
++    dbus_data = {
++        obj = "/org/automotive/runningstatus/transmission",
++        interface = "org.automotive.transmission",
++        property = "ShiftPosition",
++        signature = "y",
++    },
++}
+diff --git a/packaging.in/murphy.lua b/packaging.in/murphy.lua
+index d01103d..ef8520d 100644
+--- a/packaging.in/murphy.lua
++++ b/packaging.in/murphy.lua
+@@ -50,9 +50,13 @@ else
+ end
+ 
+ -- define application classes
+-application_class { name = "navigator", priority = 4 }
+-application_class { name = "phone"    , priority = 3 }
+-application_class { name = "game"     , priority = 2 }
++application_class { name = "navigator", priority = 8 }
++application_class { name = "event"    , priority = 7 }
++application_class { name = "phone"    , priority = 6 }
++application_class { name = "camera"   , priority = 5 }
++application_class { name = "alert"    , priority = 4 }
++application_class { name = "game"     , priority = 3 }
++application_class { name = "radio"    , priority = 2 }
+ application_class { name = "player"   , priority = 1 }
+ application_class { name = "implicit" , priority = 0 }
+ 
+diff --git a/packaging.in/murphy.spec.in b/packaging.in/murphy.spec.in
+index 653dc46..11fc0b3 100644
+--- a/packaging.in/murphy.spec.in
++++ b/packaging.in/murphy.spec.in
+@@ -330,6 +330,11 @@ popd >& /dev/null
+ cp packaging.in/murphy-lua.conf $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.conf
+ cp packaging.in/murphy.lua      $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.lua
+ 
++# Copy plugin configuration files in place.
++mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb
++cp packaging.in/amb-config.lua \
++    $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb/config.lua
++
+ mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d
+ cp packaging.in/murphyd.init $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
+ chmod a+x $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
+-- 
+1.8.1.4
+

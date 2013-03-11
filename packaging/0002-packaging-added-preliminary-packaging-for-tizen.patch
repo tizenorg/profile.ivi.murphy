@@ -1,0 +1,715 @@
+From a602911d2ca670ee7a5928f7c6f1a764c8a93c0c Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <krisztian.litkey@intel.com>
+Date: Tue, 27 Nov 2012 13:42:37 +0200
+Subject: [PATCH 02/14] packaging: added preliminary packaging for tizen.
+
+Notes: compiling domain-control as a dynamic plugins is a workaround
+to avoid trying to unconditionally regenerate the linker script for
+the domain-control plugin. This would fail due to ctags/etags not
+being available in the tizen repos.
+---
+ packaging.in/murphy.spec.in  | 510 +++++++++++++++++++++++++++++++++++++++++++
+ packaging.in/murphyd.init    | 151 +++++++++++++
+ packaging.in/org.Murphy.conf |  15 ++
+ 3 files changed, 676 insertions(+)
+ create mode 100644 packaging.in/murphy.spec.in
+ create mode 100755 packaging.in/murphyd.init
+ create mode 100644 packaging.in/org.Murphy.conf
+
+diff --git a/packaging.in/murphy.spec.in b/packaging.in/murphy.spec.in
+new file mode 100644
+index 0000000..653dc46
+--- /dev/null
++++ b/packaging.in/murphy.spec.in
+@@ -0,0 +1,510 @@
++# By default we build with distro-default compilation flags which
++# enables optimizations. If you want to build with full debugging
++# ie. with optimization turned off and full debug info (-O0 -g3)
++# pass '--with debug' to rpmbuild on the command line. Similary
++# you can chose to compile with/without pulse, ecore, glib, qt,
++# dbus, and telephony support. --without squashpkg will prevent
++# squashing the -core and -plugins-base packages into the base
++# murphy package.
++
++%{!?_with_debug:%{!?_without_debug:%define _without_debug 0}}
++%{!?_with_lua:%{!?_without_lua:%define _with_lua 1}}
++%{!?_with_pulse:%{!?_without_pulse:%define _with_pulse 1}}
++%{!?_with_ecore:%{!?_without_ecore:%define _without_ecore 1}}
++%{!?_with_glib:%{!?_without_glib:%define _with_glib 1}}
++%{!?_with_qt:%{!?_without_qt:%define _without_qt 1}}
++%{!?_with_dbus:%{!?_without_dbus:%define _with_dbus 1}}
++%{!?_with_telephony:%{!?_without_telephony:%define _with_telephony 1}}
++%{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
++%{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
++
++Summary: Murphy policy framework
++Name: murphy
++Version: @VERSION@
++Release: 1
++License: BSD
++Group: System Environment/Daemons
++URL: http://01.org/murphy/
++Source0: %{name}-%{version}.tar.gz
++@DECLARE_PATCHES@
++BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%endif
++
++BuildRequires: flex
++BuildRequires: bison
++BuildRequires: pkgconfig(lua)
++
++%if %{?_with_pulse:1}%{!?_with_pulse:0}
++BuildRequires: pkgconfig(libpulse)
++%endif
++%if %{?_with_ecore:1}%{!?_with_ecore:0}
++BuildRequires: pkgconfig(ecore)
++BuildRequires: mesa-libEGL
++BuildRequires: mesa-libGLESv2
++BuildRequires: mesa-libgbm
++%endif
++%if %{?_with_glib:1}%{!?_with_glib:0}
++BuildRequires: pkgconfig(glib-2.0)
++%endif
++%if %{?_with_qt:1}%{!?_with_qt:0}
++BuildRequires: pkgconfig(QtCore)
++%endif
++%if %{?_with_dbus:1}%{!?_with_dbus:0}
++BuildRequires: pkgconfig(dbus-1)
++%endif
++%if %{?_with_telephony:1}%{!?_with_telephony:0}
++BuildRequires: pkgconfig(ofono)
++%endif
++%if %{?_with_audiosession:1}%{!?_with_audiosession:0}
++BuildRequires: pkgconfig(audio-session-mgr)
++%endif
++
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++%package core
++Summary: Murphy core runtime libraries
++Group: System Environment/Libraries
++
++%package plugins-base
++Summary: The basic set of Murphy plugins.
++Group: System Environment/Daemons
++Requires: %{name} = %{version}
++Requires: %{name}-core = %{version}
++%endif
++
++%package devel
++Summary: The header files and libraries needed for Murphy development
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++
++%package doc
++Summary: Documentation for Murphy
++Group: Documentation
++
++%if %{?_with_pulse:1}%{!?_with_pulse:0}
++%package pulse
++Summary: Murphy PulseAudio mainloop integration.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++
++%package pulse-devel
++Summary: Murphy PulseAudio mainloop integration development files.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++%endif
++
++%if %{?_with_ecore:1}%{!?_with_ecore:0}
++%package ecore
++Summary: Murphy EFL/ecore mainloop integration.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++
++%package ecore-devel
++Summary: Murphy EFL/ecore mainloop integration development files.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++%endif
++
++%if %{?_with_glib:1}%{!?_with_glib:0}
++%package glib
++Summary: Murphy glib mainloop integration.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++
++%package glib-devel
++Summary: Murphy glib mainloop integration development files.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++%endif
++
++%if %{?_with_qt:1}%{!?_with_qt:0}
++%package qt
++Summary: Murphy Qt mainloop integration.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++
++%package qt-devel
++Summary: Murphy Qt mainloop integration development files.
++Group: Development/Libraries
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++%endif
++
++%package tests
++Summary: Various test binaries for Murphy.
++Group: Development/Debug
++Requires: %{name} = %{version}
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++Requires: %{name}-core = %{version}
++%else
++Requires: %{name} = %{version}
++%endif
++
++%description
++This package contains the basic daemon.
++
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++%description core
++This package contains the core runtime libraries.
++
++%description plugins-base
++This package contains a basic set of plugins.
++%endif
++
++%description devel
++This package contains header files and libraries necessary for development.
++
++%description doc
++This package contains documentation.
++
++%if %{?_with_pulse:1}%{!?_with_pulse:0}
++%description pulse
++This package contains the Murphy PulseAudio mainloop integration runtime files.
++
++%description pulse-devel
++This package contains the Murphy PulseAudio mainloop integration development
++files.
++%endif
++
++%if %{?_with_ecore:1}%{!?_with_ecore:0}
++%description ecore
++This package contains the Murphy EFL/ecore mainloop integration runtime files.
++
++%description ecore-devel
++This package contains the Murphy EFL/ecore mainloop integration development
++files.
++%endif
++
++%if %{?_with_glib:1}%{!?_with_glib:0}
++%description glib
++This package contains the Murphy glib mainloop integration runtime files.
++
++%description glib-devel
++This package contains the Murphy glib mainloop integration development
++files.
++%endif
++
++%if %{?_with_qt:1}%{!?_with_qt:0}
++%description qt
++This package contains the Murphy Qt mainloop integration runtime files.
++
++%description qt-devel
++This package contains the Murphy Qt mainloop integration development
++files.
++%endif
++
++%description tests
++This package contains various test binaries for Murphy.
++
++%prep
++%setup -q
++@APPLY_PATCHES@
++
++%build
++%if %{?_with_debug:1}%{!?_with_debug:0}
++export CFLAGS="-O0 -g3"
++V="V=1"
++%endif
++
++CONFIG_OPTIONS=""
++DYNAMIC_PLUGINS="domain-control"
++
++%if %{?_with_pulse:1}%{!?_with_pulse:0}
++CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-pulse"
++%else
++CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-pulse"
++%endif
++
++%if %{?_with_ecore:1}%{!?_with_ecore:0}
++CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-ecore"
++%else
++CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-ecore"
++%endif
++
++%if %{?_with_glib:1}%{!?_with_glib:0}
++CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-glib"
++%else
++CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-glib"
++%endif
++
++%if %{?_with_qt:1}%{!?_with_qt:0}
++CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-qt"
++%else
++CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-qt"
++%endif
++
++%if %{?_with_dbus:1}%{!?_with_dbus:0}
++CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-dbus"
++%else
++CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-dbus"
++%endif
++
++%if %{?_with_telephony:1}%{!?_with_telephony:0}
++CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-telephony"
++%else
++CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-telephony"
++%endif
++
++%if %{?_with_audiosession:1}%{!?_with_audiosession:0}
++CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-resource-asm"
++DYNAMIC_PLUGINS="$DYNAMIC_PLUGINS,resource-asm"
++%else
++CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-resource-asm"
++%endif
++
++NUM_CPUS="`cat /proc/cpuinfo | tr -s '\t' ' ' | \
++               grep '^processor *:' | wc -l`"
++[ -z "$NUM_CPUS" ] && NUM_CPUS=1
++
++./bootstrap && \
++    %configure $CONFIG_OPTIONS --with-dynamic-plugins=$DYNAMIC_PLUGINS && \
++    make clean && \
++    make -j$(($NUM_CPUS + 1)) $V
++
++%install
++rm -rf $RPM_BUILD_ROOT
++%make_install
++
++# Make sure we have a plugin dir even if all the basic plugins
++# are configured to be built in.
++mkdir -p $RPM_BUILD_ROOT%{_libdir}/murphy/plugins
++
++# Get rid of any *.la files installed by libtool.
++rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
++
++# Clean up also the murphy DB installation.
++rm -f $RPM_BUILD_ROOT%{_libdir}/murphy/*.la
++
++# Generate list of linkedin plugins (depends on the configuration).
++outdir="`pwd`"
++pushd $RPM_BUILD_ROOT >& /dev/null && \
++    find ./%{_libdir}/murphy/plugins -name libmurphy-plugin-*.so* | \
++        sed 's#^./*#/#g' > $outdir/filelist.plugins-base && \
++popd >& /dev/null
++
++# Generate list of header files, filtering ones that go to subpackages.
++outdir="`pwd`"
++pushd $RPM_BUILD_ROOT >& /dev/null && \
++    find ./%{_includedir}/murphy | \
++    egrep -v '((pulse)|(ecore)|(glib)|(qt))-glue' | \
++        sed 's#^./*#/#g' > $outdir/filelist.devel-includes && \
++popd >& /dev/null
++
++# Replace the default sample/test config files with the packaging ones.
++cp packaging.in/murphy-lua.conf $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.conf
++cp packaging.in/murphy.lua      $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.lua
++
++mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d
++cp packaging.in/murphyd.init $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
++chmod a+x $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
++
++%if %{?_with_dbus:1}%{!?_with_dbus:0}
++mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
++cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
++%endif
++
++%clean
++rm -rf $RPM_BUILD_ROOT
++
++%post
++ln -sf %{_sysconfdir}/rc.d/init.d/murphyd %{_sysconfdir}/rc.d/rc3.d/S21murphyd
++
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++%post core
++%endif
++ldconfig
++
++%postun
++if [ "$1" = "0" ]; then
++    rm -f %{_sysconfdir}/rc.d/rc3.d/S21murphyd
++fi
++
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++%postun core
++%endif
++ldconfig
++
++%if %{?_with_squashpkg:1}%{!?_with_squashpkg:0}
++%files -f filelist.plugins-base
++%else
++%files
++%endif
++%defattr(-,root,root,-)
++%{_bindir}/murphyd
++%{_sysconfdir}/murphy
++%{_sysconfdir}/rc.d/init.d/murphyd
++%if %{?_with_audiosession:1}%{!?_with_audiosession:0}
++%{_sbindir}/asm-bridge
++%endif
++%if %{?_with_dbus:1}%{!?_with_dbus:0}
++%{_sysconfdir}/dbus-1/system.d
++%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
++%endif
++
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++%files core
++%defattr(-,root,root,-)
++%endif
++%{_libdir}/libmurphy-common.so.*
++%{_libdir}/libmurphy-core.so.*
++%{_libdir}/libmurphy-resolver.so.*
++%{_libdir}/libmurphy-resource.so.*
++%{_libdir}/libmurphy-resource-backend.so.*
++%if %{?_with_lua:1}%{!?_with_lua:0}
++%{_libdir}/libmurphy-lua-utils.so.*
++%{_libdir}/libmurphy-lua-decision.so.*
++%endif
++%{_libdir}/libmurphy-domain-controller.so.*
++%{_libdir}/murphy/*.so.*
++%{_libdir}/libbreedline*.so.*
++%if %{?_with_dbus:1}%{!?_with_dbus:0}
++%{_libdir}/libmurphy-dbus.so.*
++%endif
++
++%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
++%files plugins-base -f filelist.plugins-base
++%defattr(-,root,root,-)
++%endif
++%{_libdir}/murphy/plugins
++
++%files devel -f filelist.devel-includes
++%defattr(-,root,root,-)
++# %{_includedir}/murphy/config.h
++# %{_includedir}/murphy/common.h
++# #%{_includedir}/murphy/core.h
++# %{_includedir}/murphy/common
++# %{_includedir}/murphy/core
++# %{_includedir}/murphy/resolver
++# %{_includedir}/murphy/resource
++# # hmmm... should handle disabled plugins properly.
++# %{_includedir}/murphy/domain-control
++# %{_includedir}/murphy/plugins
++%{_includedir}/murphy-db
++%{_libdir}/libmurphy-common.so
++%{_libdir}/libmurphy-core.so
++%{_libdir}/libmurphy-resolver.so
++%{_libdir}/libmurphy-resource.so
++%{_libdir}/libmurphy-resource-backend.so
++%if %{?_with_lua:1}%{!?_with_lua:0}
++%{_libdir}/libmurphy-lua-utils.so
++%{_libdir}/libmurphy-lua-decision.so
++%endif
++%{_libdir}/libmurphy-domain-controller.so
++%{_libdir}/murphy/*.so
++%{_libdir}/pkgconfig/murphy-common.pc
++%{_libdir}/pkgconfig/murphy-core.pc
++%{_libdir}/pkgconfig/murphy-resolver.pc
++#%{_libdir}/pkgconfig/murphy-resource.pc
++%if %{?_with_lua:1}%{!?_with_lua:0}
++%{_libdir}/pkgconfig/murphy-lua-utils.pc
++%{_libdir}/pkgconfig/murphy-lua-decision.pc
++%endif
++%{_libdir}/pkgconfig/murphy-domain-controller.pc
++%{_libdir}/pkgconfig/murphy-db.pc
++%{_includedir}/breedline
++%{_libdir}/libbreedline*.so
++%{_libdir}/pkgconfig/breedline*.pc
++%if %{?_with_dbus:1}%{!?_with_dbus:0}
++#%{_includedir}/murphy/dbus
++%{_libdir}/libmurphy-dbus.so
++%{_libdir}/pkgconfig/murphy-dbus.pc
++%endif
++
++%files doc
++%defattr(-,root,root,-)
++%doc %{_docdir}/%{name}/*
++
++%if %{?_with_pulse:1}%{!?_with_pulse:0}
++%files pulse
++%defattr(-,root,root,-)
++%{_libdir}/libmurphy-pulse.so.*
++
++%files pulse-devel
++%defattr(-,root,root,-)
++%{_includedir}/murphy/common/pulse-glue.h
++%{_libdir}/libmurphy-pulse.so
++%{_libdir}/pkgconfig/murphy-pulse.pc
++%endif
++
++%if %{?_with_ecore:1}%{!?_with_ecore:0}
++%files ecore
++%defattr(-,root,root,-)
++%{_libdir}/libmurphy-ecore.so.*
++
++%files ecore-devel
++%defattr(-,root,root,-)
++%{_includedir}/murphy/common/ecore-glue.h
++%{_libdir}/libmurphy-ecore.so
++%{_libdir}/pkgconfig/murphy-ecore.pc
++%endif
++
++%if %{?_with_glib:1}%{!?_with_glib:0}
++%files glib
++%defattr(-,root,root,-)
++%{_libdir}/libmurphy-glib.so.*
++
++%files glib-devel
++%defattr(-,root,root,-)
++%{_includedir}/murphy/common/glib-glue.h
++%{_libdir}/libmurphy-glib.so
++%{_libdir}/pkgconfig/murphy-glib.pc
++%endif
++
++%if %{?_with_qt:1}%{!?_with_qt:0}
++%files qt
++%defattr(-,root,root,-)
++%{_libdir}/libmurphy-qt.so.*
++
++%files qt-devel
++%defattr(-,root,root,-)
++%{_includedir}/murphy/common/qt-glue.h
++%{_libdir}/libmurphy-qt.so
++%{_libdir}/pkgconfig/murphy-qt.pc
++%endif
++
++%files tests
++%defattr(-,root,root,-)
++%{_bindir}/resource-client
++%{_bindir}/resource-api-test
++%{_bindir}/test-domain-controller
++%{_bindir}/murphy-console
++
++%changelog
++* Tue Nov 27 2012 Krisztian Litkey <krisztian.litkey@intel.com> -
++- Initial build for 2.0alpha.
+diff --git a/packaging.in/murphyd.init b/packaging.in/murphyd.init
+new file mode 100755
+index 0000000..5e9e773
+--- /dev/null
++++ b/packaging.in/murphyd.init
+@@ -0,0 +1,151 @@
++#! /bin/sh
++### BEGIN INIT INFO
++# Provides:          skeleton
++# Required-Start:    $remote_fs $syslog
++# Required-Stop:     $remote_fs $syslog
++# Default-Start:     2 3 4 5
++# Default-Stop:      0 1 6
++# Short-Description: Example initscript
++# Description:       This file should be used to construct scripts to be
++#                    placed in /etc/init.d.
++### END INIT INFO
++
++# Author: Foo Bar <foo@bar.org>
++#
++
++# Do NOT "set -e"
++
++# PATH should only include /usr/* if it runs after the mountnfs.sh script
++PATH=/sbin:/usr/sbin:/bin:/usr/bin
++DESC="Murphy Daemon"
++NAME=murphyd
++DAEMON=/usr/bin/$NAME
++DAEMON_ARGS=""
++SCRIPTNAME=/etc/init.d/$NAME
++
++# Exit if the package is not installed
++[ -x "$DAEMON" ] || exit 0
++
++# Read configuration variable file if it is present
++[ -r /etc/default/$NAME ] && . /etc/default/$NAME
++
++# Load the VERBOSE setting and other rcS variables
++. /lib/init/vars.sh
++
++# Define LSB log_* functions.
++# Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
++. /lib/lsb/init-functions
++
++#
++# Function that starts the daemon/service
++#
++do_start()
++{
++	mkdir -p /tmp/murphy
++	# Return
++	#   0 if daemon has been started
++	#   1 if daemon was already running
++	#   2 if daemon could not be started
++	start-stop-daemon --start --quiet --exec $DAEMON --test > /dev/null \
++		|| return 1
++	start-stop-daemon --start --quiet --exec $DAEMON -- \
++		$DAEMON_ARGS \
++		|| return 2
++}
++
++#
++# Function that stops the daemon/service
++#
++do_stop()
++{
++	# Return
++	#   0 if daemon has been stopped
++	#   1 if daemon was already stopped
++	#   2 if daemon could not be stopped
++	#   other if a failure occurred
++	start-stop-daemon --stop -s 9 --quiet --oknodo --exec $DAEMON
++	RETVAL="$?"
++	[ "$RETVAL" = 2 ] && return 2
++	# Wait for children to finish too if this is a daemon that forks
++	# and if the daemon is only ever run from this initscript.
++	# If the above conditions are not satisfied then add some other code
++	# that waits for the process to drop all resources that could be
++	# needed by services started subsequently.  A last resort is to
++	# sleep for some time.
++	start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
++	[ "$?" = 2 ] && return 2
++	return "$RETVAL"
++}
++
++#
++# Function that sends a SIGHUP to the daemon/service
++#
++do_reload() {
++	#
++	# If the daemon can reload its configuration without
++	# restarting (for example, when it is sent a SIGHUP),
++	# then implement that here.
++	#
++	start-stop-daemon --stop --signal 1 --quiet --name $NAME
++	return 0
++}
++
++case "$1" in
++  start)
++	[ "$VERBOSE" != no ] && log_daemon_msg "Starting $DESC" "$NAME"
++	do_start
++	case "$?" in
++		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
++		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
++	esac
++	;;
++  stop)
++	[ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
++	do_stop
++	case "$?" in
++		0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
++		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
++	esac
++	;;
++  status)
++       status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
++       ;;
++  #reload|force-reload)
++	#
++	# If do_reload() is not implemented then leave this commented out
++	# and leave 'force-reload' as an alias for 'restart'.
++	#
++	#log_daemon_msg "Reloading $DESC" "$NAME"
++	#do_reload
++	#log_end_msg $?
++	#;;
++  restart|force-reload)
++	#
++	# If the "reload" option is implemented then remove the
++	# 'force-reload' alias
++	#
++	log_daemon_msg "Restarting $DESC" "$NAME"
++	do_stop
++	case "$?" in
++	  0|1)
++		do_start
++		case "$?" in
++			0) log_end_msg 0 ;;
++			1) log_end_msg 1 ;; # Old process is still running
++			*) log_end_msg 1 ;; # Failed to start
++		esac
++		;;
++	  *)
++	  	# Failed to stop
++		log_end_msg 1
++		;;
++	esac
++	;;
++  *)
++	#echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
++	echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
++	exit 3
++	;;
++esac
++
++:
+diff --git a/packaging.in/org.Murphy.conf b/packaging.in/org.Murphy.conf
+new file mode 100644
+index 0000000..2d4542c
+--- /dev/null
++++ b/packaging.in/org.Murphy.conf
+@@ -0,0 +1,15 @@
++<?xml version="1.0"?>
++<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
++        "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
++
++<busconfig>
++        <policy user="root">
++                <allow own="org.Murphy"/>
++                <allow receive_sender="org.Murphy"/>
++                <allow send_destination="org.Murphy"/>
++        </policy>
++        <policy context="default">
++                <allow receive_sender="org.Murphy"/>
++                <allow send_destination="org.Murphy"/>
++        </policy>
++</busconfig>
+-- 
+1.8.1.4
+

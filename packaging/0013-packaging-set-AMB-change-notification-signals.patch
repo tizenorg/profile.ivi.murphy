@@ -1,0 +1,32 @@
+From cc94e2fe0143fb2e4a0c110cb3d5ea81e987e90e Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <krisztian.litkey@intel.com>
+Date: Thu, 21 Feb 2013 19:49:07 +0200
+Subject: [PATCH 13/14] packaging: set AMB change notification signals.
+
+---
+ packaging.in/amb-config.lua | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/packaging.in/amb-config.lua b/packaging.in/amb-config.lua
+index ad8a909..d25597b 100644
+--- a/packaging.in/amb-config.lua
++++ b/packaging.in/amb-config.lua
+@@ -13,6 +13,7 @@ amb.property {
+         obj = "/org/automotive/runningstatus/vehicleSpeed",
+         interface = "org.automotive.vehicleSpeed",
+         property = "VehicleSpeed",
++        notification = "VehicleSpeedChanged",
+         signature = "i",
+     },
+ }
+@@ -52,6 +53,7 @@ amb.property {
+         obj = "/org/automotive/runningstatus/transmission",
+         interface = "org.automotive.transmission",
+         property = "ShiftPosition",
++        notification = "ShiftPositionChanged",
+         signature = "y",
+     },
+ }
+-- 
+1.8.1.4
+

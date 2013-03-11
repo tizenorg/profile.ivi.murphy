@@ -1,0 +1,27 @@
+From d4e344a9f3da0a9223dccb3dba1fb7555e4180db Mon Sep 17 00:00:00 2001
+From: Krisztian Litkey <krisztian.litkey@intel.com>
+Date: Wed, 13 Feb 2013 19:21:49 +0200
+Subject: [PATCH 09/14] packaging: add webconsole example to config file.
+
+---
+ packaging.in/murphy.lua | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/packaging.in/murphy.lua b/packaging.in/murphy.lua
+index ef8520d..ec31841 100644
+--- a/packaging.in/murphy.lua
++++ b/packaging.in/murphy.lua
+@@ -6,6 +6,10 @@ m:try_load_plugin('dlog')
+ -- load the console plugin
+ m:try_load_plugin('console')
+ 
++m:try_load_plugin('console.disabled', 'webconsole', {
++                  address = 'wsck:127.0.0.1:3000/murphy',
++                  httpdir = '/usr/share/murphy/webconsole' });
++
+ -- load the dbus plugin
+ if m:plugin_exists('dbus') then
+     m:load_plugin('dbus')
+-- 
+1.8.1.4
+
