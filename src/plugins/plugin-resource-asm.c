@@ -660,7 +660,8 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
             reply.result_sound_state = ASM_STATE_IGNORE;
             reply.former_sound_event = ASM_EVENT_NONE;
 
-            /* TODO: check the mask properly */
+            /* ASM doesn't support optional resources. Thus, if we are granted
+             * anything, we are granted the whole set we requested. */
             if (mrp_get_resource_set_grant(d->rset)) {
                 reply.result_sound_command = ASM_COMMAND_PLAY;
                 d->granted_state = d->requested_state;
@@ -679,22 +680,6 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
         }
         case request_type_release:
         {
-#if 0
-            asm_to_lib_t reply;
-
-            reply.instance_id = d->pid;
-            reply.check_privilege = TRUE;
-            reply.alloc_handle = d->handle;
-            reply.cmd_handle = d->handle;
-
-            reply.result_sound_command = ASM_COMMAND_NONE;
-            reply.result_sound_state = ASM_STATE_STOP;
-            reply.former_sound_event = ASM_EVENT_NONE;
-
-            /* no response needed for moving to state other than PLAYING */
-            dump_outgoing_msg(&reply, ctx);
-            mrp_transport_senddata(ctx->t, &reply, TAG_ASM_TO_LIB);
-#endif
             mrp_log_info("callback for release request %u", request_id);
 
             /* expecting next server events */
@@ -709,6 +694,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
         {
             asm_to_lib_cb_t reply;
             mrp_log_info("callback for no request %u", request_id);
+            uint32_t grant = mrp_get_resource_set_grant(d->rset);
 
             reply.instance_id = d->pid;
             reply.handle = d->handle;
@@ -722,14 +708,19 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
                  * given up the resources. Filter out events. */
                 break;
             }
-
-            /* TODO: check if the d->rset state has actually changed -> only
+#if 0
+            /* check if the d->rset state has actually changed -> only
              * process server side notifications in that case */
-
-            if (mrp_get_resource_set_grant(d->rset)) {
+            if ((grant && d->granted_state == ASM_STATE_PLAYING) ||
+                    (!grant && d->granted_state != ASM_STATE_PLAYING)) {
+                mrp_log_info("state didn't change -> ignoring");
+                break;
+            }
+#endif
+            if (grant) {
                 reply.sound_command = ASM_COMMAND_RESUME;
                 /* ASM doesn't send callback to RESUME commands */
-                reply.callback_expected = TRUE;
+                reply.callback_expected = FALSE;
             }
             else {
                 reply.sound_command = ASM_COMMAND_PAUSE;
@@ -799,7 +790,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             }
 #endif
 
-            rset_data = map_slp_media_type_to_murphy(msg->sound_event);
+            rset_data = map_slp_media_type_to_murphy(
+                    (ASM_sound_events_t) msg->sound_event);
 
             if (!rset_data) {
                 mrp_log_error("unknown resource type: %d", msg->sound_event);
@@ -993,7 +985,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 }
 
                 d->request_id = ++ctx->current_request;
-                d->requested_state = msg->sound_state;
+                d->requested_state = (ASM_sound_states_t) msg->sound_state;
 
                 switch(msg->sound_state) {
                     case ASM_STATE_PLAYING:
@@ -1034,8 +1026,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             {
                 const rset_class_data_t *rset_data;
 
-                rset_data = (rset_class_data_t *)
-                        map_slp_media_type_to_murphy(msg->sound_event);
+                rset_data = map_slp_media_type_to_murphy(
+                        (ASM_sound_events_t) msg->sound_event);
 
                 mrp_log_info("REQUEST: GET STATE for %s",
                         rset_data ? rset_data->rset_class : "NULL");
