@@ -123,13 +123,13 @@ static void *wait_queue (void *arg) {
     }
 
     while (1) {
-        int ret = msgrcv(asm_rcv_msgid, &msg, sizeof(msg.data), 0, 0);
+        int size = sizeof(msg) - sizeof(msg.instance_id);
+        int ret = msgrcv(asm_rcv_msgid, &msg, size, 0, 0);
 
         if (ret < 0) {
-            /* FIXME: proper error handling */
             log_write("error receiving a message: '%s'!\n", strerror(errno));
-            /* remove message from queue */
-            msgrcv(asm_rcv_msgid, &msg, sizeof(msg.data), 0, MSG_NOERROR);
+            /* remove erroneous message from queue */
+            msgrcv(asm_rcv_msgid, &msg, size, 0, MSG_NOERROR);
             continue;
         }
 
@@ -319,6 +319,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
                     msg->instance_id, msg->handle);
         }
         else {
+            mrp_io_event_t ev;
+
             log_write("starting to listen file '%s' for callback answers\n",
                     rd_filename);
 
@@ -328,12 +330,13 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
             if (!wf)
                 goto error;
 
+            ev = (mrp_io_event_t) (MRP_IO_EVENT_IN | MRP_IO_EVENT_HUP);
+
             wf->watched_file = mrp_strdup(rd_filename);
             wf->ctx = ctx;
             wf->instance_id = msg->instance_id;
             wf->handle = msg->handle;
-            wf->wd = mrp_add_io_watch(ctx->ml, rd_fd, MRP_IO_EVENT_IN | MRP_IO_EVENT_HUP,
-                read_watch_cb, wf);
+            wf->wd = mrp_add_io_watch(ctx->ml, rd_fd, ev, read_watch_cb, wf);
 
             mrp_htbl_insert(ctx->watched_files, wf->watched_file, wf);
         }
@@ -391,19 +394,22 @@ static void recvfrom_murphy(mrp_transport_t *t, void *data, uint16_t tag,
             {
                 asm_to_lib_t *res = (asm_to_lib_t *) data;
                 ASM_msg_asm_to_lib_t msg;
+                int size = sizeof(msg) - sizeof(msg.instance_id);
 
                 msg.instance_id = res->instance_id;
                 msg.data.alloc_handle = res->alloc_handle;
                 msg.data.cmd_handle = res->cmd_handle;
-                msg.data.result_sound_command = res->result_sound_command;
-                msg.data.result_sound_state = res->result_sound_state;
-                msg.data.former_sound_event = res->former_sound_event;
+                msg.data.result_sound_command =
+                        (ASM_sound_commands_t) res->result_sound_command;
+                msg.data.result_sound_state =
+                        (ASM_sound_states_t) res->result_sound_state;
+                msg.data.former_sound_event =
+                        (ASM_sound_events_t) res->former_sound_event;
 #ifdef USE_SECURITY
                 msg.data.check_privilege = res->check_privilege;
 #endif
 
-                if (msgsnd(ctx->snd_msgq, (void *) &msg,
-                            sizeof(msg.data), 0) < 0) {
+                if (msgsnd(ctx->snd_msgq, (void *) &msg, size, 0) < 0) {
                     log_write("failed to send message to client\n");
                 }
                 break;
@@ -411,7 +417,7 @@ static void recvfrom_murphy(mrp_transport_t *t, void *data, uint16_t tag,
 
         case TAG_ASM_TO_LIB_CB:
             {
-                if (send_callback_to_client(data, ctx) < 0) {
+                if (send_callback_to_client((asm_to_lib_cb_t *) data, ctx) < 0) {
                     log_write("failed to send callback message to client\n");
                 }
                 break;
@@ -495,7 +501,7 @@ error:
 
 static void htbl_free_watches(void *key, void *object)
 {
-    struct watched_file *wf = object;
+    struct watched_file *wf = (struct watched_file *) object;
 
     MRP_UNUSED(key);
 
