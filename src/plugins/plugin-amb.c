@@ -170,6 +170,7 @@ static int subscribe_property(data_t *ctx, dbus_property_watch_t *w);
 
 static void basic_property_updated(dbus_basic_property_t *prop, void *userdata);
 
+static int create_transport(mrp_mainloop_t *ml, data_t *ctx);
 
 /* Lua config */
 
@@ -1334,9 +1335,14 @@ static void closed_evt(mrp_transport_t *t, int error, void *user_data)
 
     MRP_UNUSED(t);
     MRP_UNUSED(error);
-    MRP_UNUSED(ctx);
 
-    /* TODO: handle not connected case */
+    ctx->t = NULL;
+
+    /* open the listening socket again */
+
+    if (!ctx->lt) {
+        create_transport(t->ml, ctx);
+    }
 }
 
 static void connection_evt(mrp_transport_t *lt, void *user_data)
@@ -1578,7 +1584,7 @@ static mrp_plugin_arg_t args[] = {
             "org.automotive.message.broker"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_CONFIG_FILE, STRING, "config_file",
             "/etc/murphy/plugins/amb/config.lua"),
-    MRP_PLUGIN_ARGIDX(ARG_AMB_ID, STRING, "amb_id", "amb"),
+    MRP_PLUGIN_ARGIDX(ARG_AMB_ID, STRING, "amb_id", "ambd"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_TPORT_ADDRESS, STRING, "transport_address",
             "unxs:/tmp/murphy/amb"),
 };
