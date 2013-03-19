@@ -42,6 +42,7 @@ SCRIPTNAME=/etc/init.d/$NAME
 do_start()
 {
 	mkdir -p /tmp/murphy
+	mkdir -p /var/run/murphy/processes
 	# Return
 	#   0 if daemon has been started
 	#   1 if daemon was already running
@@ -65,6 +66,10 @@ do_stop()
 	#   other if a failure occurred
 	start-stop-daemon --stop -s 9 --quiet --oknodo --exec $DAEMON
 	RETVAL="$?"
+
+    # clean up
+    rm -f /var/run/murphy/processes/*
+
 	[ "$RETVAL" = 2 ] && return 2
 	# Wait for children to finish too if this is a daemon that forks
 	# and if the daemon is only ever run from this initscript.
