@@ -199,7 +199,7 @@ static int process_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
 }
 
 
-static void pipe_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
+static void pipe_cb(mrp_io_watch_t *w, int fd,
             mrp_io_event_t events, void *user_data)
 {
     ASM_msg_lib_to_asm_t msg;
@@ -207,7 +207,6 @@ static void pipe_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
     int bytes;
     int ret;
 
-    MRP_UNUSED(ml);
     MRP_UNUSED(w);
     MRP_UNUSED(events);
 
@@ -226,13 +225,12 @@ static void pipe_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
 }
 
 
-static void read_watch_cb(mrp_mainloop_t *ml, mrp_io_watch_t *w, int fd,
+static void read_watch_cb(mrp_io_watch_t *w, int fd,
                                   mrp_io_event_t events, void *user_data)
 {
     struct watched_file *wf = (struct watched_file *) user_data;
     ctx_t *ctx = wf->ctx;
 
-    MRP_UNUSED(ml);
     MRP_UNUSED(w);
 
     if (events & MRP_IO_EVENT_IN) {
