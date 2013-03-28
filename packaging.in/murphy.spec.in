@@ -385,7 +385,7 @@ ldconfig
 %{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
 %if %{?_with_websockets:1}%{!?_with_websockets:0}
-%{_datadir}/murphy/webconsole
+%{_datadir}/murphy
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
