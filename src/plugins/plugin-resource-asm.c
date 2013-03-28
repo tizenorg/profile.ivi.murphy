@@ -1302,12 +1302,10 @@ error:
     return -1;
 }
 
-static void signal_handler(mrp_mainloop_t *ml, mrp_sighandler_t *h,
-                           int signum, void *user_data)
+static void signal_handler(mrp_sighandler_t *h, int signum, void *user_data)
 {
     asm_data_t *ctx = (asm_data_t *) user_data;
 
-    MRP_UNUSED(ml);
     MRP_UNUSED(h);
 
     if (signum == SIGCHLD) {
