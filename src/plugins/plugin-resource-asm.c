@@ -51,6 +51,7 @@
 #include "resource-asm/asm-bridge.h"
 
 #define DEFAULT_TRANSPORT  "unxs:/tmp/murphy/asm"
+#define TYPE_MAP_SIZE      21
 
 typedef struct {
     uint32_t pid;
@@ -180,6 +181,8 @@ static const char *asm_event_name[] = {
     "ASM_EVENT_VIDEOCALL",
     "ASM_EVENT_MONITOR",
     "ASM_EVENT_RICH_CALL",
+    "ASM_EVENT_EMERGENCY",
+    "ASM_EVENT_EXCLUSIVE_RESOURCE",
     NULL
 };
 
@@ -228,6 +231,8 @@ static rset_class_data_t type_map[] = {
     MAP_EVENT(VIDEOCALL            , "phone"  , AVPR, !SHARED, !STRICT),
     MAP_EVENT(MONITOR              , "monitor", NONE,  SHARED, !STRICT),
     MAP_EVENT(RICH_CALL            , "phone"  , AVPR, !SHARED, !STRICT),
+    MAP_EVENT(EMERGENCY            , "phone"  , AVPR, !SHARED, !STRICT),
+    MAP_EVENT(EXCLUSIVE_RESOURCE   , "player" , APR,  !SHARED, !STRICT),
 
     { NULL, NULL, NONE, FALSE, FALSE, FALSE, 0 }
 };
@@ -498,13 +503,12 @@ static uint32_t int_hash(const void *key)
 static const rset_class_data_t *map_slp_media_type_to_murphy(
         ASM_sound_events_t media_type)
 {
-    if (media_type < 0 || media_type >= ASM_EVENT_MAX)
-        /* error case */
+    /* check if the event is within the bounds */
+    if (media_type <= ASM_EVENT_NONE || media_type >= ASM_EVENT_MAX)
         return NULL;
 
-    /* check if the header has changed */
-
-    if (ASM_EVENT_MAX != 19)
+    /* check that we don't overflow */
+    if (media_type > TYPE_MAP_SIZE)
         return NULL;
 
     return &type_map[media_type];
