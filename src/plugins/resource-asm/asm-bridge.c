@@ -277,7 +277,7 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
 
     struct watched_file *wf = NULL;
 
-    ret = snprintf(wr_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%d.%u",
+    ret = snprintf(wr_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%u.%d",
             msg->instance_id, msg->handle);
 
     if (ret <= 0 || ret == ASM_FILENAME_SIZE)
@@ -294,7 +294,7 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
 
     if (msg->callback_expected) {
 
-        ret = snprintf(rd_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%d.%ur",
+        ret = snprintf(rd_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%u.%dr",
             msg->instance_id, msg->handle);
 
         if (ret <= 0 || ret == ASM_FILENAME_SIZE)
@@ -315,6 +315,7 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
 
             log_write("client %d.%u missed a callback notification\n",
                     msg->instance_id, msg->handle);
+            close(rd_fd);
         }
         else {
             mrp_io_event_t ev;
