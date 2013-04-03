@@ -781,6 +781,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
             if (!client) {
                 client = create_client(pid);
+                if (!client)
+                    goto error;
+
                 mrp_htbl_insert(ctx->clients, u_to_p(pid), client);
             }
 #if 0
@@ -1346,6 +1349,7 @@ static int close_fds()
     int maxfd;
     int i;
     int newin, newout, newerr;
+    int ret = -1;
 
     /* Closing all file descriptors in a protable way is tricky, so improve
        this function as we go. */
@@ -1364,18 +1368,21 @@ static int close_fds()
     newerr = open("/dev/null", O_WRONLY);
 
     if (newin < 0 || newout < 0 || newerr < 0)
-        return -1;
+        goto end;
 
     if (dup2(newin, fileno(stdin)) < 0 ||
         dup2(newout, fileno(stdout)) < 0 ||
         dup2(newerr, fileno(stderr)) < 0)
-        return -1;
+        goto end;
 
+    ret = 0;
+
+end:
     close(newin);
     close(newout);
     close(newerr);
 
-    return 0;
+    return ret;
 }
 
 static int asm_init(mrp_plugin_t *plugin)
