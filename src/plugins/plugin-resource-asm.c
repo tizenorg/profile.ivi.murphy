@@ -316,7 +316,7 @@ static int parse_config(rset_class_data_t *data, char *config)
 
     len = colon - (config) + 1;
     mrp_free(data->rset_class);
-    data->rset_class = mrp_datadup(config, len - 1);
+    data->rset_class = mrp_datadup(config, len);
     data->rset_class[len - 1] = '\0';
 
     mrp_debug("class name: '%s'", data->rset_class);
