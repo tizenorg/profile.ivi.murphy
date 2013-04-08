@@ -1,0 +1,3 @@
+* Mon Apr 08 17:36:46 EEST 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.22
+- release: released 0.0.22 (git: acdfb91dd7b0d019c39cdea0ad27686f7662b7be).
+- fixed memory corruption bugs discovered by valgrind and static analysis.
