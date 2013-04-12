@@ -738,7 +738,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 
             /* expecting next server events */
             client_class->rtype = request_type_server_event;
-            client_class->event_filtering = TRUE;
+            client_class->event_filtering = FALSE;
 
             break;
         }
@@ -760,7 +760,7 @@ static void event_cb(uint32_t request_id, mrp_resource_set_t *set, void *data)
 
             /* expecting next server events */
             client_class->rtype = request_type_server_event;
-            client_class->event_filtering = TRUE;
+            client_class->event_filtering = FALSE;
 
             break;
         }
@@ -1030,6 +1030,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 client_class->client = client;
                 client_class->rset_data = rset_data;
                 client_class->rset = NULL;
+                client_class->event_filtering = TRUE;
 
                 client_class->rtype = request_type_server_event;
 
