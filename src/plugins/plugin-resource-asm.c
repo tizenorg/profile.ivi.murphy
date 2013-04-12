@@ -973,6 +973,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             client_t *client;
             const rset_class_data_t *rset_data;
             client_class_t *client_class;
+            bool merged;
 
             mrp_log_info("REQUEST: REGISTER");
 
@@ -1038,11 +1039,14 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
                 mrp_htbl_insert(client->classes, rset_data->rset_class,
                         client_class);
+
+                merged = FALSE;
             }
             else {
                 /* do the merging */
                 d->client_class = client_class;
                 mrp_list_append(&client_class->asm_clients, &d->hook);
+                merged = TRUE;
             }
 
             if (strcmp(rset_data->rset_class, "earjack") == 0) {
@@ -1056,7 +1060,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 client->monitor = TRUE;
                 d->monitor = TRUE;
             }
-            else {
+            else if (!merged) {
                 /* a normal resource request */
 
                 client_class->rset = mrp_resource_set_create(
@@ -1132,6 +1136,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     goto error;
                 }
             }
+            /* else a merged request, no need to create resource set */
 
             mrp_htbl_insert(client->sets, u_to_p(handle), d);
             client->n_sets++;
