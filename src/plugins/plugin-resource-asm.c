@@ -843,6 +843,9 @@ static void remove_asm_client_from_class(client_class_t *client_class,
 static void update_asm_client_states(client_class_t *client_class,
         resource_set_data_t *d)
 {
+    if (!client_class || !d)
+        return;
+
     /* asm_client just made a request -- see if we can fulfill it without
      * querying resource library */
 
@@ -1038,6 +1041,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             }
             else {
                 /* do the merging */
+                d->client_class = client_class;
                 mrp_list_append(&client_class->asm_clients, &d->hook);
             }
 
