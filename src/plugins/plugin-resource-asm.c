@@ -612,6 +612,20 @@ static uint32_t get_handle(uint32_t data) {
 }
 #endif
 
+
+static uint32_t get_next_handle(client_t *client)
+{
+    uint32_t retval = client->current_handle;
+
+    client->current_handle++;
+
+    if (client->current_handle == ASM_SERVER_HANDLE_MAX)
+        client->current_handle = 1;
+
+    return retval;
+}
+
+
 static void htbl_free_client_class(void *key, void *object)
 {
     client_class_t *client_class = (client_class_t *) object;
@@ -996,7 +1010,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 goto error;
             }
 
-            handle = client->current_handle++;
+            handle = get_next_handle(client);
             d = (resource_set_data_t *) mrp_allocz(sizeof(resource_set_data_t));
 
             if (!d)
