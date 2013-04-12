@@ -52,6 +52,7 @@
 
 #define DEFAULT_TRANSPORT  "unxs:/tmp/murphy/asm"
 #define TYPE_MAP_SIZE      21
+#define FILE_WRITING_HACK  1
 
 /*
  * mapping entry of a single ASM event to a resource set
@@ -472,6 +473,66 @@ static void dump_event_config(void)
                   data->strict ? "strict" : "relaxed");
     }
 }
+
+static int update_buffer(void *key, void *object, void *user_data)
+{
+    uint32_t *buffer = (uint32_t *) user_data;
+    resource_set_data_t *asm_client = (resource_set_data_t *) object;
+    client_class_t *client_class = asm_client->client_class;
+
+    MRP_UNUSED(key);
+
+    if (!client_class->rset)
+        return MRP_HTBL_ITER_MORE;
+
+    if (asm_client->handle >= 256)
+        return MRP_HTBL_ITER_MORE;
+
+    buffer[asm_client->handle] = mrp_get_resource_set_id(client_class->rset);
+
+    return MRP_HTBL_ITER_MORE;
+}
+
+#ifdef FILE_WRITING_HACK
+/* temporary hack */
+
+static char* get_filename(client_t *client)
+{
+    static char fname[256];
+    snprintf(fname, 256, "/tmp/murphy/mapping-file-%d", client->pid);
+
+    return fname;
+}
+
+
+static void update_client_mapping_file(client_t *client)
+{
+    uint32_t buf[256];
+    int size = 256*sizeof(uint32_t);
+    FILE *f;
+
+    memset(buf, 0, size);
+
+    if (!client->sets)
+        return;
+
+    /* go through every asm handle and fill the file with the murphy rset ids */
+    mrp_htbl_foreach(client->sets, update_buffer, buf);
+
+    /* create a tmp file */
+    f = fopen("/tmp/murphy/tmp-mapping-file", "w");
+
+    if (!f)
+        return;
+
+    /* write the buffer to the tmp file */
+    fwrite(buf, 256, sizeof(uint32_t), f);
+    fclose(f);
+
+    /* rename the tmp file to the official file */
+    rename("/tmp/murphy/tmp-mapping-file", get_filename(client));
+}
+#endif
 
 
 static void *u_to_p(uint32_t u)
@@ -1156,6 +1217,11 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             mrp_htbl_insert(client->sets, u_to_p(handle), d);
             client->n_sets++;
 
+#ifdef FILE_WRITING_HACK
+            /* temporary hack */
+            update_client_mapping_file(client);
+#endif
+
             reply->alloc_handle = handle;
             reply->cmd_handle = reply->alloc_handle;
 
@@ -1197,7 +1263,15 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     mrp_htbl_remove(client->sets, u_to_p(msg->handle), TRUE);
                     client->n_sets--;
 
+#ifdef FILE_WRITING_HACK
+                    /* temporary hack */
+                    update_client_mapping_file(client);
+#endif
                     if (client->n_sets <= 0) {
+#ifdef FILE_WRITING_HACK
+                        /* temporary hack*/
+                        unlink(get_filename(client));
+#endif
                         mrp_htbl_remove(ctx->clients, u_to_p(pid), TRUE);
                         client = NULL;
                     }
