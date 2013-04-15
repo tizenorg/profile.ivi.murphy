@@ -1,0 +1,2 @@
+* Mon Apr 15 10:20:28 EEST 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.18
+- release: cope with updated libwebsockets + numerous crash- and bugfixes.
