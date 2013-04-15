@@ -513,6 +513,7 @@ ldconfig
 %defattr(-,root,root,-)
 %{_bindir}/resource-client
 %{_bindir}/resource-api-test
+%{_bindir}/resource-api-fuzz
 %{_bindir}/test-domain-controller
 %{_bindir}/murphy-console
 
