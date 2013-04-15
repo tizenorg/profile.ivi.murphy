@@ -125,6 +125,9 @@ typedef struct {
 
     /* murphy integration */
     mrp_sighandler_t *sighandler;
+    int error_count;
+    bool shutting_down;
+
     mrp_context_t *ctx;
 } asm_data_t;
 
@@ -258,6 +261,81 @@ static rset_class_data_t type_map[] = {
 
 
 static int max_event_name;
+
+
+static int close_fds()
+{
+    int maxfd;
+    int i;
+    int newin, newout, newerr;
+    int ret = -1;
+
+    /* Closing all file descriptors in a protable way is tricky, so improve
+       this function as we go. */
+
+    maxfd = sysconf(_SC_OPEN_MAX);
+
+    for (i = 0; i < maxfd; i++) {
+        if (i != fileno(stdin) && i != fileno(stdout) && i != fileno(stderr))
+            close(i);
+    }
+
+    /* redirect the streams to /dev/null */
+
+    newin = open("/dev/null", O_RDONLY);
+    newout = open("/dev/null", O_WRONLY);
+    newerr = open("/dev/null", O_WRONLY);
+
+    if (newin < 0 || newout < 0 || newerr < 0)
+        goto end;
+
+    if (dup2(newin, fileno(stdin)) < 0 ||
+        dup2(newout, fileno(stdout)) < 0 ||
+        dup2(newerr, fileno(stderr)) < 0)
+        goto end;
+
+    ret = 0;
+
+end:
+    close(newin);
+    close(newout);
+    close(newerr);
+
+    return ret;
+}
+
+
+static bool launch_asm_bridge(asm_data_t *ctx)
+{
+    pid_t pid;
+
+    mrp_log_info("going to fork!");
+
+    pid = fork();
+
+    if (pid < 0) {
+        mrp_log_error("error launching asm-bridge");
+        return FALSE;
+    }
+    else if (pid == 0) {
+        /* child */
+        if (close_fds() < 0) {
+            mrp_log_error("close_fds() failed");
+            exit(1);
+        }
+        if (ctx->log != NULL)
+            setenv(ASM_BRIDGE_LOG_ENVVAR, ctx->log, 1);
+        execl(ctx->binary, ctx->binary, ctx->address, NULL);
+        exit(1);
+    }
+    else {
+        /* parent */
+        ctx->pid = pid;
+        mrp_log_info("child pid is %d", pid);
+    }
+
+    return TRUE;
+}
 
 
 static int asm_event(const char *name, int len)
@@ -1626,6 +1704,18 @@ static void signal_handler(mrp_sighandler_t *h, int signum, void *user_data)
                 mrp_log_warning("asm-bridge process died");
                 ctx->pid = 0;
             }
+
+            /* restart the process if the plugin isn't in process of being shut
+             * down and the error counter isn't too high */
+
+            if (!ctx->shutting_down && ctx->error_count < 5) {
+
+                ctx->error_count++;
+
+                if (!launch_asm_bridge(ctx)) {
+                    mrp_log_error("Error launching asm_bridge");
+                }
+            }
         }
     }
 }
@@ -1645,52 +1735,11 @@ static void htbl_free_client(void *key, void *object)
     mrp_free(client);
 }
 
-static int close_fds()
-{
-    int maxfd;
-    int i;
-    int newin, newout, newerr;
-    int ret = -1;
-
-    /* Closing all file descriptors in a protable way is tricky, so improve
-       this function as we go. */
-
-    maxfd = sysconf(_SC_OPEN_MAX);
-
-    for (i = 0; i < maxfd; i++) {
-        if (i != fileno(stdin) && i != fileno(stdout) && i != fileno(stderr))
-            close(i);
-    }
-
-    /* redirect the streams to /dev/null */
-
-    newin = open("/dev/null", O_RDONLY);
-    newout = open("/dev/null", O_WRONLY);
-    newerr = open("/dev/null", O_WRONLY);
-
-    if (newin < 0 || newout < 0 || newerr < 0)
-        goto end;
-
-    if (dup2(newin, fileno(stdin)) < 0 ||
-        dup2(newout, fileno(stdout)) < 0 ||
-        dup2(newerr, fileno(stderr)) < 0)
-        goto end;
-
-    ret = 0;
-
-end:
-    close(newin);
-    close(newout);
-    close(newerr);
-
-    return ret;
-}
 
 static int asm_init(mrp_plugin_t *plugin)
 {
     mrp_plugin_arg_t *args = plugin->args;
     asm_data_t *ctx = (asm_data_t *) mrp_allocz(sizeof(asm_data_t));
-    pid_t pid;
     mrp_htbl_config_t client_conf;
 
     if (!ctx) {
@@ -1748,7 +1797,10 @@ static int asm_init(mrp_plugin_t *plugin)
 
     /* listen to SIGCHLD signal */
 
-    ctx->sighandler = mrp_add_sighandler(plugin->ctx->ml, SIGCHLD, signal_handler, ctx);
+    ctx->error_count = 0;
+    ctx->shutting_down = FALSE;
+    ctx->sighandler = mrp_add_sighandler(plugin->ctx->ml, SIGCHLD,
+            signal_handler, ctx);
 
     if (!ctx->sighandler) {
         mrp_log_error("Failed to register signal handling");
@@ -1779,29 +1831,9 @@ static int asm_init(mrp_plugin_t *plugin)
 
     /* fork-exec the asm bridge binary */
 
-    mrp_log_info("going to fork!");
-
-    pid = fork();
-
-    if (pid < 0) {
-        mrp_log_error("error launching asm-bridge");
+    if (!launch_asm_bridge(ctx)) {
+        mrp_log_error("Error launching asm_bridge");
         goto error;
-    }
-    else if (pid == 0) {
-        /* child */
-        if (close_fds() < 0) {
-            mrp_log_error("close_fds() failed");
-            exit(1);
-        }
-        if (ctx->log != NULL)
-            setenv(ASM_BRIDGE_LOG_ENVVAR, ctx->log, 1);
-        execl(ctx->binary, ctx->binary, ctx->address, NULL);
-        exit(1);
-    }
-    else {
-        /* parent */
-        ctx->pid = pid;
-        mrp_log_info("child pid is %d", pid);
     }
 
     plugin->data = ctx;
@@ -1809,9 +1841,10 @@ static int asm_init(mrp_plugin_t *plugin)
     return TRUE;
 
 error:
-
     if (!ctx)
         return FALSE;
+
+    ctx->shutting_down = TRUE;
 
     if (ctx->pid) {
         kill(ctx->pid, SIGTERM);
@@ -1841,6 +1874,8 @@ error:
 static void asm_exit(mrp_plugin_t *plugin)
 {
     asm_data_t *ctx = (asm_data_t *) plugin->data;
+
+    ctx->shutting_down = TRUE;
 
     if (ctx->pid) {
         kill(ctx->pid, SIGTERM);
