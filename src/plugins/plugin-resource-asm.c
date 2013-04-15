@@ -1268,10 +1268,6 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     update_client_mapping_file(client);
 #endif
                     if (client->n_sets <= 0) {
-#ifdef FILE_WRITING_HACK
-                        /* temporary hack*/
-                        unlink(get_filename(client));
-#endif
                         mrp_htbl_remove(ctx->clients, u_to_p(pid), TRUE);
                         client = NULL;
                     }
@@ -1641,7 +1637,10 @@ static void htbl_free_client(void *key, void *object)
     client_t *client = (client_t *) object;
 
     mrp_htbl_destroy(client->sets, TRUE);
-
+#ifdef FILE_WRITING_HACK
+    /* temporary hack*/
+    unlink(get_filename(client));
+#endif
     /* TODO: free memory when resource API allows that */
     mrp_free(client);
 }
@@ -1817,6 +1816,11 @@ error:
     if (ctx->pid) {
         kill(ctx->pid, SIGTERM);
         ctx->pid = 0;
+    }
+
+    if (ctx->clients) {
+        mrp_htbl_destroy(ctx->clients, TRUE);
+        ctx->clients = NULL;
     }
 
     if (ctx->sighandler) {
