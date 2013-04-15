@@ -14,6 +14,7 @@
 %{!?_with_glib:%{!?_without_glib:%define _with_glib 1}}
 %{!?_with_qt:%{!?_without_qt:%define _without_qt 1}}
 %{!?_with_dbus:%{!?_without_dbus:%define _with_dbus 1}}
+%{!?_with_telephony:%{!?_without_telephony:%define _with_telephony 1}}
 %{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
 %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
@@ -53,6 +54,9 @@ BuildRequires: pkgconfig(QtCore)
 %endif
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 BuildRequires: pkgconfig(dbus-1)
+%endif
+%if %{?_with_telephony:1}%{!?_with_telephony:0}
+BuildRequires: pkgconfig(ofono)
 %endif
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 BuildRequires: pkgconfig(audio-session-mgr)
@@ -276,7 +280,11 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-dbus"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-dbus"
 %endif
 
+%if %{?_with_telephony:1}%{!?_with_telephony:0}
+CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-telephony"
+%else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-telephony"
+%endif
 
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-resource-asm"
