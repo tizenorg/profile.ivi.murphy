@@ -128,9 +128,20 @@ static void *wait_queue (void *arg) {
 
         if (ret < 0) {
             log_write("error receiving a message: '%s'!\n", strerror(errno));
-            /* remove erroneous message from queue */
-            msgrcv(asm_rcv_msgid, &msg, size, 0, MSG_NOERROR);
-            continue;
+
+            if (errno == E2BIG) {
+                /* remove erroneous message from queue */
+                msgrcv(asm_rcv_msgid, &msg, size, 0, MSG_NOERROR);
+                continue;
+            }
+            else if (errno == EAGAIN || errno == ENOMSG || errno == EINTR) {
+                continue;
+            }
+            else /* EACCES, EFAULT, EIDRM, EINVAL */  {
+                /* the message queue was removed from the system or became
+                 * otherwise unusable */
+                return NULL;
+            }
         }
 
         /* alignment is fine, since the first argument to the struct is a long */
