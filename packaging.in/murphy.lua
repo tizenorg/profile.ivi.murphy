@@ -158,6 +158,14 @@ resource.method.veto = {
             return false
         end
 
+        if (rset.audio_playback.attributes.role ~= 'browser' and
+            resource.sets[owner_id].audio_playback.attributes.role == 'browser')
+        then
+            print('veto: ' .. rset.audio_playback.attributes.role .. ' vs '
+                  .. resource.sets[owner_id].audio_playback.attributes.role)
+            return false
+        end
+
         return true
     end
 }
