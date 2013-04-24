@@ -865,7 +865,7 @@ error:
 mrp_pid_watch_t mrp_pid_set_watch(pid_t pid, mrp_mainloop_t *ml,
         mrp_pid_watch_handler_t cb, void *userdata)
 {
-    nl_pid_watch_t *w = NULL;
+    nl_pid_watch_t *nl_w = NULL;
     nl_pid_client_t *client = NULL;
     char pid_s[16];
     bool already_inserted = TRUE;
@@ -879,26 +879,29 @@ mrp_pid_watch_t mrp_pid_set_watch(pid_t pid, mrp_mainloop_t *ml,
     if (ret < 0 || ret >= (int) sizeof(pid_s))
         goto error;
 
-    w = (nl_pid_watch_t *) mrp_htbl_lookup(nl_watches, pid_s);
+    nl_w = (nl_pid_watch_t *) mrp_htbl_lookup(nl_watches, pid_s);
 
-    if (!w) {
+    if (!nl_w) {
 
-        w = (nl_pid_watch_t *) mrp_allocz(sizeof(nl_pid_watch_t));
+        nl_w = (nl_pid_watch_t *) mrp_allocz(sizeof(nl_pid_watch_t));
 
-        if (!w)
+        if (!nl_w)
             goto error;
 
-        mrp_list_init(&w->clients);
-        w->pid = pid;
-        memcpy(w->pid_s, pid_s, sizeof(w->pid_s));
+        mrp_list_init(&nl_w->clients);
+        nl_w->pid = pid;
+        memcpy(nl_w->pid_s, pid_s, sizeof(nl_w->pid_s));
 
         already_inserted = FALSE;
     }
 
     client = (nl_pid_client_t *) mrp_allocz(sizeof(nl_pid_client_t));
 
-    if (!client)
+    if (!client) {
+        if (!already_inserted)
+            mrp_free(nl_w);
         goto error;
+    }
 
     mrp_list_init(&client->hook);
     client->cb = cb;
@@ -906,12 +909,15 @@ mrp_pid_watch_t mrp_pid_set_watch(pid_t pid, mrp_mainloop_t *ml,
     client->w = (mrp_pid_watch_t) mrp_allocz(sizeof(mrp_pid_watch_t));
     client->w->pid = pid;
 
-    mrp_list_append(&w->clients, &client->hook);
-    w->n_clients++;
+    mrp_list_append(&nl_w->clients, &client->hook);
+    nl_w->n_clients++;
 
     if (!already_inserted) {
-        if (mrp_htbl_insert(nl_watches, w->pid_s, w) < 0)
+        if (mrp_htbl_insert(nl_watches, nl_w->pid_s, nl_w) < 0) {
+            mrp_list_delete(&client->hook);
+            mrp_free(nl_w);
             goto error;
+        }
 
         nl_n_pid_watches++;
     }
@@ -921,13 +927,21 @@ mrp_pid_watch_t mrp_pid_set_watch(pid_t pid, mrp_mainloop_t *ml,
     if (!subscribed)
         subscribe_proc_events();
 
+    /* check that the pid is still there -- return error if not */
+
+    if (mrp_pid_query_state(pid) != MRP_PROCESS_STATE_READY)
+        goto error_process;
+
     return client->w;
 
+error_process:
+    mrp_pid_remove_watch(client->w);
+    client = NULL;
+
 error:
-    mrp_free(w);
     if (client) {
-        mrp_free(client->w);
         mrp_free(client);
+        mrp_free(client->w);
     }
 
     return NULL;
