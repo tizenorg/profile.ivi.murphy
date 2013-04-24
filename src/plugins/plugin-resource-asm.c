@@ -43,6 +43,7 @@
 #include <audio-session-manager.h>
 
 #include <murphy/common.h>
+#include <murphy/common/process.h>
 #include <murphy/core.h>
 #include <murphy/core/plugin.h>
 
@@ -87,6 +88,7 @@ typedef struct {
 
     bool monitor; /* if the client has set up a monitor resource */
 
+    mrp_pid_watch_t *pid_w;
     mrp_htbl_t *classes;
 } client_t;
 
@@ -822,9 +824,13 @@ static client_t *create_client(uint32_t pid) {
     return client;
 
 error:
-    if (client && client->sets) {
-        mrp_htbl_destroy(client->sets, false);
+    if (client) {
+        if (client->sets)
+            mrp_htbl_destroy(client->sets, false);
+        if (client->classes)
+            mrp_htbl_destroy(client->classes, false);
     }
+
     mrp_free(client);
     return NULL;
 }
@@ -1095,6 +1101,22 @@ static void update_asm_client_states(client_class_t *client_class,
 }
 
 
+static void pid_watch_cb(pid_t pid, mrp_process_state_t s, void *userdata)
+{
+    asm_data_t *ctx = (asm_data_t *) userdata;
+
+    client_t *client = (client_t *) mrp_htbl_lookup(ctx->clients, u_to_p(pid));
+
+    if (!client) {
+        mrp_log_error("client '%u' not found", pid);
+        return;
+    }
+
+    if (s == MRP_PROCESS_STATE_NOT_READY)
+        mrp_htbl_remove(ctx->clients, u_to_p(pid), TRUE);
+}
+
+
 static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 {
     pid_t pid = msg->instance_id;
@@ -1137,6 +1159,10 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 client = create_client(pid);
                 if (!client)
                     goto error;
+
+                /* start following the process lifecycle */
+                client->pid_w = mrp_pid_set_watch(pid, ctx->ctx->ml, pid_watch_cb,
+                        ctx);
 
                 mrp_htbl_insert(ctx->clients, u_to_p(pid), client);
             }
@@ -1726,7 +1752,11 @@ static void htbl_free_client(void *key, void *object)
 
     client_t *client = (client_t *) object;
 
+    if (client->pid_w)
+        mrp_pid_remove_watch(client->pid_w);
+
     mrp_htbl_destroy(client->sets, TRUE);
+    mrp_htbl_destroy(client->classes, TRUE);
 #ifdef FILE_WRITING_HACK
     /* temporary hack*/
     unlink(get_filename(client));
