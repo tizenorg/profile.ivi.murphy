@@ -66,7 +66,7 @@ typedef struct {
 typedef struct {
     mrp_pid_watch_handler_t cb;
     void *user_data;
-    mrp_pid_watch_t w; /* identify the client */
+    mrp_pid_watch_t *w; /* identify the client */
 
     mrp_list_hook_t hook;
 } nl_pid_client_t;
@@ -862,7 +862,7 @@ error:
 }
 
 
-mrp_pid_watch_t mrp_pid_set_watch(pid_t pid, mrp_mainloop_t *ml,
+mrp_pid_watch_t *mrp_pid_set_watch(pid_t pid, mrp_mainloop_t *ml,
         mrp_pid_watch_handler_t cb, void *userdata)
 {
     nl_pid_watch_t *nl_w = NULL;
@@ -906,7 +906,7 @@ mrp_pid_watch_t mrp_pid_set_watch(pid_t pid, mrp_mainloop_t *ml,
     mrp_list_init(&client->hook);
     client->cb = cb;
     client->user_data = userdata;
-    client->w = (mrp_pid_watch_t) mrp_allocz(sizeof(mrp_pid_watch_t));
+    client->w = (mrp_pid_watch_t *) mrp_allocz(sizeof(mrp_pid_watch_t));
     client->w->pid = pid;
 
     mrp_list_append(&nl_w->clients, &client->hook);
@@ -992,7 +992,7 @@ int mrp_process_remove_watch(const char *id)
 }
 
 
-int mrp_pid_remove_watch(mrp_pid_watch_t w)
+int mrp_pid_remove_watch(mrp_pid_watch_t *w)
 {
     nl_pid_watch_t *nl_w = NULL;
     nl_pid_client_t *client = NULL;
