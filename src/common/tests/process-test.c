@@ -109,7 +109,7 @@ static void test_pid_watch(mrp_mainloop_t *ml)
         printf("error forking\n");
     }
     else if (pid > 0) {
-        mrp_pid_watch_t w;
+        mrp_pid_watch_t *w;
 
         if (mrp_pid_query_state(pid) != MRP_PROCESS_STATE_READY) {
             printf("failed to query the process READY state\n");
