@@ -1319,6 +1319,39 @@ resource_client_CFLAGS  = $(AM_CFLAGS)
 resource_client_LDADD   =  libmurphy-common.la
 endif
 
+# IVI resource manager plugin
+if BUILD_RESOURCES
+PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES = 				    \
+		plugins/ivi-resource-manager/plugin-ivi-resource-manager.c
+PLUGIN_IVI_RESOURCE_MANAGER_SOURCES = 					    \
+		$(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)		    \
+                plugin-ivi-resource-manager-func-info.c
+PLUGIN_IVI_RESOURCE_MANAGER_CFLAGS =					    \
+		$(LUA_CFLAGS)
+
+PLUGIN_IVI_RESOURCE_MANAGER_LIBS =       				    \
+		libmurphy-common.la					    \
+		$(RESOURCE_LIBRARY)                   			    \
+		$(LUA_LIBS)
+
+plugin_ivi_resource_manager_la_SOURCES = $(PLUGIN_IVI_RESOURCE_MANAGER_SOURCES)
+plugin_ivi_resource_manager_la_CFLAGS  = $(PLUGIN_IVI_RESOURCE_MANAGER_CFLAGS)\
+					 $(MURPHY_CFLAGS) $(AM_CFLAGS)	      \
+					 $(JSON_CFLAGS)
+plugin_ivi_resource_manager_la_LDFLAGS = -module -avoid-version
+plugin_ivi_resource_manager_la_LIBADD  = $(PLUGIN_IVI_RESOURCE_MANAGER_LIBS)
+
+plugin_LTLIBRARIES += plugin-ivi-resource-manager.la
+
+# debug file:line-function mapping generation
+plugin-ivi-resource-manager-func-info.c: $(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)
+	$(QUIET_GEN)$(top_builddir)/build-aux/gen-debug-table -o $@ $^
+
+clean-func-infos::
+	-rm plugin-ivi-resource-manager-func-info.c
+endif
+
+
 # domain control plugin
 DOMAIN_CONTROL_PLUGIN_SOURCES = plugins/domain-control/plugin-domain-control.c \
 				plugins/domain-control/domain-control.c        \
