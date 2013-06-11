@@ -102,6 +102,14 @@ else
 end
 
 
+-- load IVI resource manager plugin if exists
+if m:plugin_exists('ivi-resource-manager') then
+    m:load_plugin('ivi-resource-manager')
+else
+    m:info("No resource manager plugin found...")
+end
+
+
 -- define application classes
 application_class { name="interrupt", priority=99, modal=true , share=false, order="fifo" }
 application_class { name="navigator", priority=4 , modal=false, share=true , order="fifo" }
