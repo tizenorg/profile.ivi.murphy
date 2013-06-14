@@ -27,7 +27,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+
 #include <murphy/common.h>
+
+#include <murphy-db/mqi.h>
 
 #include <murphy/resource/config-api.h>
 #include <murphy/resource/manager-api.h>
@@ -35,15 +42,25 @@
 #include "screen.h"
 #include "class.h"
 
+#define ACTIVE_SCREEN_MAX   32
+
 #define ATTRIBUTE(n,t,v)    {n, MRP_RESOURCE_RW, mqi_##t, {.t=v}}
 #define ATTR_END            {NULL, 0, 0, {.string=NULL}}
 
 typedef struct screen_resource_s   screen_resource_t;
+typedef struct active_screen_s     active_screen_t;
+
+struct active_screen_s {
+    const char *appid;
+};
 
 struct mrp_resmgr_screen_s {
     mrp_resmgr_data_t *data;
     uint32_t resid;
     mrp_list_hook_t classes[MRP_ZONE_MAX];
+    int nactive[MRP_ZONE_MAX];
+    active_screen_t actives[MRP_ZONE_MAX][ACTIVE_SCREEN_MAX];
+    mqi_handle_t dbtbl;
 };
 
 struct screen_resource_s {
@@ -67,6 +84,7 @@ static void resource_class_move_resource(mrp_resmgr_class_t *,
                                          screen_resource_t *);
 static uint32_t resource_key(mrp_resource_t *);
 
+static void get_active_screens(mrp_resmgr_screen_t *, mrp_zone_t *);
 
 static void screen_notify(mrp_resource_event_t, mrp_zone_t *,
                           mrp_application_class_t *, mrp_resource_t *, void *);
@@ -113,9 +131,12 @@ mrp_resmgr_screen_t *mrp_resmgr_screen_create(mrp_resmgr_data_t *data)
 
         screen->data = data;
         screen->resid = resid;
+        screen->dbtbl = MQI_HANDLE_INVALID;
 
         for (i = 0;  i < MRP_ZONE_MAX;  i++)
             mrp_list_init(screen->classes + i);
+
+        mqi_open();
     }
 
     return screen;
@@ -255,6 +276,75 @@ static uint32_t resource_key(mrp_resource_t *res)
     return key;
 }
 
+static void get_active_screens(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
+{
+    static const char *zone_name;
+
+    MQI_COLUMN_SELECTION_LIST(columns,
+        MQI_COLUMN_SELECTOR( 1, active_screen_t, appid )
+    );
+
+    MQI_WHERE_CLAUSE(where,
+        MQI_EQUAL( MQI_COLUMN(0), MQI_STRING_VAR(zone_name) )
+    );
+
+
+    uint32_t zone_id;
+    int n, nrow;
+    active_screen_t rows[MRP_ZONE_MAX * ACTIVE_SCREEN_MAX];
+    active_screen_t *as, *from, *to;
+    int i;
+
+    if (!screen || !zone)
+        return;
+
+    zone_id = mrp_zone_get_id(zone);
+    zone_name = mrp_zone_get_name(zone);
+
+    for (i = 0, n = screen->nactive[zone_id];   i < n;   i++) {
+        as = &screen->actives[zone_id][i];
+        mrp_free((void *)as->appid);
+        as = NULL;
+    }
+
+    screen->nactive[zone_id] = 0;
+
+    if (screen->dbtbl == MQI_HANDLE_INVALID) {
+        screen->dbtbl = mqi_get_table_handle("active_screen");
+
+        if (screen->dbtbl == MQI_HANDLE_INVALID)
+            return;
+
+        mrp_log_info("ivi-resource-manager: 'active_screen' table found");
+    }
+
+    if ((size_t)mqi_get_table_size(screen->dbtbl) > MRP_ARRAY_SIZE(rows)) {
+        mrp_log_error("ivi-resource-manager: table size exceeds the max.");
+        return;
+    }
+
+    if ((nrow = MQI_SELECT(columns, screen->dbtbl, where, rows)) < 0) {
+        mrp_log_error("ivi-resource-manager: DB select failed: %s",
+                      strerror(errno));
+        return;
+    }
+
+    if (nrow > ACTIVE_SCREEN_MAX) {
+        mrp_log_error("ivi-resource-manager: DB select result is too "
+                      "large (%d). Will be truncated to %d",
+                      nrow, ACTIVE_SCREEN_MAX);
+        nrow = ACTIVE_SCREEN_MAX;
+    }
+
+    for (i = 0;  i < nrow;  i++) {
+        from = &rows[i];
+        to = &screen->actives[zone_id][i];
+
+        to->appid = mrp_strdup(from->appid);
+    }
+
+    screen->nactive[zone_id] = nrow;
+}
 
 
 static void screen_notify(mrp_resource_event_t event,
@@ -319,6 +409,8 @@ static void screen_init(mrp_zone_t *zone, void *userdata)
     MRP_ASSERT(screen, "invalid argument");
 
     mrp_log_info("screen init in zone '%s'", zone_name);
+
+    get_active_screens(screen, zone);
 }
 
 static bool screen_allocate(mrp_zone_t *zone,
@@ -327,14 +419,33 @@ static bool screen_allocate(mrp_zone_t *zone,
 {
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
     const char *zone_name = mrp_zone_get_name(zone);
+    uint32_t zone_id = mrp_zone_get_id(zone);
+    mrp_attr_t attr;
+    const char *appid;
+    active_screen_t *as;
+    int i, n;
 
-    MRP_UNUSED(res);
+    MRP_ASSERT(res && screen, "invalid argument");
 
-    MRP_ASSERT(screen, "invalid argument");
+    if (!mrp_resource_read_attribute(res, APPID_ATTRIDX, &attr)) {
+        mrp_log_error("screen allocate in zone '%s' failed: "
+                      "attribute read error", zone_name);
+        return FALSE;
+    }
 
-    mrp_log_info("screen allocate in zone '%s'", zone_name);
+    appid = attr.value.string;
 
-    return TRUE;
+
+    mrp_log_info("screen allocate in zone '%s' for '%s'", zone_name, appid);
+
+    for (i = 0, n = screen->nactive[zone_id];   i < n;   i++) {
+        as = &screen->actives[zone_id][i];
+
+        if (!strcmp(appid, as->appid))
+            return TRUE;
+    }
+
+    return FALSE;
 }
 
 
@@ -347,7 +458,7 @@ static void screen_free(mrp_zone_t *zone, mrp_resource_t *res, void *userdata)
 
     MRP_ASSERT(screen, "invalid argument");
 
-    mrp_log_info("screen allocation free in zone '%s'", zone_name);
+    mrp_log_info("screen free in zone '%s'", zone_name);
 }
 
 static bool screen_advice(mrp_zone_t *zone,mrp_resource_t *res,void *userdata)
