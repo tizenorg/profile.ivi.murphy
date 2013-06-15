@@ -39,6 +39,7 @@
 #include <murphy/core/plugin.h>
 #include <murphy/core/console.h>
 #include <murphy/core/event.h>
+#include <murphy/core/context.h>
 #include <murphy/core/lua-bindings/murphy.h>
 
 #include <murphy-db/mql.h>
@@ -55,22 +56,67 @@ struct mrp_resmgr_data_s {
     mrp_event_watch_t   *w;
     mrp_resmgr_screen_t *screen;
     mrp_htbl_t          *resources;
+    int                  ndepend;
+    const char         **depends;
+    mrp_zone_mask_t      zones;
 };
 
 
+void mrp_resmgr_register_dependency(mrp_resmgr_data_t *data,
+                                    const char *db_table_name)
+{
+    size_t size;
+    const char **depends;
+    char dependency[512];
+    int idx;
+
+    MRP_ASSERT(data && db_table_name, "invalid argument");
+
+    idx = data->ndepend;
+    size = (idx + 1) * sizeof(const char *);
+
+    if (!(depends = mrp_realloc(data->depends, size))) {
+        mrp_log_error("ivi-resource-manager: failed to allocate memory "
+                      "for resource dependencies");
+        data->ndepend = 0;
+        data->depends = NULL;
+        return;
+    }
+
+    snprintf(dependency, sizeof(dependency), "$%s", db_table_name);
+
+    if (!(depends[idx] = mrp_strdup(dependency))) {
+        mrp_log_error("ivi-resource-manager: failed to strdup dependency");
+        data->depends = depends;
+        return;
+    }
+
+    data->ndepend = idx + 1;
+    data->depends = depends;
+}
+
 void mrp_resmgr_insert_resource(mrp_resmgr_data_t *data,
+                                mrp_zone_t *zone,
                                 mrp_resource_t *key,
                                 void *resource)
 {
-    MRP_ASSERT(data && key && resource, "invalid argument");
+    uint32_t zoneid;
+
+    MRP_ASSERT(data && zone && key && resource, "invalid argument");
     MRP_ASSERT(data->resources, "uninitialised data structure");
+
+    zoneid = mrp_zone_get_id(zone);
+
+    data->zones |= ((mrp_zone_mask_t)1 << zoneid);
 
     mrp_htbl_insert(data->resources, key, resource);
 }
 
-void *mrp_resmgr_remove_resource(mrp_resmgr_data_t *data, mrp_resource_t *key)
+void *mrp_resmgr_remove_resource(mrp_resmgr_data_t *data,
+                                 mrp_zone_t *zone,
+                                 mrp_resource_t *key)
 {
-    MRP_ASSERT(data && key, "invalid argument");
+    MRP_ASSERT(data && zone && key, "invalid argument");
     MRP_ASSERT(data->resources, "uninitialised data structure");
 
     return mrp_htbl_remove(data->resources, key, FALSE);
@@ -82,6 +128,67 @@ void *mrp_resmgr_lookup_resource(mrp_resmgr_data_t *data, mrp_resource_t *key)
     MRP_ASSERT(data->resources, "uninitialised data structure");
 
     return mrp_htbl_lookup(data->resources, key);
+}
+
+static int resource_update_cb(mrp_scriptlet_t *script, mrp_context_tbl_t *ctbl)
+{
+    mrp_resmgr_data_t *data = (mrp_resmgr_data_t *)script->data;
+    mrp_zone_mask_t mask;
+    uint32_t zoneid;
+
+    MRP_UNUSED(ctbl);
+
+    for (mask = data->zones, zoneid = 0;   mask;   mask >>= 1, zoneid++) {
+        if ((mask & 1))
+            mrp_resource_owner_recalc(zoneid);
+    }
+
+    return TRUE;
+}
+
+static void add_depenedencies_to_resolver(mrp_resmgr_data_t *data)
+{
+    const char *target = "_ivi_resources";
+    mrp_interpreter_t resource_updater = {
+        { NULL, NULL },
+        "resource_updater",
+        NULL,
+        NULL,
+        NULL,
+        resource_update_cb,
+        NULL
+    };
+
+    mrp_plugin_t *plugin;
+    mrp_context_t *ctx;
+    mrp_resolver_t *resolver;
+    char buf[2048];
+    char *p, *e;
+    int i;
+    int success;
+
+    MRP_ASSERT(data, "invalid argument");
+
+    plugin = data->plugin;
+
+    if (!(ctx = plugin->ctx) || !(resolver = ctx->r))
+        return;
+
+    if (!data->ndepend || !data->depends)
+        return;
+
+    for (i = 0, e = (p = buf) + sizeof(buf); i < data->ndepend && p < e; i++)
+        p += snprintf(p, e-p, " %s", data->depends[i]);
+
+    printf("%s:%s\n\tresource_recalc()\n\n", target, buf);
+
+    success = mrp_resolver_add_prepared_target(resolver, target,
+                                               data->depends, data->ndepend,
+                                               &resource_updater, NULL, data);
+    if (!success) {
+        mrp_log_error("ivi-resource-manager: failed to install "
+                      "resolver target '%s'", target);
+    }
 }
 
 static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
@@ -112,6 +219,8 @@ static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
             if (success) {
                 if (!strcmp(inst, plugin->instance)) {
                     data->screen = mrp_resmgr_screen_create(data);
+
+                    add_depenedencies_to_resolver(data);
                 }
             }
         } /* if PLUGIN_STARTED */
