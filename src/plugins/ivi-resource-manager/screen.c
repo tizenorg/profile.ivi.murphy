@@ -42,6 +42,9 @@
 #include "screen.h"
 #include "class.h"
 
+#define RESOURCE_NAME       "screen"
+#define ACTIVE_SCREEN_TABLE "active_screen"
+
 #define ACTIVE_SCREEN_MAX   32
 
 #define ATTRIBUTE(n,t,v)    {n, MRP_RESOURCE_RW, mqi_##t, {.t=v}}
@@ -76,7 +79,8 @@ struct screen_resource_s {
 static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *,
                                                  mrp_zone_t *,mrp_resource_t *,
                                                  mrp_application_class_t *);
-static void screen_resource_destroy(mrp_resmgr_screen_t *,  mrp_resource_t *);
+static void screen_resource_destroy(mrp_resmgr_screen_t *,  mrp_zone_t *,
+                                    mrp_resource_t *);
 static screen_resource_t *screen_resource_lookup(mrp_resmgr_screen_t *,
                                                  mrp_resource_t *);
 
@@ -125,8 +129,8 @@ mrp_resmgr_screen_t *mrp_resmgr_screen_create(mrp_resmgr_data_t *data)
     uint32_t i;
 
     if ((screen = mrp_allocz(sizeof(*screen)))) {
-        resid = mrp_resource_definition_create("screen", true, screen_attrs,
-                                               &screen_ftbl, screen);
+        resid = mrp_resource_definition_create(RESOURCE_NAME,true,screen_attrs,
+                                               &screen_ftbl,screen);
         mrp_lua_resclass_create_from_c(resid);
 
         screen->data = data;
@@ -137,6 +141,8 @@ mrp_resmgr_screen_t *mrp_resmgr_screen_create(mrp_resmgr_data_t *data)
             mrp_list_init(screen->classes + i);
 
         mqi_open();
+
+        mrp_resmgr_register_dependency(data, ACTIVE_SCREEN_TABLE);
     }
 
     return screen;
@@ -156,6 +162,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
                                                  mrp_resource_t *res,
                                                  mrp_application_class_t *ac)
 {
+    mrp_resmgr_data_t *data;
     uint32_t zone_id;
     mrp_list_hook_t *classes;
     mrp_resmgr_class_t *rc;
@@ -163,6 +170,8 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
 
     MRP_ASSERT(screen && zone && res && ac, "invalid argument");
     MRP_ASSERT(screen->data, "confused with data structures");
+
+    data = screen->data;
 
     zone_id = mrp_zone_get_id(zone);
     classes = screen->classes + zone_id;
@@ -184,7 +193,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
 
             resource_class_move_resource(rc, sr);
 
-            mrp_resmgr_insert_resource(screen->data, res, sr);
+            mrp_resmgr_insert_resource(data, zone, res, sr);
         }
     }
 
@@ -193,6 +202,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
 
 
 static void screen_resource_destroy(mrp_resmgr_screen_t *screen,
+                                    mrp_zone_t *zone,
                                     mrp_resource_t *res)
 {
     screen_resource_t *sr;
@@ -200,7 +210,7 @@ static void screen_resource_destroy(mrp_resmgr_screen_t *screen,
     MRP_ASSERT(res && screen, "invalid argument");
     MRP_ASSERT(screen->data, "confused with data structures");
 
-    if ((sr = mrp_resmgr_remove_resource(screen->data, res))) {
+    if ((sr = mrp_resmgr_remove_resource(screen->data, zone, res))) {
         mrp_list_delete(&sr->link);
         mrp_free(sr);
     }
@@ -310,7 +320,7 @@ static void get_active_screens(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
     screen->nactive[zone_id] = 0;
 
     if (screen->dbtbl == MQI_HANDLE_INVALID) {
-        screen->dbtbl = mqi_get_table_handle("active_screen");
+        screen->dbtbl = mqi_get_table_handle(ACTIVE_SCREEN_TABLE);
 
         if (screen->dbtbl == MQI_HANDLE_INVALID)
             return;
@@ -368,7 +378,7 @@ static void screen_notify(mrp_resource_event_t event,
 
     case MRP_RESOURCE_EVENT_DESTROYED:
         mrp_log_info("screen resource in zone '%s' destroyed", zone_name);
-        screen_resource_destroy(screen, res);
+        screen_resource_destroy(screen, zone, res);
         break;
 
     case MRP_RESOURCE_EVENT_ACQUIRE:
