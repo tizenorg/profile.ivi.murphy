@@ -186,8 +186,8 @@ static int resource_update_cb(mrp_scriptlet_t *script, mrp_context_tbl_t *ctbl)
 
 static void add_depenedencies_to_resolver(mrp_resmgr_data_t *data)
 {
-    const char *target = "_ivi_resources";
-    mrp_interpreter_t resource_updater = {
+    static const char *target = "_ivi_resources";
+    static mrp_interpreter_t resource_updater = {
         { NULL, NULL },
         "resource_updater",
         NULL,
