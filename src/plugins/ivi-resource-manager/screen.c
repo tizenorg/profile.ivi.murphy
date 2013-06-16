@@ -157,6 +157,74 @@ void mrp_resmgr_screen_destroy(mrp_resmgr_screen_t *screen)
     }
 }
 
+int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
+                            uint32_t zoneid,
+                            char *buf, int len)
+{
+#define PRINT(...)                              \
+    do {                                        \
+        p += snprintf(p, e-p, __VA_ARGS__);     \
+        if (p >= e)                             \
+            return p - buf;                     \
+    } while (0)
+
+    char *p, *e;
+    mrp_list_hook_t *classes, *centry, *cn;
+    mrp_list_hook_t *resources, *rentry, *rn;
+    mrp_resmgr_class_t *class;
+    screen_resource_t *sr;
+    const char *class_name;
+    mrp_attr_def_t *attdef;
+    mrp_attr_t a;
+    int i;
+
+    MRP_ASSERT(screen && buf && len > 0, "invalid argument");
+
+    e = (p = buf) + len;
+    classes = screen->classes + zoneid;
+
+    PRINT("      Resource 'screen'\n");
+
+    if (mrp_list_empty(classes))
+        PRINT("         No resources\n");
+    else {
+        mrp_list_foreach(classes, centry, cn) {
+            class = mrp_list_entry(centry, mrp_resmgr_class_t, link);
+            class_name = mrp_application_class_get_name(class->class);
+            resources = &class->resources;
+
+            PRINT("         Class '%s':\n", class_name);
+
+            mrp_list_foreach(resources, rentry, rn) {
+                sr = mrp_list_entry(rentry, screen_resource_t, link);
+
+                PRINT("            0x%08x %sactive",
+                      sr->key, sr->active ? "  ":"in");
+
+                for (i = 0;    i < MRP_ARRAY_SIZE(screen_attrs) - 1;    i++) {
+                    if ((mrp_resource_read_attribute(sr->res, i, &a))) {
+                        PRINT(" %s:", a.name);
+
+                        switch (a.type) {
+                        case mqi_string:   PRINT("'%s'",a.value.string); break;
+                        case mqi_integer:  PRINT("%ld",a.value.integer); break;
+                        case mqi_unsignd:  PRINT("%ld",a.value.unsignd); break;
+                        case mqi_floating: PRINT("%lf",a.value.floating);break;
+                        default:           PRINT("<unsupported type>");  break;
+                        }
+                    }
+                }
+
+                PRINT("\n");
+            }
+        }
+    }
+
+    return p - buf;
+
+#undef PRINT
+}
+
 static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
                                                  mrp_zone_t *zone,
                                                  mrp_resource_t *res,

@@ -47,6 +47,7 @@
 
 #include <murphy/resource/config-api.h>
 #include <murphy/resource/manager-api.h>
+#include <murphy/resource/client-api.h>
 #include <murphy/resource/protocol.h>
 
 #include "screen.h"
@@ -61,6 +62,16 @@ struct mrp_resmgr_data_s {
     mrp_zone_mask_t      zones;
 };
 
+static void print_resources_cb(mrp_console_t *, void *, int, char **);
+
+MRP_CONSOLE_GROUP(manager_group, "ivi-resource-manager", NULL, NULL, {
+        MRP_TOKENIZED_CMD("resources", print_resources_cb, FALSE,
+                          "resources", "prints managed resources",
+                          "prints  the resources managed by "
+                          "ivi-resource-manager."),
+});
+
+static mrp_resmgr_data_t *resmgr_data;
 
 void mrp_resmgr_register_dependency(mrp_resmgr_data_t *data,
                                     const char *db_table_name)
@@ -129,6 +140,33 @@ void *mrp_resmgr_lookup_resource(mrp_resmgr_data_t *data, mrp_resource_t *key)
 
     return mrp_htbl_lookup(data->resources, key);
 }
+
+static void print_resources_cb(mrp_console_t *c, void *user_data,
+                               int argc, char **argv)
+{
+    const char *zones[MRP_ZONE_MAX + 1];
+    uint32_t zoneid;
+    char buf[65536];
+
+    MRP_UNUSED(c);
+    MRP_UNUSED(user_data);
+    MRP_UNUSED(argc);
+    MRP_UNUSED(argv);
+
+    mrp_zone_get_all_names(MRP_ZONE_MAX+1, zones);
+
+    printf("Resources managed by ivi-resource-manager:\n");
+
+    for (zoneid = 0;   zones[zoneid];  zoneid++) {
+        printf("   Zone '%s':\n", zones[zoneid]);
+
+        mrp_resmgr_screen_print(resmgr_data->screen, zoneid, buf, sizeof(buf));
+        printf(buf);
+    }
+
+    printf("\n");
+}
+
 
 static int resource_update_cb(mrp_scriptlet_t *script, mrp_context_tbl_t *ctbl)
 {
@@ -301,6 +339,7 @@ static int manager_init(mrp_plugin_t *plugin)
     data->resources = mrp_htbl_create(&cfg);
 
     plugin->data = data;
+    resmgr_data  = data;
 
     subscribe_events(plugin);
 
@@ -317,7 +356,7 @@ static void manager_exit(mrp_plugin_t *plugin)
 
     unsubscribe_events(plugin);
 
-    if ((data = plugin->data)) {
+    if ((data = plugin->data) && data == resmgr_data) {
         mrp_resmgr_screen_destroy(data->screen);
     }
 }
@@ -341,14 +380,9 @@ MURPHY_REGISTER_PLUGIN("resource-manager",
                        manager_init,
                        manager_exit,
                        args, MRP_ARRAY_SIZE(args),
-#if 0
-                       exports, MRP_ARRAY_SIZE(exports),
-                       imports, MRP_ARRAY_SIZE(imports),
-#else
                        NULL, 0,
                        NULL, 0,
-#endif
-                       NULL);
+                       &manager_group);
 
 /*
  * Local Variables:
