@@ -35,6 +35,8 @@
 mrp_resmgr_screen_t *mrp_resmgr_screen_create(mrp_resmgr_data_t *);
 void mrp_resmgr_screen_destroy(mrp_resmgr_screen_t *);
 
+int mrp_resmgr_screen_print(mrp_resmgr_screen_t *, uint32_t, char *, int);
+
 
 #endif  /* __MURPHY_IVI_RESOURCE_MANAGER_SCREEN_H__ */
 
