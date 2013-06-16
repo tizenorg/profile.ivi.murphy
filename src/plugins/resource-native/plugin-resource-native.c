@@ -153,7 +153,6 @@ static void print_zones_cb(mrp_console_t *c, void *user_data,
         for (i = 0;  zone_names[i];  i++)
             printf("   %s\n", zone_names[i]);
 
-
         mrp_free(zone_names);
     }
 }
