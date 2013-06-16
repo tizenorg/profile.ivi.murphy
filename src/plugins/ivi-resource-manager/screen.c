@@ -38,6 +38,7 @@
 
 #include <murphy/resource/config-api.h>
 #include <murphy/resource/manager-api.h>
+#include <murphy/resource/client-api.h>
 
 #include "screen.h"
 #include "class.h"
@@ -46,6 +47,21 @@
 #define ACTIVE_SCREEN_TABLE "active_screen"
 
 #define ACTIVE_SCREEN_MAX   32
+
+#define BIT(i)               ((uint32_t)1 << (i))
+#define MASK(w)              (((uint32_t)1 << (w)) - 1)
+
+#define PRIORITY_BITS       8
+#define CATEGORY_BITS       8
+#define ZORDER_BITS         16
+
+#define PRIORITY_POSITION   0
+#define CATEGORY_POSITION   (PRIORITY_POSITION + PRIORITY_BITS)
+#define ZORDER_POSITION     (CATEGORY_POSITION + CATEGORY_BITS)
+
+#define PRIORITY_MASK       MASK(PRIORITY_BITS)
+#define CATEGORY_MASK       MASK(CATEGORY_BITS)
+#define ZORDER_MASK         MASK(ZORDER_BITS)
 
 #define ATTRIBUTE(n,t,v)    {n, MRP_RESOURCE_RW, mqi_##t, {.t=v}}
 #define ATTR_END            {NULL, 0, 0, {.string=NULL}}
@@ -64,6 +80,7 @@ struct mrp_resmgr_screen_s {
     int nactive[MRP_ZONE_MAX];
     active_screen_t actives[MRP_ZONE_MAX][ACTIVE_SCREEN_MAX];
     mqi_handle_t dbtbl;
+    uint32_t grantids[MRP_ZONE_MAX];
 };
 
 struct screen_resource_s {
@@ -71,7 +88,8 @@ struct screen_resource_s {
     mrp_resource_t *res;
     mrp_resmgr_screen_t *screen;
     mrp_resmgr_class_t *class;
-    bool active;
+    bool acquire;
+    uint32_t grantid;
     uint32_t key;
 };
 
@@ -83,6 +101,8 @@ static void screen_resource_destroy(mrp_resmgr_screen_t *,  mrp_zone_t *,
                                     mrp_resource_t *);
 static screen_resource_t *screen_resource_lookup(mrp_resmgr_screen_t *,
                                                  mrp_resource_t *);
+static void screen_update_resources(mrp_resmgr_screen_t *, mrp_zone_t *);
+static void screen_grant_resources(mrp_resmgr_screen_t *, mrp_zone_t *);
 
 static void resource_class_move_resource(mrp_resmgr_class_t *,
                                          screen_resource_t *);
@@ -100,7 +120,7 @@ static void screen_commit(mrp_zone_t *, void *);
 
 
 #define PRIORITY_ATTRIDX  0
-#define CATHEGORY_ATTRIDX 1
+#define CATEGORY_ATTRIDX  1
 #define APPID_ATTRIDX     2
 
 static mrp_attr_def_t screen_attrs[] = {
@@ -174,7 +194,6 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
     mrp_resmgr_class_t *class;
     screen_resource_t *sr;
     const char *class_name;
-    mrp_attr_def_t *attdef;
     mrp_attr_t a;
     int i;
 
@@ -183,32 +202,32 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
     e = (p = buf) + len;
     classes = screen->classes + zoneid;
 
-    PRINT("      Resource 'screen'\n");
+    PRINT("      Resource 'screen' - grantid:%u\n", screen->grantids[zoneid]);
 
     if (mrp_list_empty(classes))
         PRINT("         No resources\n");
     else {
-        mrp_list_foreach(classes, centry, cn) {
+        mrp_list_foreach_back(classes, centry, cn) {
             class = mrp_list_entry(centry, mrp_resmgr_class_t, link);
             class_name = mrp_application_class_get_name(class->class);
             resources = &class->resources;
 
             PRINT("         Class '%s':\n", class_name);
 
-            mrp_list_foreach(resources, rentry, rn) {
+            mrp_list_foreach_back(resources, rentry, rn) {
                 sr = mrp_list_entry(rentry, screen_resource_t, link);
 
-                PRINT("            0x%08x %sactive",
-                      sr->key, sr->active ? "  ":"in");
+                PRINT("            0x%08x %s %u",
+                      sr->key, sr->acquire ? "acquire":"release", sr->grantid);
 
-                for (i = 0;    i < MRP_ARRAY_SIZE(screen_attrs) - 1;    i++) {
+                for (i = 0;  i < (int)MRP_ARRAY_SIZE(screen_attrs) - 1;  i++) {
                     if ((mrp_resource_read_attribute(sr->res, i, &a))) {
                         PRINT(" %s:", a.name);
 
                         switch (a.type) {
                         case mqi_string:   PRINT("'%s'",a.value.string); break;
-                        case mqi_integer:  PRINT("%ld",a.value.integer); break;
-                        case mqi_unsignd:  PRINT("%ld",a.value.unsignd); break;
+                        case mqi_integer:  PRINT("%d",a.value.integer);  break;
+                        case mqi_unsignd:  PRINT("%u",a.value.unsignd);  break;
                         case mqi_floating: PRINT("%lf",a.value.floating);break;
                         default:           PRINT("<unsupported type>");  break;
                         }
@@ -257,8 +276,6 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
             sr->class = rc;
             sr->key = resource_key(res);
 
-            printf("*** key 0x%08x\n", sr->key);
-
             resource_class_move_resource(rc, sr);
 
             mrp_resmgr_insert_resource(data, zone, res, sr);
@@ -298,6 +315,106 @@ static screen_resource_t *screen_resource_lookup(mrp_resmgr_screen_t *screen,
     return sr;
 }
 
+static void screen_update_resources(mrp_resmgr_screen_t *screen,
+                                    mrp_zone_t *zone)
+{
+    uint32_t zoneid;
+    mrp_list_hook_t *classes, *centry, *cn;
+    mrp_list_hook_t *resources, *rentry, *rn;
+    mrp_resmgr_class_t *class;
+    mrp_attr_t a;
+    const char *appid;
+    screen_resource_t *sr, *srs[4096];
+    int nsr;
+    active_screen_t *as;
+    bool active;
+    uint32_t zorder;
+    int i, n;
+
+    zoneid = mrp_zone_get_id(zone);
+    classes = screen->classes + zoneid;
+
+    mrp_list_foreach_back(classes, centry, cn) {
+        class = mrp_list_entry(centry, mrp_resmgr_class_t, link);
+        resources = &class->resources;
+        nsr = 0;
+
+        mrp_list_foreach_back(resources, rentry, rn) {
+            sr = mrp_list_entry(rentry, screen_resource_t, link);
+
+            active = false;
+
+            if (mrp_resource_read_attribute(sr->res, APPID_ATTRIDX, &a)) {
+                appid = a.value.string;
+
+                for (i = 0, n = screen->nactive[zoneid];   i < n;   i++) {
+                    as = &screen->actives[zoneid][i];
+
+                    if (!strcmp(appid, as->appid)) {
+                        active = true;
+                        break;
+                    }
+                }
+            }
+
+            if (active) {
+                sr->key |= (ZORDER_MASK << ZORDER_POSITION);
+                if (nsr >= (int)MRP_ARRAY_SIZE(srs)) {
+                    mrp_log_error("ivi-resource-manager: "
+                                  "too many active screens");
+                    break;
+                }
+                mrp_list_delete(&sr->link);
+                srs[nsr++] = sr;
+            }
+            else {
+                zorder  = (sr->key >> ZORDER_POSITION) & ZORDER_MASK;
+                zorder -= (zorder > 0) ? 1 : 0;
+
+                sr->key &= ~(ZORDER_MASK << ZORDER_POSITION);
+                sr->key |= (zorder << ZORDER_POSITION);
+            }
+        } /* foreach resource */
+
+        for (i = 0;   i < nsr;   i++)
+            resource_class_move_resource(class, srs[i]);
+
+    } /* foreach class */
+}
+
+static void screen_grant_resources(mrp_resmgr_screen_t *screen,
+                                   mrp_zone_t *zone)
+{
+    uint32_t zoneid;
+    uint32_t grantid;
+    mrp_list_hook_t *classes, *centry, *cn;
+    mrp_list_hook_t *resources, *rentry, *rn;
+    mrp_resmgr_class_t *class;
+    screen_resource_t *sr;
+
+    zoneid  = mrp_zone_get_id(zone);
+    classes = screen->classes + zoneid;
+    grantid = ++screen->grantids[zoneid];
+
+    if (screen->nactive[zoneid]) {
+        mrp_list_foreach_back(classes, centry, cn) {
+            class = mrp_list_entry(centry, mrp_resmgr_class_t, link);
+            resources = &class->resources;
+
+            mrp_list_foreach_back(resources, rentry, rn) {
+                sr = mrp_list_entry(rentry, screen_resource_t, link);
+
+                if (sr->acquire) {
+                    sr->grantid = grantid;
+
+                    if (!mrp_resource_is_shared(sr->res))
+                        return;
+                }
+            }
+        }
+    }
+}
+
 static void resource_class_move_resource(mrp_resmgr_class_t *class,
                                          screen_resource_t *resource)
 {
@@ -320,11 +437,12 @@ static void resource_class_move_resource(mrp_resmgr_class_t *class,
     mrp_list_append(insert_before, &resource->link);
 }
 
+
 static uint32_t resource_key(mrp_resource_t *res)
 {
     mrp_attr_t attr;
     uint32_t priority;
-    uint32_t cathegory;
+    uint32_t category;
     uint32_t key = 0;
 
     do {
@@ -336,16 +454,16 @@ static uint32_t resource_key(mrp_resource_t *res)
         if (attr.type != mqi_integer || attr.value.integer < 0)
             break;
 
-        priority = attr.value.integer;
+        priority = ((attr.value.integer & PRIORITY_MASK) << PRIORITY_POSITION);
 
-        if (!mrp_resource_read_attribute(res, CATHEGORY_ATTRIDX, &attr))
+        if (!mrp_resource_read_attribute(res, CATEGORY_ATTRIDX, &attr))
             break;
         if (attr.type != mqi_integer || attr.value.integer < 0)
             break;
 
-        cathegory = attr.value.integer;
+        category = ((attr.value.integer & CATEGORY_MASK) << CATEGORY_POSITION);
 
-        key = ((cathegory & 0xffff) << 16) | (priority & 0xffff);
+        key = (priority | category);
 
         return key;
 
@@ -454,7 +572,7 @@ static void screen_notify(mrp_resource_event_t event,
         if (!(sr = screen_resource_lookup(screen, res)))
             goto no_screen_resource;
         else {
-            sr->active = true;
+            sr->acquire = true;
         }
         break;
 
@@ -463,7 +581,7 @@ static void screen_notify(mrp_resource_event_t event,
         if (!(sr = screen_resource_lookup(screen, res)))
             goto no_screen_resource;
         else {
-            sr->active = false;
+            sr->acquire = false;
         }
         break;
 
@@ -489,6 +607,9 @@ static void screen_init(mrp_zone_t *zone, void *userdata)
     mrp_log_info("screen init in zone '%s'", zone_name);
 
     get_active_screens(screen, zone);
+    screen_update_resources(screen, zone);
+
+    screen_grant_resources(screen, zone);
 }
 
 static bool screen_allocate(mrp_zone_t *zone,
@@ -496,32 +617,21 @@ static bool screen_allocate(mrp_zone_t *zone,
                             void *userdata)
 {
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
-    const char *zone_name = mrp_zone_get_name(zone);
-    uint32_t zone_id = mrp_zone_get_id(zone);
-    mrp_attr_t attr;
-    const char *appid;
-    active_screen_t *as;
-    int i, n;
+    uint32_t zoneid;
+    screen_resource_t *sr;
+    uint32_t grantid;
 
     MRP_ASSERT(res && screen, "invalid argument");
 
-    if (!mrp_resource_read_attribute(res, APPID_ATTRIDX, &attr)) {
-        mrp_log_error("screen allocate in zone '%s' failed: "
-                      "attribute read error", zone_name);
-        return FALSE;
+    zoneid  = mrp_zone_get_id(zone);
+    grantid = screen->grantids[zoneid];
+
+    if ((sr = screen_resource_lookup(screen, res))) {
+        return (sr->grantid == grantid);
     }
 
-    appid = attr.value.string;
-
-
-    mrp_log_info("screen allocate in zone '%s' for '%s'", zone_name, appid);
-
-    for (i = 0, n = screen->nactive[zone_id];   i < n;   i++) {
-        as = &screen->actives[zone_id][i];
-
-        if (!strcmp(appid, as->appid))
-            return TRUE;
-    }
+    mrp_log_error("ivi-resource-manager: attempt to allocate "
+                  "untracked resource");
 
     return FALSE;
 }
