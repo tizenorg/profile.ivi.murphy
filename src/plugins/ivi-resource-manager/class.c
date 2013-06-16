@@ -41,16 +41,30 @@
 mrp_resmgr_class_t *mrp_resmgr_class_create(mrp_list_hook_t *classes,
                                             mrp_application_class_t *ac)
 {
-    mrp_resmgr_class_t *rc;
+    mrp_list_hook_t *insert_before, *entry, *n;
+    mrp_resmgr_class_t *class, *c;
+    uint32_t pri;
 
     if (ac) {
-        if ((rc = mrp_allocz(sizeof(*rc)))) {
-            rc->class = ac;
-            mrp_list_init(&rc->resources);
+        pri = mrp_application_class_get_priority(ac);
 
-            mrp_list_append(classes, &rc->link);
+        if ((class = mrp_allocz(sizeof(mrp_resmgr_class_t)))) {
+            class->class = ac;
+            mrp_list_init(&class->resources);
 
-            return rc;
+            insert_before = classes;
+            mrp_list_foreach_back(classes, entry, n) {
+                c = mrp_list_entry(entry, mrp_resmgr_class_t, link);
+
+                if (pri >= mrp_application_class_get_priority(c->class))
+                    break;
+
+                insert_before = entry;
+            }
+
+            mrp_list_insert_before(insert_before, &class->link);
+
+            return class;
         }
     }
 
