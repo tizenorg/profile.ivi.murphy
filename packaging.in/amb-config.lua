@@ -11,7 +11,7 @@ amb.property {
     basic_table_name = "amb_vehicle_speed", -- default: "amb_" + name
     dbus_data = {
         obj = "/org/automotive/runningstatus/vehicleSpeed",
-        interface = "org.automotive.vehicleSpeed",
+        interface = "org.automotive.VehicleSpeed",
         property = "VehicleSpeed",
         notification = "VehicleSpeedChanged",
         signature = "i",
