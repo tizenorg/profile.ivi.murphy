@@ -21,7 +21,7 @@
 
 Summary: Murphy policy framework
 Name: murphy
-Version: 0.0.20
+Version: 0.0.27
 Release: 1
 License: BSD
 Group: System Environment/Daemons
