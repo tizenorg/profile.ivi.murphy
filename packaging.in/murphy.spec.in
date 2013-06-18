@@ -456,6 +456,7 @@ ldconfig
 %endif
 %{_libdir}/pkgconfig/murphy-domain-controller.pc
 %{_libdir}/pkgconfig/murphy-db.pc
+%{_libdir}/pkgconfig/murphy-resource.pc
 %{_includedir}/breedline
 %{_libdir}/libbreedline*.so
 %{_libdir}/pkgconfig/breedline*.pc
