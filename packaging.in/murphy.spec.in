@@ -63,8 +63,8 @@ BuildRequires: pkgconfig(audio-session-mgr)
 %endif
 %if %{?_with_websockets:1}%{!?_with_websockets:0}
 BuildRequires: libwebsockets-devel
-BuildRequires: pkgconfig(json)
 %endif
+BuildRequires: pkgconfig(json)
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %package core
