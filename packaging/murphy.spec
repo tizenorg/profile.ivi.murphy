@@ -16,7 +16,7 @@
 %{!?_with_dbus:%{!?_without_dbus:%define _with_dbus 1}}
 %{!?_with_telephony:%{!?_without_telephony:%define _with_telephony 1}}
 %{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
-%{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
+%{!?_with_websockets:%{!?_without_websockets:%define _without_websockets 0}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
 Summary: Murphy policy framework
