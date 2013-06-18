@@ -707,23 +707,31 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     DBusMessageIter variant_iter;
     char *variant_sig = NULL;
 
-    if (!w || !msg)
+    if (!w || !msg) {
+        mrp_log_error("amb: no dbus property watch set");
         goto error;
+    }
 
-    if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR)
+    if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
+        mrp_log_error("amb: error message from ambd");
         goto error;
+    }
 
     dbus_message_iter_init(msg, &msg_iter);
 
-    if (dbus_message_iter_get_arg_type(&msg_iter) != DBUS_TYPE_VARIANT)
+    if (dbus_message_iter_get_arg_type(&msg_iter) != DBUS_TYPE_VARIANT) {
+        mrp_log_error("amb: message parameter wasn't a variant");
         goto error;
+    }
 
     dbus_message_iter_recurse(&msg_iter, &variant_iter);
 
     variant_sig = dbus_message_iter_get_signature(&variant_iter);
 
-    if (!variant_sig)
+    if (!variant_sig) {
+        mrp_log_error("amb: could not get variant signature");
         goto error;
+    }
 
     /*
     mrp_log_info("iter sig: %s, expected: %s",
@@ -731,11 +739,15 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     */
 
     /* check if we got what we were expecting */
-    if (strcmp(variant_sig, w->lua_prop->dbus_data.signature) != 0)
+    if (strcmp(variant_sig, w->lua_prop->dbus_data.signature) != 0) {
+        mrp_log_error("amb: dbus data signature didn't match");
         goto error;
+    }
 
-    if (w->lua_prop->handler_ref == LUA_NOREF)
+    if (w->lua_prop->handler_ref == LUA_NOREF) {
+        mrp_log_error("amb: no lua reference");
         goto error;
+    }
 
     /* load the function pointer to the stack */
     lua_rawgeti(w->ctx->L, LUA_REGISTRYINDEX, w->lua_prop->handler_ref);
@@ -774,19 +786,26 @@ static void basic_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     double d_val;
     char *s_val;
 
-    if (!w || !msg)
+    if (!w || !msg) {
+        mrp_log_error("amb: no dbus property watch set");
         goto error;
+    }
 
     dbus_message_iter_init(msg, &msg_iter);
 
-    if (dbus_message_iter_get_arg_type(&msg_iter) != DBUS_TYPE_VARIANT)
+    if (dbus_message_iter_get_arg_type(&msg_iter) != DBUS_TYPE_VARIANT) {
+        mrp_log_error("amb: message parameter wasn't a variant");
         goto error;
+    }
 
     dbus_message_iter_recurse(&msg_iter, &variant_iter);
 
     if (dbus_message_iter_get_arg_type(&variant_iter)
-                        != w->prop.type)
+                        != w->prop.type) {
+        mrp_log_error("amb: argument type %c did not match expected type %c",
+                dbus_message_iter_get_arg_type(&variant_iter), w->prop_type);
         goto error;
+    }
 
     switch (w->prop.type) {
         case DBUS_TYPE_INT32:
@@ -842,7 +861,8 @@ static int property_signal_handler(mrp_dbus_t *dbus, DBusMessage *msg,
 
     MRP_UNUSED(dbus);
 
-    mrp_debug("amb: received property signal");
+    mrp_debug("amb: received property signal, going for %s handling",
+            w->tdata ? "basic" : "lua");
 
     if (w->tdata) {
         basic_property_handler(msg, w);
@@ -861,15 +881,16 @@ static void property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
 
     MRP_UNUSED(dbus);
 
-    mrp_debug("amb: received property method reply");
+    mrp_debug("amb: received property method reply, going for %s handling",
+            w->tdata ? "basic" : "lua");
 
     if (w->tdata) {
         basic_property_handler(msg, w);
     }
     else {
         lua_property_handler(msg, w);
-    }}
-
+    }
+}
 
 static int subscribe_property(data_t *ctx, dbus_property_watch_t *w)
 {
