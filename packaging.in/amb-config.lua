@@ -10,7 +10,7 @@ amb.property {
     name = "vehicle_speed",
     basic_table_name = "amb_vehicle_speed", -- default: "amb_" + name
     dbus_data = {
-        obj = "/org/automotive/runningstatus/vehicleSpeed",
+        obj = "/org/automotive/runningstatus/VehicleSpeed",
         interface = "org.automotive.VehicleSpeed",
         property = "VehicleSpeed",
         notification = "VehicleSpeedChanged",
@@ -50,8 +50,8 @@ amb.property {
         }
     },
     dbus_data = {
-        obj = "/org/automotive/runningstatus/transmission",
-        interface = "org.automotive.transmission",
+        obj = "/org/automotive/runningstatus/Transmission",
+        interface = "org.automotive.Transmission",
         property = "ShiftPosition",
         notification = "ShiftPositionChanged",
         signature = "y",
