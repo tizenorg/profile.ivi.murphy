@@ -166,6 +166,9 @@ static data_t *global_ctx = NULL;
 static basic_table_data_t *create_basic_property_table(const char *table_name,
         const char *member, int type);
 
+static int find_property_object(data_t *ctx, dbus_property_watch_t *w,
+        const char *prop);
+
 static int subscribe_property(data_t *ctx, dbus_property_watch_t *w);
 
 static void basic_property_updated(dbus_basic_property_t *prop, void *userdata);
@@ -234,6 +237,7 @@ static int amb_constructor(lua_State *L)
     const char *field_name;
     data_t *ctx = global_ctx;
     dbus_property_watch_t *w = NULL;
+    char error = "unknown error";
 
     MRP_LUA_ENTER;
 
@@ -272,8 +276,10 @@ static int amb_constructor(lua_State *L)
 
                 mrp_log_info("%s -> %s", key, value);
 
-                if (!key || !value)
+                if (!key || !value) {
+                    error = "key or value undefined";
                     goto error;
+                }
 
                 if (strcmp(key, "signature") == 0) {
                     prop->dbus_data.signature = mrp_strdup(value);
@@ -285,12 +291,20 @@ static int amb_constructor(lua_State *L)
                     prop->dbus_data.signame = mrp_strdup(value);
                 }
                 else if (strcmp(key, "obj") == 0) {
-                    prop->dbus_data.obj = mrp_strdup(value);
+                    if (strcmp(value, "undefined") == 0) {
+                        /* need to query AMB for finding the object path */
+                        mrp_log_info("querying AMB for correct path");
+                        prop->dbus_data.obj = NULL;
+                    }
+                    else {
+                        prop->dbus_data.obj = mrp_strdup(value);
+                    }
                 }
                 else if (strcmp(key, "interface") == 0) {
                     prop->dbus_data.iface = mrp_strdup(value);
                 }
                 else {
+                    error = "unknown key";
                     goto error;
                 }
 
@@ -303,9 +317,9 @@ static int amb_constructor(lua_State *L)
             /* check that we have all necessary data */
             if (prop->dbus_data.signature == NULL ||
                 prop->dbus_data.iface == NULL ||
-                prop->dbus_data.obj == NULL ||
                 prop->dbus_data.name == NULL ||
                 prop->dbus_data.signame == NULL) {
+                error = "missing data";
                 goto error;
             }
         }
@@ -329,16 +343,22 @@ static int amb_constructor(lua_State *L)
         }
     }
 
-    if (!prop->name)
+    if (!prop->name) {
+        error = "missing property name";
         goto error;
+    }
 
-    if (prop->handler_ref == LUA_NOREF && !prop->basic_table_name)
+    if (prop->handler_ref == LUA_NOREF && !prop->basic_table_name) {
+        error = "missing table name";
         goto error;
+    }
 
     w = (dbus_property_watch_t *) mrp_allocz(sizeof(dbus_property_watch_t));
 
-    if (!w)
+    if (!w) {
+        error = "out of memory";
         goto error;
+    }
 
     w->ctx = ctx;
     w->lua_prop = prop;
@@ -346,8 +366,10 @@ static int amb_constructor(lua_State *L)
     w->prop.type = DBUS_TYPE_INVALID;
     w->prop.name = mrp_strdup(w->lua_prop->dbus_data.name);
 
-    if (!w->prop.name)
+    if (!w->prop.name) {
+        error = "missing watch property name";
         goto error;
+    }
 
     if (prop->handler_ref == LUA_NOREF) {
         basic_table_data_t *tdata;
@@ -358,6 +380,7 @@ static int amb_constructor(lua_State *L)
             prop->dbus_data.name, w->prop.type);
 
         if (!tdata) {
+            error = "could not create table data";
             goto error;
         }
 
@@ -366,10 +389,14 @@ static int amb_constructor(lua_State *L)
         w->cb = basic_property_updated;
         w->user_data = w;
 
-        /* add_table_data(tdata, ctx); */
-        if (subscribe_property(ctx, w)) {
-            mrp_log_error("Failed to subscribe to basic property");
-            goto error;
+        if (w->lua_prop->dbus_data.obj) {
+            if (subscribe_property(ctx, w)) {
+                error = "failed to subscribe to basic property";
+                goto error;
+            }
+        }
+        else {
+            find_property_object(ctx, w, w->lua_prop->dbus_data.name);
         }
     }
     else {
@@ -377,12 +404,17 @@ static int amb_constructor(lua_State *L)
 
         /* TODO: refactor to decouple updating the property (calling the
          * lua handler) from parsing the D-Bus message. Is this possible? */
-        if (subscribe_property(ctx, w)) {
-            mrp_log_error("Failed to subscribe to basic property");
-            goto error;
+
+        if (w->lua_prop->dbus_data.obj) {
+            if (subscribe_property(ctx, w)) {
+                error = "failed to subscribe to specially handled property";
+                goto error;
+            }
+        }
+        else {
+            find_property_object(ctx, w, w->lua_prop->dbus_data.name);
         }
     }
-
 
     mrp_list_init(&w->hook);
 
@@ -401,7 +433,7 @@ error:
     /* TODO: delete the allocated data */
     destroy_prop(global_ctx, w);
 
-    mrp_log_error("< amb_constructor ERROR");
+    mrp_log_error("< amb_constructor error: %s", error);
     MRP_LUA_LEAVE(0);
 }
 
@@ -435,7 +467,10 @@ static int amb_getfield(lua_State *L)
         lua_newtable(L);
 
         lua_pushstring(L, AMB_OBJECT);
-        lua_pushstring(L, prop->dbus_data.obj);
+        if (prop->dbus_data.obj)
+            lua_pushstring(L, prop->dbus_data.obj);
+        else
+            lua_pushstring(L, "undefined");
         lua_settable(L, -3);
 
         lua_pushstring(L, AMB_INTERFACE);
@@ -803,7 +838,7 @@ static void basic_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     if (dbus_message_iter_get_arg_type(&variant_iter)
                         != w->prop.type) {
         mrp_log_error("amb: argument type %c did not match expected type %c",
-                dbus_message_iter_get_arg_type(&variant_iter), w->prop_type);
+                dbus_message_iter_get_arg_type(&variant_iter), w->prop.type);
         goto error;
     }
 
@@ -891,6 +926,57 @@ static void property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
         lua_property_handler(msg, w);
     }
 }
+
+
+static void find_property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
+        void *data)
+{
+    dbus_property_watch_t *w = (dbus_property_watch_t *) data;
+    char *obj = NULL;
+
+    MRP_UNUSED(dbus);
+
+    if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
+        mrp_log_error("Error when trying to find an AMB object path");
+        goto error;
+    }
+
+    if (!dbus_message_get_args(msg, NULL, DBUS_TYPE_OBJECT_PATH, &obj,
+            DBUS_TYPE_INVALID)) {
+        mrp_log_error("Error fetching the object path from the message");
+        goto error;
+    }
+
+    mrp_free((char *) w->lua_prop->dbus_data.obj);
+    w->lua_prop->dbus_data.obj = mrp_strdup(obj);
+
+    mrp_debug("amb: path for property %s: %s", w->lua_prop->dbus_data.name,
+            w->lua_prop->dbus_data.obj);
+
+    subscribe_property(w->ctx, w);
+
+error:
+    return;
+}
+
+
+static int find_property_object(data_t *ctx, dbus_property_watch_t *w,
+        const char *prop)
+{
+    if (!ctx || !w || !prop)
+        return -1;
+
+    mrp_log_info("finding object path of property '%s'", prop);
+
+    mrp_dbus_call(ctx->dbus,
+            ctx->amb_addr, "/",
+            "org.automotive.Manager",
+            "findProperty", 3000, find_property_reply_handler, w,
+            DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+
+    return 0;
+}
+
 
 static int subscribe_property(data_t *ctx, dbus_property_watch_t *w)
 {
