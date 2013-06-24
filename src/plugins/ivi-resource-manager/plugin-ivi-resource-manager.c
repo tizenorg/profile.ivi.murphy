@@ -51,11 +51,13 @@
 #include <murphy/resource/protocol.h>
 
 #include "screen.h"
+#include "audio.h"
 
 struct mrp_resmgr_data_s {
     mrp_plugin_t        *plugin;
     mrp_event_watch_t   *w;
     mrp_resmgr_screen_t *screen;
+    mrp_resmgr_audio_t  *audio;
     mrp_htbl_t          *resources;
     int                  ndepend;
     const char         **depends;
@@ -162,6 +164,9 @@ static void print_resources_cb(mrp_console_t *c, void *user_data,
 
         mrp_resmgr_screen_print(resmgr_data->screen, zoneid, buf, sizeof(buf));
         printf(buf);
+
+        mrp_resmgr_audio_print(resmgr_data->audio, zoneid, buf, sizeof(buf));
+        printf(buf);
     }
 
     printf("\n");
@@ -257,6 +262,7 @@ static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
             if (success) {
                 if (!strcmp(inst, plugin->instance)) {
                     data->screen = mrp_resmgr_screen_create(data);
+                    data->audio  = mrp_resmgr_audio_create(data);
 
                     add_depenedencies_to_resolver(data);
                 }
