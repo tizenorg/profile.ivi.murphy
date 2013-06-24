@@ -167,15 +167,17 @@ zone {
 
 
 -- define resource classes
-resource.class {
-     name = "audio_playback",
-     shareable = true,
-     attributes = {
-         role = { mdb.string, "music", "rw" },
-         pid = { mdb.string, "<unknown>", "rw" },
-         policy = { mdb.string, "relaxed", "rw" }
-     }
-}
+if not m:plugin_exists('ivi-resource-manager') then
+   resource.class {
+        name = "audio_playback",
+        shareable = true,
+        attributes = {
+            role = { mdb.string, "music", "rw" },
+            pid = { mdb.string, "<unknown>", "rw" },
+            policy = { mdb.string, "relaxed", "rw" }
+        }
+   }
+end
 
 resource.class {
      name = "audio_recording",
