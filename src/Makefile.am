@@ -1322,7 +1322,8 @@ if BUILD_RESOURCES
 PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES = 				    \
 		plugins/ivi-resource-manager/plugin-ivi-resource-manager.c  \
 		plugins/ivi-resource-manager/class.c 			    \
-		plugins/ivi-resource-manager/screen.c
+		plugins/ivi-resource-manager/screen.c			    \
+		plugins/ivi-resource-manager/audio.c
 PLUGIN_IVI_RESOURCE_MANAGER_SOURCES = 					    \
 		$(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)		    \
                 plugin-ivi-resource-manager-func-info.c
