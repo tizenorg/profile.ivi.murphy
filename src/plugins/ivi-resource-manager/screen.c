@@ -511,24 +511,26 @@ static void get_active_screens(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
         if (screen->dbtbl == MQI_HANDLE_INVALID)
             return;
 
-        mrp_log_info("ivi-resource-manager: 'active_screen' table found");
+        mrp_log_info("ivi-resource-manager: screen resource: "
+                     "'active_screen' table found");
     }
 
     if ((size_t)mqi_get_table_size(screen->dbtbl) > MRP_ARRAY_SIZE(rows)) {
-        mrp_log_error("ivi-resource-manager: table size exceeds the max.");
+        mrp_log_error("ivi-resource-manager: screen resource: "
+                      "table size exceeds the max.");
         return;
     }
 
     if ((nrow = MQI_SELECT(columns, screen->dbtbl, where, rows)) < 0) {
-        mrp_log_error("ivi-resource-manager: DB select failed: %s",
-                      strerror(errno));
+        mrp_log_error("ivi-resource-manager: screen resource: "
+                      "DB select failed: %s", strerror(errno));
         return;
     }
 
     if (nrow > ACTIVE_SCREEN_MAX) {
-        mrp_log_error("ivi-resource-manager: DB select result is too "
-                      "large (%d). Will be truncated to %d",
-                      nrow, ACTIVE_SCREEN_MAX);
+        mrp_log_error("ivi-resource-manager: screen resource: "
+                      "DB select result is too large (%d). "
+                      "Will be truncated to %d", nrow, ACTIVE_SCREEN_MAX);
         nrow = ACTIVE_SCREEN_MAX;
     }
 
