@@ -27,33 +27,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __MURPHY_IVI_RESOURCE_MANAGER_H__
-#define __MURPHY_IVI_RESOURCE_MANAGER_H__
+#ifndef __MURPHY_IVI_RESOURCE_MANAGER_APPID_H__
+#define __MURPHY_IVI_RESOURCE_MANAGER_APPID_H__
 
-#include <murphy/resource/data-types.h>
+#include "plugin-ivi-resource-manager.h"
 
+mrp_resmgr_appid_t *mrp_resmgr_appid_create(mrp_resmgr_data_t *);
+void mrp_resmgr_appid_destroy(mrp_resmgr_appid_t *);
 
-typedef struct mrp_resmgr_data_s      mrp_resmgr_data_t;
-typedef struct mrp_resmgr_screen_s    mrp_resmgr_screen_t;
-typedef struct mrp_resmgr_audio_s     mrp_resmgr_audio_t;
-typedef struct mrp_resmgr_class_s     mrp_resmgr_class_t;
-typedef struct mrp_resmgr_appid_s     mrp_resmgr_appid_t;
+const char *mrp_resmgr_appid_find_by_pid(mrp_resmgr_appid_t *, const char *);
 
 
-void  mrp_resmgr_register_dependency(mrp_resmgr_data_t *, const char *);
-
-void  mrp_resmgr_insert_resource(mrp_resmgr_data_t *, mrp_zone_t *,
-                                 mrp_resource_t *, void *);
-void *mrp_resmgr_remove_resource(mrp_resmgr_data_t *, mrp_zone_t *,
-                                 mrp_resource_t *);
-void *mrp_resmgr_lookup_resource(mrp_resmgr_data_t *, mrp_resource_t *);
-
-mrp_resmgr_screen_t *mrp_resmgr_get_screen(mrp_resmgr_data_t *);
-mrp_resmgr_audio_t *mrp_resmgr_get_audio(mrp_resmgr_data_t *);
-mrp_resmgr_appid_t *mrp_resmgr_get_appid(mrp_resmgr_data_t *);
-
-
-#endif  /* __MURPHY_IVI_RESOURCE_MANAGER_H__ */
+#endif  /* __MURPHY_IVI_RESOURCE_MANAGER_APPID_H__ */
 
 /*
  * Local Variables:
