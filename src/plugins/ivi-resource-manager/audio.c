@@ -42,6 +42,7 @@
 
 #include "audio.h"
 #include "class.h"
+#include "appid.h"
 
 #define RESOURCE_NAME       "audio_playback"
 #define ACTIVE_SCREEN_TABLE "active_screen"
@@ -122,6 +123,7 @@ static void resource_class_move_resource(mrp_resmgr_class_t *,
 static uint32_t resource_key(audio_resource_t *);
 static bool resource_is_active(mrp_resmgr_audio_t *, uint32_t,
                                audio_resource_t *);
+static void resource_fix_appid(mrp_resmgr_audio_t *, mrp_resource_t *);
 
 static void get_active_screens(mrp_resmgr_audio_t *, mrp_zone_t *);
 
@@ -268,9 +270,9 @@ int mrp_resmgr_audio_print(mrp_resmgr_audio_t *audio,
 }
 
 static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
-                                                 mrp_zone_t *zone,
-                                                 mrp_resource_t *res,
-                                                 mrp_application_class_t *ac)
+                                               mrp_zone_t *zone,
+                                               mrp_resource_t *res,
+                                               mrp_application_class_t *ac)
 {
     mrp_resmgr_data_t *data;
     uint32_t zone_id;
@@ -292,6 +294,8 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
         mrp_log_error("ivi-resource-manager: can't obtain resmgr class");
     }
     else {
+        resource_fix_appid(audio, res);
+
         if ((ar = mrp_allocz(sizeof(*ar)))) {
             mrp_list_init(&ar->link);
             ar->res = res;
@@ -533,6 +537,45 @@ static bool resource_is_active(mrp_resmgr_audio_t *audio,
     }
 
     return false;
+}
+
+static void resource_fix_appid(mrp_resmgr_audio_t *audio, mrp_resource_t *res)
+{
+    mrp_resmgr_data_t *data;
+    mrp_attr_t attr, attrs[2];
+    const char *appid;
+    const char *pid;
+
+    data = audio->data;
+    appid = NULL;
+    pid = 0;
+
+    if (mrp_resource_read_attribute(res, PID_ATTRIDX, &attr)) {
+        if (attr.type == mqi_string) {
+            if (strcmp(attr.value.string, "<unknown>"))
+                pid = attr.value.string;
+        }
+    }
+
+    if (mrp_resource_read_attribute(res, APPID_ATTRIDX, &attr)) {
+        if (attr.type == mqi_string) {
+            if (strcmp(attr.value.string, "<undefined>"))
+                appid = attr.value.string;
+        }
+    }
+
+    if (!appid && pid) {
+        appid = mrp_resmgr_appid_find_by_pid(mrp_resmgr_get_appid(data), pid);
+
+        if (appid) {
+            memset(attrs, 0, sizeof(attrs));
+            attrs[0].name = audio_attrs[APPID_ATTRIDX].name;
+            attrs[0].type = mqi_string;
+            attrs[0].value.string = appid;
+
+            mrp_resource_write_attributes(res, attrs);
+        }
+    }
 }
 
 static void get_active_screens(mrp_resmgr_audio_t *audio, mrp_zone_t *zone)
