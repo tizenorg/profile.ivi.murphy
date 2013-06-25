@@ -52,12 +52,14 @@
 
 #include "screen.h"
 #include "audio.h"
+#include "appid.h"
 
 struct mrp_resmgr_data_s {
     mrp_plugin_t        *plugin;
     mrp_event_watch_t   *w;
     mrp_resmgr_screen_t *screen;
     mrp_resmgr_audio_t  *audio;
+    mrp_resmgr_appid_t  *appid;
     mrp_htbl_t          *resources;
     int                  ndepend;
     const char         **depends;
@@ -141,6 +143,30 @@ void *mrp_resmgr_lookup_resource(mrp_resmgr_data_t *data, mrp_resource_t *key)
     MRP_ASSERT(data->resources, "uninitialised data structure");
 
     return mrp_htbl_lookup(data->resources, key);
+}
+
+mrp_resmgr_screen_t *mrp_resmgr_get_screen(mrp_resmgr_data_t *data)
+{
+    MRP_ASSERT(data, "invalid argument");
+    MRP_ASSERT(data->screen, "confused with data structures");
+
+    return data->screen;
+}
+
+mrp_resmgr_audio_t *mrp_resmgr_get_audio(mrp_resmgr_data_t *data)
+{
+    MRP_ASSERT(data, "invalid argument");
+    MRP_ASSERT(data->audio, "confused with data structures");
+
+    return data->audio;
+}
+
+mrp_resmgr_appid_t *mrp_resmgr_get_appid(mrp_resmgr_data_t *data)
+{
+    MRP_ASSERT(data, "invalid argument");
+    MRP_ASSERT(data->appid, "confused with data structures");
+
+    return data->appid;
 }
 
 static void print_resources_cb(mrp_console_t *c, void *user_data,
@@ -263,6 +289,7 @@ static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
                 if (!strcmp(inst, plugin->instance)) {
                     data->screen = mrp_resmgr_screen_create(data);
                     data->audio  = mrp_resmgr_audio_create(data);
+                    data->appid  = mrp_resmgr_appid_create(data);
 
                     add_depenedencies_to_resolver(data);
                 }
@@ -364,6 +391,8 @@ static void manager_exit(mrp_plugin_t *plugin)
 
     if ((data = plugin->data) && data == resmgr_data) {
         mrp_resmgr_screen_destroy(data->screen);
+        mrp_resmgr_audio_destroy(data->audio);
+        mrp_resmgr_appid_destroy(data->appid);
     }
 }
 
