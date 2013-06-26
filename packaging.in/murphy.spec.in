@@ -26,8 +26,8 @@ Summary: Murphy policy framework
 Name: murphy
 Version: @VERSION@
 Release: 1
-License: BSD
-Group: System Environment/Daemons
+License: BSD-3-Clause
+Group: System/Service
 URL: http://01.org/murphy/
 Source0: %{name}-%{version}.tar.gz
 @DECLARE_PATCHES@
@@ -72,18 +72,18 @@ BuildRequires: pkgconfig(json)
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %package core
 Summary: Murphy core runtime libraries
-Group: System Environment/Libraries
+Group: System/Libraries
 
 %package plugins-base
-Summary: The basic set of Murphy plugins.
-Group: System Environment/Daemons
+Summary: The basic set of Murphy plugins
+Group: System/Service
 Requires: %{name} = %{version}
 Requires: %{name}-core = %{version}
 %endif
 
 %package devel
 Summary: The header files and libraries needed for Murphy development
-Group: Development/Libraries
+Group: System/Libraries
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -92,12 +92,12 @@ Requires: %{name} = %{version}
 
 %package doc
 Summary: Documentation for Murphy
-Group: Documentation
+Group: SDK/Documentation
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 %package pulse
-Summary: Murphy PulseAudio mainloop integration.
-Group: Development/Libraries
+Summary: Murphy PulseAudio mainloop integration
+Group: System/Libraries
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -105,8 +105,9 @@ Requires: %{name} = %{version}
 %endif
 
 %package pulse-devel
-Summary: Murphy PulseAudio mainloop integration development files.
-Group: Development/Libraries
+Summary: Murphy PulseAudio mainloop integration development files
+Group: System/Libraries
+Requires: %{name}-pulse = %{version}
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -116,8 +117,8 @@ Requires: %{name} = %{version}
 
 %if %{?_with_ecore:1}%{!?_with_ecore:0}
 %package ecore
-Summary: Murphy EFL/ecore mainloop integration.
-Group: Development/Libraries
+Summary: Murphy EFL/ecore mainloop integration
+Group: System/Libraries
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -125,8 +126,9 @@ Requires: %{name} = %{version}
 %endif
 
 %package ecore-devel
-Summary: Murphy EFL/ecore mainloop integration development files.
-Group: Development/Libraries
+Summary: Murphy EFL/ecore mainloop integration development files
+Group: System/Libraries
+Requires: %{name}-ecore = %{version}
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -136,8 +138,8 @@ Requires: %{name} = %{version}
 
 %if %{?_with_glib:1}%{!?_with_glib:0}
 %package glib
-Summary: Murphy glib mainloop integration.
-Group: Development/Libraries
+Summary: Murphy glib mainloop integration
+Group: System/Libraries
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -145,8 +147,9 @@ Requires: %{name} = %{version}
 %endif
 
 %package glib-devel
-Summary: Murphy glib mainloop integration development files.
-Group: Development/Libraries
+Summary: Murphy glib mainloop integration development files
+Group: System/Libraries
+Requires: %{name}-glib = %{version}
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -156,8 +159,8 @@ Requires: %{name} = %{version}
 
 %if %{?_with_qt:1}%{!?_with_qt:0}
 %package qt
-Summary: Murphy Qt mainloop integration.
-Group: Development/Libraries
+Summary: Murphy Qt mainloop integration
+Group: System/Libraries
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -165,8 +168,9 @@ Requires: %{name} = %{version}
 %endif
 
 %package qt-devel
-Summary: Murphy Qt mainloop integration development files.
-Group: Development/Libraries
+Summary: Murphy Qt mainloop integration development files
+Group: System/Libraries
+Requires: %{name}-qt = %{version}
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
 %else
@@ -175,8 +179,8 @@ Requires: %{name} = %{version}
 %endif
 
 %package tests
-Summary: Various test binaries for Murphy.
-Group: Development/Debug
+Summary: Various test binaries for Murphy
+Group: System/Testing
 Requires: %{name} = %{version}
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
@@ -379,6 +383,38 @@ fi
 %endif
 ldconfig
 
+%if %{?_with_glib:1}%{!?_with_glib:0}
+%post glib
+ldconfig
+
+%postun glib
+ldconfig
+%endif
+
+%if %{?_with_pulse:1}%{!?_with_pulse:0}
+%post pulse
+ldconfig
+
+%postun pulse
+ldconfig
+%endif
+
+%if %{?_with_ecore:1}%{!?_with_ecore:0}
+%post ecore
+ldconfig
+
+%postun ecore
+ldconfig
+%endif
+
+%if %{?_with_qt:1}%{!?_with_qt:0}
+%post qt
+lfconfig
+
+%postun qt
+ldconfig
+%endif
+
 %if %{?_with_squashpkg:1}%{!?_with_squashpkg:0}
 %files -f filelist.plugins-base
 %else
@@ -386,14 +422,14 @@ ldconfig
 %endif
 %defattr(-,root,root,-)
 %{_bindir}/murphyd
-%{_sysconfdir}/murphy
+%config %{_sysconfdir}/murphy
 %{systemddir}/system/murphyd.service
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 %{_sbindir}/asm-bridge
 %endif
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 %{_sysconfdir}/dbus-1/system.d
-%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
+%config %{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
 %if %{?_with_websockets:1}%{!?_with_websockets:0}
 %{_datadir}/murphy
@@ -471,7 +507,13 @@ ldconfig
 
 %files doc
 %defattr(-,root,root,-)
-%doc %{_docdir}/../murphy/*
+%doc %{_docdir}/../murphy/AUTHORS
+%doc %{_docdir}/../murphy/CODING-STYLE
+%license %{_docdir}/../murphy/COPYING
+%doc %{_docdir}/../murphy/ChangeLog
+%doc %{_docdir}/../murphy/INSTALL
+%doc %{_docdir}/../murphy/NEWS
+%doc %{_docdir}/../murphy/README
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 %files pulse
