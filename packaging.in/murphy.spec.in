@@ -19,6 +19,9 @@
 %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
+# TODO: take care of /lib vs /lib64...
+%define systemddir /lib/systemd
+
 Summary: Murphy policy framework
 Name: murphy
 Version: @VERSION@
@@ -346,9 +349,9 @@ mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb
 cp packaging.in/amb-config.lua \
     $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb/config.lua
 
-mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d
-cp packaging.in/murphyd.init $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
-chmod a+x $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/murphyd
+# Copy the systemd service file in place.
+mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
+cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
@@ -359,7 +362,7 @@ cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/or
 rm -rf $RPM_BUILD_ROOT
 
 %post
-ln -sf %{_sysconfdir}/rc.d/init.d/murphyd %{_sysconfdir}/rc.d/rc3.d/S21murphyd
+systemctl enable murphyd.service
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %post core
@@ -368,7 +371,7 @@ ldconfig
 
 %postun
 if [ "$1" = "0" ]; then
-    rm -f %{_sysconfdir}/rc.d/rc3.d/S21murphyd
+    systemctl disable murphyd.service
 fi
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
@@ -384,7 +387,7 @@ ldconfig
 %defattr(-,root,root,-)
 %{_bindir}/murphyd
 %{_sysconfdir}/murphy
-%{_sysconfdir}/rc.d/init.d/murphyd
+%{systemddir}/system/murphyd.service
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 %{_sbindir}/asm-bridge
 %endif
