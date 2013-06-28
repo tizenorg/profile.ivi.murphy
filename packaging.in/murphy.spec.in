@@ -36,6 +36,9 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 Requires: %{name}-core = %{version}
 %endif
 
+Requires(post): /bin/systemctl
+Requires(postun): /bin/systemctl
+
 BuildRequires: flex
 BuildRequires: bison
 BuildRequires: pkgconfig(lua)
@@ -366,7 +369,7 @@ cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/or
 rm -rf $RPM_BUILD_ROOT
 
 %post
-systemctl enable murphyd.service
+/bin/systemctl enable murphyd.service
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %post core
@@ -375,7 +378,7 @@ ldconfig
 
 %postun
 if [ "$1" = "0" ]; then
-    systemctl disable murphyd.service
+    /bin/systemctl disable murphyd.service
 fi
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
