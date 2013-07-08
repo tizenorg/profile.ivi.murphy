@@ -1,6 +1,7 @@
 m = murphy.get()
 
--- load the dlog plugin
+-- try loading the various logging plugins
+m:try_load_plugin('systemd')
 m:try_load_plugin('dlog')
 
 -- load the console plugin
@@ -56,14 +57,21 @@ else
     m:info("No audio session manager plugin found...")
 end
 
+if m:plugin_exists('ivi-resource-manager.disabled') then
+    m:load_plugin('ivi-resource-manager')
+end
+
 -- define application classes
 application_class { name="interrupt", priority=99, modal=true , share=false, order="fifo" }
+application_class { name="emergency", priority=80, modal=false, share=false, order="fifo" }
 application_class { name="alert"    , priority=51, modal=false, share=false, order="fifo" }
 application_class { name="navigator", priority=50, modal=false, share=true , order="fifo" }
 application_class { name="phone"    , priority=6 , modal=false, share=true , order="lifo" }
 application_class { name="camera"   , priority=5 , modal=false, share=false, order="lifo" }
 application_class { name="event"    , priority=4 , modal=false, share=true , order="fifo" }
 application_class { name="game"     , priority=3 , modal=false, share=false, order="lifo" }
+--# doesn't need to be created here, ivi-resource-manager creates it if loaded
+--#application_class { name="basic"    , priority=2 , modal=false, share=false, order="lifo" }
 application_class { name="player"   , priority=1 , modal=false, share=true , order="lifo" }
 application_class { name="implicit" , priority=0 , modal=false, share=false, order="lifo" }
 
@@ -116,15 +124,17 @@ zone {
 
 
 -- define resource classes
-resource.class {
-     name = "audio_playback",
-     shareable = true,
-     attributes = {
-         role   = { mdb.string, "music"    , "rw" },
-         pid    = { mdb.string, "<unknown>", "rw" },
-         policy = { mdb.string, "strict"   , "rw" }
-     }
-}
+if not m:plugin_exists('ivi-resource-manager.disabled') then
+   resource.class {
+        name = "audio_playback",
+        shareable = true,
+        attributes = {
+            role = { mdb.string, "music", "rw" },
+            pid = { mdb.string, "<unknown>", "rw" },
+            policy = { mdb.string, "relaxed", "rw" }
+        }
+   }
+end
 
 resource.class {
      name = "audio_recording",
@@ -146,6 +156,7 @@ resource.class {
      shareable = false
 }
 
+if not m:plugin_exists('ivi-resource-manager.disabled') then
 resource.method.veto = {
     function(zone, rset, grant, owners)
 	rset_priority = application_class[rset.application_class].priority
@@ -161,6 +172,7 @@ resource.method.veto = {
         return true
     end
 }
+end
 
 -- test for creating selections
 mdb.select {
