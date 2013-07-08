@@ -22,12 +22,13 @@ resctl_t *resctl_init(void)
     resctl_t              *ctl;
     mrp_resource_client_t *client;
     mrp_resource_set_t    *set;
-    const char            *zone = "driver";
-    const char            *play = "audio_playback";
-    const char            *rec  = "audio_recording";
-    const char            *cls  = "phone";
-    bool                   ar   = false;
-    uint32_t               prio = 1;               /* what is this ? */
+    const char            *zone   = "driver";
+    const char            *play   = "audio_playback";
+    const char            *rec    = "audio_recording";
+    const char            *cls    = "phone";
+    bool                   ar     = false;
+    bool                   nowait = false;
+    uint32_t               prio   = 1;               /* what is this ? */
 
     ctl    = NULL;
     client = NULL;
@@ -47,7 +48,7 @@ resctl_t *resctl_init(void)
         goto fail;
     }
 
-    set = mrp_resource_set_create(client, ar, prio, event_cb, ctl);
+    set = mrp_resource_set_create(client, ar, nowait, prio, event_cb, ctl);
 
     if (set == NULL) {
         mrp_log_error("Failed to create telephony resource set.");
