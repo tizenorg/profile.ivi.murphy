@@ -42,6 +42,8 @@ Requires(postun): /bin/systemctl
 BuildRequires: flex
 BuildRequires: bison
 BuildRequires: pkgconfig(lua)
+BuildRequires: pkgconfig(libsystemd-daemon)
+BuildRequires: pkgconfig(libsystemd-journal)
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 BuildRequires: pkgconfig(libpulse)
