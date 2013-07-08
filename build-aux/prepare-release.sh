@@ -168,14 +168,25 @@ generate_specfile() {
 # generate a changelog for the release (with no real changelog content)
 generate_changelog() {
     local _chlog="$1" _version="$2" _gitver="$3" _author="$4"
-    local _sha
+    local _sha _last
 
-    info "* Generating changelog $_chlog for version $_version ($_gitver)..."
+    info "* Generating changelog $_chlog for version $_version ($_gitver)..." |
+        indent " GENLOG: "
 
+    _last="`git tag -l | grep accepted/$TARGET/ | tail -1`"
     _sha="`git rev-parse $_gitver`"
+
+    rm -f $_chlog && touch $_chlog
 
     echo "* $(date '+%a %b %d %H:%M:%S %Z %Y') $_author - $_version" > $_chlog
     echo "- release: released $_version (git: $_sha)." >> $_chlog
+
+    if [ -n "$_last" ]; then
+        echo "" >> $_chlog
+        git cat-file -p $_last:$_chlog >> $_chlog
+    fi
+
+    vi $_chlog
 }
 
 # generate linker scripts
@@ -372,7 +383,7 @@ gbs_prepare() {
 
     package_gbs_quirks 2>&1 | indent "QUIRKS: "
 
-    generate_changelog $_chlog $VERSION $RELEASE "$AUTHOR" | indent " GENLOG: "
+    generate_changelog $_chlog $VERSION $RELEASE "$AUTHOR"
 
     git_add "packaging: added packaging." $_dir | indent " GITADD: "
 
@@ -428,7 +439,7 @@ parse_configuration $*
 [ -z "$PKG" ]     && PKG=$(basename `pwd`)
 [ -z "$RELEASE" ] && RELEASE=HEAD
 [ -z "$VERSION" ] && VERSION=$(default_version)
-[ -z "$TARGET" ]  && TARGET="2.0alpha"
+[ -z "$TARGET" ]  && TARGET="tizen"
 [ -z "$AUTHOR" ]  && AUTHOR="`git config user.name` <`git config \
                                   user.email`>"
 
