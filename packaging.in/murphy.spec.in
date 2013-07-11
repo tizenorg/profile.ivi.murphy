@@ -17,6 +17,7 @@
 %{!?_with_telephony:%{!?_without_telephony:%define _with_telephony 1}}
 %{!?_with_audiosession:%{!?_without_audiosession:%define _without_audiosession 0}}
 %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
+%{!?_with_smack:%{!?_without_smack:%define _with_smack 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
 # TODO: take care of /lib vs /lib64...
@@ -73,6 +74,10 @@ BuildRequires: pkgconfig(audio-session-mgr)
 BuildRequires: libwebsockets-devel
 %endif
 BuildRequires: pkgconfig(json)
+
+%if %{?_with_smack:1}%{!?_with_smack:0}
+BuildRequires: pkgconfig(libsmack)
+%endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %package core
@@ -309,6 +314,12 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-resource-asm"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-websockets"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-websockets"
+%endif
+
+%if %{?_with_smack:1}%{!?_with_smack:0}
+CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-smack"
+%else
+CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-smack"
 %endif
 
 NUM_CPUS="`cat /proc/cpuinfo | tr -s '\t' ' ' | \
