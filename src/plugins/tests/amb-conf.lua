@@ -5,18 +5,57 @@
     the built-in handler.
 --]]
 
-
 amb.property {
     name = "vehicle_speed",
     basic_table_name = "amb_vehicle_speed", -- default: "amb_" + name
     dbus_data = {
-        obj = "/org/automotive/runningstatus/vehicleSpeed",
-        interface = "org.automotive.vehicleSpeed",
+        obj = "/org/automotive/runningstatus/VehicleSpeed",
+        interface = "org.automotive.VehicleSpeed",
         property = "VehicleSpeed",
+        notification = "VehicleSpeedChanged",
         signature = "i",
     },
 }
 
+
+--[[
+    Shift position property
+
+    Use custom handler for setting the stick status.
+--]]
+
+stick_handler = function (self, property)
+    -- insert or update the incoming data
+
+    print("shift position handler: " .. property)
+
+    table = self.outputs.test_table
+
+    table:replace({ id = 0, shift_position = property })
+end
+
+amb.property {
+    name = "stick_handler",
+    handler = stick_handler,
+    outputs = {
+        test_table = mdb.table {
+            name = "amb_shift_position",
+            index = { "id" },
+            create = true,
+            columns = {
+                { "id", mdb.unsigned },
+                { "shift_position", mdb.unsigned },
+            }
+        }
+    },
+    dbus_data = {
+        obj = "/org/automotive/runningstatus/Transmission",
+        interface = "org.automotive.Transmission",
+        property = "ShiftPosition",
+        notification = "ShiftPositionChanged",
+        signature = "y",
+    },
+}
 
 
 --[[
@@ -58,9 +97,10 @@ amb.property {
     name = "mirror_setttings",
     handler = mirror_handler,
     dbus_data = {
-        obj = "/org/automotive/runningstatus/personalization",
-        interface = "org.automotive.mirrorSettings",
+        obj = "/org/automotive/runningstatus/Personalization",
+        interface = "org.automotive.runningstatus",
         property = "MirrorSettings",
+        notification = "MirrorSettingsChanged",
         signature = "a{y(yy)}",
     },
 }
@@ -115,6 +155,7 @@ amb.property {
         obj = "/org/automotive/test",
         interface = "org.automotive.test",
         property = "Test",
+        notification = "TestChanged",
         signature = "s",
     },
 }
@@ -138,6 +179,7 @@ amb.property {
         obj = "/org/automotive/test1",
         interface = "org.automotive.test",
         property = "Test",
+        notification = "TestChanged",
         signature = "(su)",
     },
 }
@@ -159,6 +201,7 @@ amb.property {
         obj = "/org/automotive/test2",
         interface = "org.automotive.test",
         property = "Test",
+        notification = "TestChanged",
         signature = "as",
     },
 }
@@ -184,6 +227,7 @@ amb.property {
         obj = "/org/automotive/test3",
         interface = "org.automotive.test",
         property = "Test",
+        notification = "TestChanged",
         signature = "a{su}",
     },
 }
@@ -209,6 +253,7 @@ amb.property {
         obj = "/org/automotive/test4",
         interface = "org.automotive.test",
         property = "Test",
+        notification = "TestChanged",
         signature = "a{s(uu)}",
     },
 }
