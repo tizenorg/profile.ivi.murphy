@@ -1332,7 +1332,7 @@ static bool initiate_func(lua_State *L, void *data,
     *ret_type = MRP_FUNCBRIDGE_BOOLEAN;
     ret_val->boolean = true;
 
-    return true;
+    return TRUE;
 }
 
 
@@ -1349,11 +1349,13 @@ static bool update_func(lua_State *L, void *data,
     double d_val;
 
     int ret = -1;
+    char *error = "unknown error";
 
     MRP_UNUSED(L);
 
     if (!signature || signature[0] != 'o') {
-        return false;
+        mrp_log_error("amb: invalid signature '%s'", signature ? signature : "NULL");
+        goto error;
     }
 
     sink = (mrp_lua_sink_t *) args[0].pointer;
@@ -1361,6 +1363,7 @@ static bool update_func(lua_State *L, void *data,
     property = mrp_lua_sink_get_property(sink);
 
     if (!property || strlen(property) == 0) {
+        error = "invalid property";
         goto error;
     }
 
@@ -1369,6 +1372,7 @@ static bool update_func(lua_State *L, void *data,
     type = mrp_lua_sink_get_type(sink);
 
     if (!type || strlen(type) != 1) {
+        error = "invalid type";
         goto error;
     }
 
@@ -1400,10 +1404,15 @@ static bool update_func(lua_State *L, void *data,
             break;
     }
 
+    if (ret < 0) {
+        error = "error updating property";
+        goto error;
+    }
+
     *ret_type = MRP_FUNCBRIDGE_BOOLEAN;
     ret_val->boolean = true;
 
-    return ret == 0;
+    return TRUE;
 
 error:
     mrp_log_error("AMB: error processing the property change!");
@@ -1411,7 +1420,10 @@ error:
     *ret_type = MRP_FUNCBRIDGE_BOOLEAN;
     ret_val->boolean = false;
 
-    return true;
+    /* FIXME: this shouldn't be needed, but without this the element handler crashes */
+    ret_val->string = mrp_strdup(error);
+
+    return TRUE;
 }
 
 
