@@ -217,5 +217,79 @@ element.lua {
 	     end
 }
 
+-- Night mode processing chain
+
+mdb.select {
+    name = "exterior_brightness",
+    table = "amb_exterior_brightness",
+    columns = { "value" },
+    condition = "key = 'ExteriorBrightness'"
+}
+
+mdb.table {
+    name = "amb_nightmode",
+    index = { "id" },
+    create = true,
+    columns = {
+        { "id", mdb.unsigned },
+        { "night_mode", mdb.unsigned }
+    }
+}
+
+element.lua {
+    name    = "nightmode",
+    inputs  = { brightness = mdb.select.exterior_brightness },
+    oldmode = 0;
+    outputs = {
+    mdb.table {
+        name = "mandatory_placeholder_to_prevent_spurious_updates",
+            create = true,
+            columns = { { "id", mdb.unsigned } }
+        }
+    },
+    update = function(self)
+        -- This is a trivial function to calculate night mode. Later, we will
+        -- need a better threshold value and hysteresis to prevent oscillation.
+
+        brightness = self.inputs.brightness.single_value
+
+        if not brightness then
+            return
+        end
+
+        print("*** element "..self.name.." update brightness: "..brightness)
+
+        if brightness > 300 then
+            mode = 0
+        else
+            mode = 1
+        end
+
+        print("*** resulting mode ".. mode .. ", old mode " .. self.oldmode)
+
+        if not (mode == self.oldmode) then
+            mdb.table.amb_nightmode:replace({ id = 0, night_mode = mode })
+        end
+
+        self.oldmode = mode
+    end
+}
+
+mdb.select {
+    name = "select_night_mode",
+    table = "amb_nightmode",
+    columns = { "night_mode" },
+    condition = "id = 0"
+}
+
+sink.lua {
+    name = "night_mode",
+    inputs = { owner = mdb.select.select_night_mode },
+    property = "NightMode",
+    type = "b",
+    initiate = builtin.method.amb_initiate,
+    update = builtin.method.amb_update
+}
+
 -- load the telephony plugin
 m:try_load_plugin('telephony')
