@@ -10,7 +10,7 @@ amb.property {
     name = "vehicle_speed",
     basic_table_name = "amb_vehicle_speed", -- default: "amb_" + name
     dbus_data = {
-        obj = "/org/automotive/runningstatus/VehicleSpeed",
+        obj = "undefined",
         interface = "org.automotive.VehicleSpeed",
         property = "VehicleSpeed",
         notification = "VehicleSpeedChanged",
@@ -50,10 +50,30 @@ amb.property {
         }
     },
     dbus_data = {
-        obj = "/org/automotive/runningstatus/Transmission",
+        obj = "undefined",
         interface = "org.automotive.Transmission",
         property = "ShiftPosition",
         notification = "ShiftPositionChanged",
         signature = "y",
+    },
+}
+
+
+--[[
+    Exterior brightness property
+
+    This property has a basic type which is updated often, therefore use
+    the built-in handler.
+--]]
+
+amb.property {
+    name = "exterior_brightness",
+    basic_table_name = "amb_exterior_brightness",
+    dbus_data = {
+        obj = "undefined",
+        interface = "org.automotive.ExteriorBrightness",
+        property = "ExteriorBrightness",
+        notification = "ExteriorBrightnessChanged",
+        signature = "q",
     },
 }
