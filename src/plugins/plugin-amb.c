@@ -237,7 +237,7 @@ static int amb_constructor(lua_State *L)
     const char *field_name;
     data_t *ctx = global_ctx;
     dbus_property_watch_t *w = NULL;
-    char error = "unknown error";
+    char *error = "unknown error";
 
     MRP_LUA_ENTER;
 
