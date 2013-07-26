@@ -239,7 +239,7 @@ mdb.table {
 element.lua {
     name    = "nightmode",
     inputs  = { brightness = mdb.select.exterior_brightness },
-    oldmode = 0;
+    oldmode = -1;
     outputs = {
     mdb.table {
         name = "mandatory_placeholder_to_prevent_spurious_updates",
@@ -265,7 +265,7 @@ element.lua {
             mode = 1
         end
 
-        print("*** resulting mode ".. mode .. ", old mode " .. self.oldmode)
+        print("*** resulting mode: ".. mode)
 
         if not (mode == self.oldmode) then
             mdb.table.amb_nightmode:replace({ id = 0, night_mode = mode })
