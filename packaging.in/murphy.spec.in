@@ -10,7 +10,7 @@
 %{!?_with_debug:%{!?_without_debug:%define _without_debug 0}}
 %{!?_with_lua:%{!?_without_lua:%define _with_lua 1}}
 %{!?_with_pulse:%{!?_without_pulse:%define _with_pulse 1}}
-%{!?_with_ecore:%{!?_without_ecore:%define _without_ecore 1}}
+%{!?_with_ecore:%{!?_without_ecore:%define _with_ecore 1}}
 %{!?_with_glib:%{!?_without_glib:%define _with_glib 1}}
 %{!?_with_qt:%{!?_without_qt:%define _without_qt 1}}
 %{!?_with_dbus:%{!?_without_dbus:%define _with_dbus 1}}
@@ -53,7 +53,6 @@ BuildRequires: pkgconfig(libpulse)
 BuildRequires: pkgconfig(ecore)
 BuildRequires: mesa-libEGL
 BuildRequires: mesa-libGLESv2
-BuildRequires: mesa-libgbm
 %endif
 %if %{?_with_glib:1}%{!?_with_glib:0}
 BuildRequires: pkgconfig(glib-2.0)
