@@ -98,6 +98,7 @@ Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+Requires: libjson-devel
 
 %package doc
 Summary: Documentation for Murphy
