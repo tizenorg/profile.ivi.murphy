@@ -1,0 +1,40 @@
+* Wed Jul 31 15:42:27 EEST 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.33
+- release: released 0.0.33 (git: d28e693f39edba7c7b72ddc63e0e2cc39509443f).
+- reenabled support for Audio Session Manager.
+
+* Fri Jul 26 15:19:57 EEST 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.32
+- release: released 0.0.32 (git: 9e13b2a1e0fb606b4808334fb04e0d92ed875496).
+- packaging: update night mode when the brightness is first read.
+- packaging: added processing for night mode.
+- amb: fix a bug in error handling.
+- amb: updated test data to match the changed AMB D-Bus interface.
+- amb: added error logging messages to D-Bus error conditions.
+- resource-client: fix possible NULL pointer bug.
+- resource-dbus: do not use memory before testing for NULL.
+- resource-native: resource-native: do not use memory before assert.
+- common: fix a possible NULL pointer error.
+- murphy-db: sizeof(int*) -> sizeof(int) as reported by static analysis.
+- resource-c: fixed a compiler warning.
+- build-sys: fix systemd enabling configure option typo.
+
+
+* Fri Jul 12 17:35:30 EEST 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.31
+- release: released 0.0.31 (git: 3b311403638ab262a98e2f8a27d84656f2c68ece).
+- packaging: enabled SMACK support.
+- resource-c: don't crash in client lib on 'premature' set creation.
+
+* Mon Jul 08 20:27:53 EEST 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.30
+- release: released 0.0.30 (git: 0b59371000d3e350da69345917bfc8c81e00013d).
+- resource: added ivi-resource-manager (disabled by default in the config).
+- console: don't crash on unterminated quoting from the console.
+- packaging: use systemd instead of dlog for logging.
+
+* Fri Jun 28 13:37:53 EEST 2013 Krisztian Litkey <krisztian.litkey@intel.com> -
+- release: released 0.0.29 (git: 93867cf298273bb81b773aeb3edcde8709963b27).
+- packaging: fix %post scriptlet failing to enable murphyd.service.
+
+* Wed Jun 26 22:12:26 EEST 2013 Krisztian Litkey <krisztian.litkey@intel.com> -
+- release: released 0.0.28 (git: 5e7d42593f8416917edd70c0f800ea9665f7a602).
+- build-sys: workaround for LD_AS_NEEDED=1 breaking AC_LINK_IFELSE.
+- common: re-enabled websocket support.
+- packaging: get rid of a bunch of rpmlint warnings.
