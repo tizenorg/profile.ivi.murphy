@@ -1244,8 +1244,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 /* a normal resource request */
 
                 client_class->rset = mrp_resource_set_create(
-                        ctx->resource_client, 0, rset_data->priority, event_cb,
-                        client_class);
+                        ctx->resource_client, 0, 0, rset_data->priority,
+                        event_cb, client_class);
 
                 if (!client_class->rset) {
                     mrp_log_error("Failed to create resource set!");
