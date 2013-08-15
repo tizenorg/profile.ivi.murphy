@@ -1,3 +1,10 @@
+* Fri Aug 23 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.34
+- amb: query ambd properties again when it's started up.
+- resource-c: removed forgotten debug print.
+- common: ecore-glue.h can now be called from C++.
+- resource-c: can be called from C++ code.
+- breedline: started working on backwards search.
+
 * Wed Jul 31 15:42:27 EEST 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.33
 - release: released 0.0.33 (git: d28e693f39edba7c7b72ddc63e0e2cc39509443f).
 - reenabled support for Audio Session Manager.
