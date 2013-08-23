@@ -51,7 +51,8 @@ enum {
     ARG_AMB_DBUS_ADDRESS,
     ARG_AMB_CONFIG_FILE,
     ARG_AMB_ID,
-    ARG_AMB_TPORT_ADDRESS
+    ARG_AMB_TPORT_ADDRESS,
+    ARG_AMB_STARTUP_DELAY,
 };
 
 enum amb_type {
@@ -116,6 +117,7 @@ typedef struct {
         const char *name;
         const char *signame;
         const char *signature;
+        bool undefined_object_path;
     } dbus_data;
     const char *name;
     const char *basic_table_name;
@@ -133,6 +135,9 @@ typedef struct {
     mrp_list_hook_t lua_properties;
 
     mrp_process_state_t amb_state;
+    uint32_t amb_startup_delay;
+
+    mrp_mainloop_t *ml;
 
     mrp_transport_t *lt;
     mrp_transport_t *t;
@@ -294,9 +299,11 @@ static int amb_constructor(lua_State *L)
                     if (strcmp(value, "undefined") == 0) {
                         /* need to query AMB for finding the object path */
                         mrp_log_info("querying AMB for correct path");
+                        prop->dbus_data.undefined_object_path = TRUE;
                         prop->dbus_data.obj = NULL;
                     }
                     else {
+                        prop->dbus_data.undefined_object_path = FALSE;
                         prop->dbus_data.obj = mrp_strdup(value);
                     }
                 }
@@ -318,7 +325,9 @@ static int amb_constructor(lua_State *L)
             if (prop->dbus_data.signature == NULL ||
                 prop->dbus_data.iface == NULL ||
                 prop->dbus_data.name == NULL ||
-                prop->dbus_data.signame == NULL) {
+                prop->dbus_data.signame == NULL ||
+                (!prop->dbus_data.undefined_object_path &&
+                  prop->dbus_data.obj == NULL)) {
                 error = "missing data";
                 goto error;
             }
@@ -388,32 +397,6 @@ static int amb_constructor(lua_State *L)
 
         w->cb = basic_property_updated;
         w->user_data = w;
-
-        if (w->lua_prop->dbus_data.obj) {
-            if (subscribe_property(ctx, w)) {
-                error = "failed to subscribe to basic property";
-                goto error;
-            }
-        }
-        else {
-            find_property_object(ctx, w, w->lua_prop->dbus_data.name);
-        }
-    }
-    else {
-        /* we now have the callback function reference */
-
-        /* TODO: refactor to decouple updating the property (calling the
-         * lua handler) from parsing the D-Bus message. Is this possible? */
-
-        if (w->lua_prop->dbus_data.obj) {
-            if (subscribe_property(ctx, w)) {
-                error = "failed to subscribe to specially handled property";
-                goto error;
-            }
-        }
-        else {
-            find_property_object(ctx, w, w->lua_prop->dbus_data.name);
-        }
     }
 
     mrp_list_init(&w->hook);
@@ -1240,6 +1223,34 @@ static int load_config(lua_State *L, const char *path)
     }
 }
 
+static void amb_startup_timer(mrp_timer_t *t, void *data)
+{
+    data_t *ctx = (data_t *) data;
+    mrp_list_hook_t *p, *n;
+
+    mrp_del_timer(t);
+
+    /* check that ambd hasn't crashed meanwhile */
+
+    if (ctx->amb_state != MRP_PROCESS_STATE_READY)
+        return;
+
+    mrp_log_info("delayed querying of amb properties\n");
+
+    /* query the ambd property D-Bus paths again and start listening to
+     * the signals. */
+
+    mrp_list_foreach(&ctx->lua_properties, p, n) {
+        dbus_property_watch_t *w =
+                mrp_list_entry(p, dbus_property_watch_t, hook);
+
+        if (w->lua_prop->dbus_data.undefined_object_path)
+            find_property_object(ctx, w, w->lua_prop->dbus_data.name);
+        else
+            subscribe_property(ctx, w);
+    }
+}
+
 static void amb_watch(const char *id, mrp_process_state_t state, void *data)
 {
     data_t *ctx = (data_t *) data;
@@ -1253,7 +1264,30 @@ static void amb_watch(const char *id, mrp_process_state_t state, void *data)
 
     if (state == MRP_PROCESS_STATE_NOT_READY &&
             ctx->amb_state == MRP_PROCESS_STATE_READY) {
+        mrp_list_hook_t *p, *n;
+
         mrp_log_error("lost connection to ambd");
+
+        /* stop listening to the ambd signals */
+
+        mrp_list_foreach(&ctx->lua_properties, p, n) {
+            dbus_property_watch_t *w =
+                    mrp_list_entry(p, dbus_property_watch_t, hook);
+
+            mrp_dbus_unsubscribe_signal(ctx->dbus, property_signal_handler, w,
+                    NULL, w->lua_prop->dbus_data.obj,
+                    w->lua_prop->dbus_data.iface,
+                    w->lua_prop->dbus_data.signame, NULL);
+        }
+    }
+    else if (state == MRP_PROCESS_STATE_READY &&
+            ctx->amb_state != MRP_PROCESS_STATE_READY) {
+
+        mrp_log_info("amb was started up\n");
+
+        /* give amb some time to get the D-Bus interface ready */
+
+        mrp_add_timer(ctx->ml, ctx->amb_startup_delay, amb_startup_timer, ctx);
     }
 
     ctx->amb_state = state;
@@ -1452,9 +1486,9 @@ static void closed_evt(mrp_transport_t *t, int error, void *user_data)
 {
     data_t *ctx = (data_t *) user_data;
 
-    MRP_UNUSED(t);
     MRP_UNUSED(error);
 
+    mrp_transport_destroy(t);
     ctx->t = NULL;
 
     /* open the listening socket again */
@@ -1475,6 +1509,8 @@ static void connection_evt(mrp_transport_t *lt, void *user_data)
     }
     else {
         ctx->t = mrp_transport_accept(lt, ctx, 0);
+
+        /* amb murphy plugin is now connected to us */
     }
 
     /* close the listening socket, since we only have one client */
@@ -1571,10 +1607,13 @@ static int amb_init(mrp_plugin_t *plugin)
 
     plugin->data = ctx;
 
+    ctx->ml = plugin->ctx->ml;
+
     ctx->amb_addr = args[ARG_AMB_DBUS_ADDRESS].str;
     ctx->config_file = args[ARG_AMB_CONFIG_FILE].str;
     ctx->amb_id = args[ARG_AMB_ID].str;
     ctx->tport_addr = args[ARG_AMB_TPORT_ADDRESS].str;
+    ctx->amb_startup_delay = args[ARG_AMB_STARTUP_DELAY].u32;
 
     mrp_log_info("amb dbus address: %s", ctx->amb_addr);
     mrp_log_info("amb config file: %s", ctx->config_file);
@@ -1624,14 +1663,17 @@ static int amb_init(mrp_plugin_t *plugin)
     if (!load_config(ctx->L, ctx->config_file))
         goto error;
 
-    /* TODO: if loading the config failed, go to error */
-
     mrp_process_set_state("murphy-amb", MRP_PROCESS_STATE_READY);
 
     if (mrp_process_set_watch(ctx->amb_id, plugin->ctx->ml, amb_watch, ctx) < 0)
         goto process_watch_failed;
 
     ctx->amb_state = mrp_process_query_state(ctx->amb_id);
+
+    /* query amb properties after amb has had time to ready the interface */
+
+    if (ctx->amb_state == MRP_PROCESS_STATE_READY)
+        mrp_add_timer(ctx->ml, ctx->amb_startup_delay, amb_startup_timer, ctx);
 
     return TRUE;
 
@@ -1706,8 +1748,9 @@ static mrp_plugin_arg_t args[] = {
     MRP_PLUGIN_ARGIDX(ARG_AMB_ID, STRING, "amb_id", "ambd"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_TPORT_ADDRESS, STRING, "transport_address",
             "unxs:/tmp/murphy/amb"),
+    MRP_PLUGIN_ARGIDX(ARG_AMB_STARTUP_DELAY, UINT32, "amb_startup_delay",
+            2000),
 };
-
 
 MURPHY_REGISTER_PLUGIN("amb",
                        AMB_VERSION, AMB_DESCRIPTION,
