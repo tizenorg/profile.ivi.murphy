@@ -367,6 +367,10 @@ mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb
 cp packaging.in/amb-config.lua \
 $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb/config.lua
 
+# Copy tmpfiles.d config file in place
+mkdir -p $RPM_BUILD_ROOT%{_tmpfilesdir}
+cp packaging.in/murphyd.conf $RPM_BUILD_ROOT%{_tmpfilesdir}
+
 # Copy the systemd service file in place.
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
 cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
@@ -438,6 +442,7 @@ ldconfig
 %{_bindir}/murphyd
 %config %{_sysconfdir}/murphy
 %{systemddir}/system/murphyd.service
+%{_tmpfilesdir}/murphyd.conf
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 %{_sbindir}/asm-bridge
 %endif
