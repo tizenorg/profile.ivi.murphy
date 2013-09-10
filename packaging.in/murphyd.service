@@ -3,7 +3,6 @@ Description=Murphy Resource Policy Daemon
 
 [Service]
 Type=simple
-ExecStartPre=/bin/mkdir -p /tmp/murphy /var/run/murphy/processes
 ExecStart=/usr/bin/murphyd -t systemd -vvv -f
 KillSignal=SIGTERM
 
