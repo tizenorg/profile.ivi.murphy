@@ -291,5 +291,67 @@ sink.lua {
     update = builtin.method.amb_update
 }
 
+
+-- Driving mode processing chain
+
+mdb.table {
+    name = "amb_drivingmode",
+    index = { "id" },
+    create = true,
+    columns = {
+        { "id", mdb.unsigned },
+        { "driving_mode", mdb.unsigned }
+    }
+}
+
+element.lua {
+    name    = "drivingmode",
+    inputs  = { speed = mdb.select.vehicle_speed },
+    oldmode = -1;
+    outputs = {
+    mdb.table {
+        name = "another_mandatory_placeholder_to_prevent_spurious_updates",
+            create = true,
+            columns = { { "id", mdb.unsigned } }
+        }
+    },
+    update = function(self)
+
+        speed = self.inputs.speed.single_value
+
+        if not speed then
+            return
+        end
+
+        if speed == 0 then
+            mode = 0
+        else
+            mode = 1
+        end
+
+        if not (mode == self.oldmode) then
+            mdb.table.amb_drivingmode:replace({ id = 0, driving_mode = mode })
+        end
+
+        self.oldmode = mode
+    end
+}
+
+mdb.select {
+    name = "select_driving_mode",
+    table = "amb_drivingmode",
+    columns = { "driving_mode" },
+    condition = "id = 0"
+}
+
+sink.lua {
+    name = "driving_mode",
+    inputs = { owner = mdb.select.select_driving_mode },
+    property = "DrivingMode",
+    type = "u",
+    initiate = builtin.method.amb_initiate,
+    update = builtin.method.amb_update
+}
+
 -- load the telephony plugin
 m:try_load_plugin('telephony')
