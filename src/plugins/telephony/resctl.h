@@ -4,6 +4,10 @@
 struct resctl_s;
 typedef struct resctl_s resctl_t;
 
+int resctl_config(const char *zone, const char *cls, uint32_t priority,
+                  const char *playback, const char *recording,
+                  const char *role);
+
 resctl_t *resctl_init(void);
 void resctl_exit(resctl_t *ctl);
 
