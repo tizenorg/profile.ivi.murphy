@@ -105,8 +105,10 @@ int tel_start_listeners(mrp_mainloop_t *ml)
         return FALSE;
     }
 
+#if 0
     if (mqi_create_index(tel_calls, tel_calls_indexdef) != 0)
         mrp_log_error("could not create index in Murphy database");
+#endif
 
     ofono = ofono_watch(ml, tel_watcher);
     if (ofono == NULL)
