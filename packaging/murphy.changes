@@ -1,3 +1,7 @@
+* Sat Sep 21 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.35
+- packaging: added support for driving mode.
+- Add systemd tmpfiles config to init tmp directories
+
 * Fri Aug 23 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.34
 - amb: query ambd properties again when it's started up.
 - resource-c: removed forgotten debug print.
