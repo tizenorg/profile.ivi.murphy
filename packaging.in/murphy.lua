@@ -57,7 +57,7 @@ else
     m:info("No audio session manager plugin found...")
 end
 
-if m:plugin_exists('ivi-resource-manager.disabled') then
+if m:plugin_exists('ivi-resource-manager') then
     m:load_plugin('ivi-resource-manager')
 end
 
@@ -124,7 +124,7 @@ zone {
 
 
 -- define resource classes
-if not m:plugin_exists('ivi-resource-manager.disabled') then
+if not m:plugin_exists('ivi-resource-manager') then
    resource.class {
         name = "audio_playback",
         shareable = true,
@@ -156,7 +156,7 @@ resource.class {
      shareable = false
 }
 
-if not m:plugin_exists('ivi-resource-manager.disabled') then
+if not m:plugin_exists('ivi-resource-manager') then
 resource.method.veto = {
     function(zone, rset, grant, owners)
 	rset_priority = application_class[rset.application_class].priority
