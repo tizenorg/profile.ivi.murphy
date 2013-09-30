@@ -290,8 +290,11 @@ int mrp_application_class_add_resource_set(const char *class_name,
     rset->class.ptr = class;
     rset->zone = mrp_zone_get_id(zone);
 
-    if (rset->state == mrp_resource_acquire)
+    if (rset->state == mrp_resource_acquire) {
+        mrp_resource_set_notify(rset, MRP_RESOURCE_EVENT_CREATED);
+
         mrp_resource_set_acquire(rset, reqid);
+    }
     else {
         rset->request.id = reqid;
 
