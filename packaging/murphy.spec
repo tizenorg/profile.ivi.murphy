@@ -67,6 +67,7 @@ BuildRequires: pkgconfig(ofono)
 %endif
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 BuildRequires: pkgconfig(audio-session-mgr)
+BuildRequires: pkgconfig(aul)
 %endif
 %if %{?_with_websockets:1}%{!?_with_websockets:0}
 BuildRequires: libwebsockets-devel
