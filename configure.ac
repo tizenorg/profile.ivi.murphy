@@ -524,6 +524,15 @@ if test "$enable_resource_asm" != "no"; then
     fi
     AC_SUBST(AUDIO_SESSION_MANAGER_CFLAGS)
     AC_SUBST(AUDIO_SESSION_MANAGER_LIBS)
+
+    # check for AUL
+    PKG_CHECK_MODULES(AUL, aul, [have_aul=yes], [have_aul=no])
+    if test "$have_aul" = "no" -a "$enable_aul" = "yes"; then
+        AC_MSG_ERROR([AUL development headers not found.])
+    fi
+    AC_SUBST(AUL_CFLAGS)
+    AC_SUBST(AUL_LIBS)
+
     enable_resource_asm="$have_resource_asm"
 else
     AC_MSG_NOTICE([Audio Session Manager support is disabled.])
