@@ -79,6 +79,7 @@ enum field_e {
     PRIORITY,
     SHAREABLE,
     MANDATORY,
+    BINARIES,
     MODAL,
     SHARE,
     GRANT,
@@ -203,6 +204,8 @@ static int check_attrindex(lua_State *, int, attr_def_t *);
 static int check_boolean(lua_State *, int);
 static mrp_resource_order_t check_order(lua_State *, int);
 static int push_order(lua_State *, mrp_resource_order_t);
+static mrp_resource_set_definition_t *check_defs(lua_State *, int);
+static void free_defs(mrp_resource_set_definition_t *);
 static field_t field_check(lua_State *, int, const char **);
 static field_t field_name_to_type(const char *, size_t);
 
@@ -644,6 +647,7 @@ static int appclass_create(lua_State *L)
     int share = -1;
     mrp_resource_order_t order = 0;
     const char *name = NULL;
+    mrp_resource_set_definition_t *defs, *d;
 
     MRP_LUA_ENTER;
 
@@ -669,6 +673,10 @@ static int appclass_create(lua_State *L)
 
         case ORDER:
             order = check_order(L, -1);
+            break;
+
+        case BINARIES:
+            defs = check_defs(L, -1);
             break;
 
         default:
@@ -698,6 +706,21 @@ static int appclass_create(lua_State *L)
         luaL_error(L, "invalid or duplicate name '%s'", name);
     else {
         appclass->name = name;
+
+        if (defs) {
+            for (d = defs;  d->binary_name; d++) {
+                d->class_name = name;
+                
+                if (mrp_resource_set_add_definition_for_binary(d) < 0) {
+                    luaL_error(L, "can't add binary mapping '%s' "
+                               "to application class '%s'",
+                               d->binary_name, d->class_name);
+                }
+            }
+
+            free_defs(defs);
+        }
+
         mrp_log_info("application class '%s' created", name);
     }
     MRP_LUA_LEAVE(1);
@@ -1480,6 +1503,7 @@ static void free_attrdefs(mrp_attr_def_t *attrdefs)
     }
 }
 
+
 static int attr_name_to_index(const char *name, attr_def_t *def)
 {
     mrp_attr_def_t *attrs = def->attrs;
@@ -1625,6 +1649,91 @@ static int push_order(lua_State *L, mrp_resource_order_t order)
 }
 
 
+static mrp_resource_set_definition_t *check_defs(lua_State *L, int tbl)
+{
+    int defidx;
+    size_t namlen;
+    const char *name;
+    const char *flag;
+    size_t n = 0;
+    mrp_resource_set_definition_t *d, *defs = NULL;
+    size_t i, len;
+    int priority;
+
+    tbl = (tbl < 0) ? lua_gettop(L) + tbl + 1 : tbl;
+
+    luaL_checktype(L, tbl, LUA_TTABLE);
+
+    MRP_LUA_FOREACH_FIELD(L, tbl, name, namlen) {
+        if (!name[0])
+            luaL_error(L, "invalid binary map definition");
+
+        defs = mrp_realloc(defs,(n+2)*(sizeof(mrp_resource_set_definition_t)));
+        if (!defs)
+            luaL_error(L, "failed to allocate memory for binary mapping");
+        memset(defs + n, 0, sizeof(mrp_resource_set_definition_t)*2);
+
+        d = defs + n++;
+        defidx = lua_gettop(L);
+
+        d->binary_name = mrp_strdup(name);
+
+        switch (lua_type(L, -1)) {
+
+        case LUA_TTABLE:
+            if ((len = luaL_getn(L, defidx)) < 1)
+                luaL_error(L, "invalid binary map entry '%s'", name);
+
+            for (i = 1;  i <= len;  i++) {
+                lua_pushnumber(L, (int)i);
+                lua_gettable(L, defidx);
+                
+                if (i == 1) {
+                    priority = luaL_checkint(L, -1);
+
+                    if (priority < 0 || priority > 7) {
+                        luaL_error(L, "invalid priority %d for '%s'",
+                                   priority, name);
+                    }
+
+                    d->priority = priority;
+                }
+                else {
+                    flag = luaL_checkstring(L, -1);
+
+                    if (!strcmp(flag, "autorelease"))
+                        d->auto_release = true;
+                    else if (!strcmp(flag, "dontwait"))
+                        d->dont_wait = true;
+                    else
+                        luaL_error(L, "invalid flag '%s' for '%s'", flag,name);
+                }
+
+                lua_pop(L, 1);
+            }
+            break;
+
+        default:
+            luaL_error(L, "invalid binary specification. Should be a table");
+            break;
+        }
+    } /* FOREACH_FIELD */
+
+    return defs;
+}
+
+static void free_defs(mrp_resource_set_definition_t *defs)
+{
+    mrp_resource_set_definition_t *d;
+
+    if (defs) {
+        for (d = defs;  d->binary_name;  d++)
+            mrp_free(d->binary_name);
+
+        mrp_free(defs);
+    }
+}
+
 static field_t field_check(lua_State *L, int idx, const char **ret_fldnam)
 {
     const char *fldnam;
@@ -1686,6 +1795,8 @@ static field_t field_name_to_type(const char *name, size_t len)
     case 8:
         if (!strcmp(name, "priority"))
             return PRIORITY;
+        if (!strcmp(name, "binaries"))
+            return BINARIES;
         break;
 
     case 9:
