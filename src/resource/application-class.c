@@ -293,6 +293,7 @@ int mrp_application_class_add_resource_set(const char *class_name,
     if (rset->state == mrp_resource_acquire) {
         mrp_resource_set_notify(rset, MRP_RESOURCE_EVENT_CREATED);
 
+        rset->state = mrp_resource_no_request;
         mrp_resource_set_acquire(rset, reqid);
     }
     else {
