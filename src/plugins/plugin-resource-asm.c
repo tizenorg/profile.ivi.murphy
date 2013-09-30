@@ -125,6 +125,7 @@ typedef struct {
     char *audio_recording;
     char *video_playback;
     char *video_recording;
+    char *ignored_argv0;
 
     mrp_htbl_t *requests;
     uint32_t current_request;
@@ -184,6 +185,7 @@ enum {
     ARG_ASM_VIDEO_PLAYBACK,
     ARG_ASM_VIDEO_RECORDING,
     ARG_ASM_EVENT_CONFIG,
+    ARG_ASM_IGNORED_ARGV0,
 };
 
 
@@ -1123,11 +1125,162 @@ static void pid_watch_cb(pid_t pid, mrp_process_state_t s, void *userdata)
 }
 
 
+static char *get_tag(pid_t pid, char *tag, char *buf, size_t size)
+{
+    char path[PATH_MAX];
+    char data[8192], *p, *q;
+    int  fd, n, tlen;
+
+    fd = -1;
+    snprintf(path, sizeof(path), "/proc/%u/status", pid);
+
+    if ((fd = open(path, O_RDONLY)) < 0) {
+    fail:
+        if (fd >= 0)
+            close(fd);
+        return NULL;
+    }
+
+    if ((n = read(fd, data, sizeof(data) - 1)) <= 0)
+        goto fail;
+    else
+        data[sizeof(data)-1] = '\0';
+
+    close(fd);
+    fd = -1;
+    tlen = strlen(tag);
+
+    p = data;
+    while (*p) {
+        if (*p != '\n' && p != data) {
+            while (*p && *p != '\n')
+                p++;
+        }
+
+        if (*p == '\n')
+            p++;
+        else
+            if (p != data)
+                goto fail;
+
+        if (!strncmp(p, tag, tlen) && p[tlen] == ':') {
+            p += tlen + 1;
+            while (*p == ' ' || *p == '\t')
+                p++;
+
+            q = buf;
+            while (*p != '\n' && *p && size > 1)
+                *q++ = *p++;
+            *q = '\0';
+
+            return buf;
+        }
+        else
+            p++;
+    }
+
+    goto fail;
+}
+
+
+static pid_t get_ppid(pid_t pid)
+{
+    char  buf[32], *end;
+    pid_t ppid;
+
+    if (get_tag(pid, "PPid", buf, sizeof(buf)) != NULL) {
+        ppid = strtoul(buf, &end, 10);
+
+        if (end && !*end)
+            return ppid;
+    }
+
+    return 0;
+}
+
+
+static void get_argv0(pid_t pid, char *buf, size_t size)
+{
+    char path[PATH_MAX];
+    char cmdline[1024], *end, *base;
+    int  fd, n;
+
+    fd = -1;
+    snprintf(path, sizeof(path), "/proc/%u/cmdline", pid);
+
+    if ((fd = open(path, O_RDONLY)) < 0) {
+    fail:
+        snprintf(buf, size, "<unknown>");
+        if (fd >= 0)
+            close(fd);
+        return;
+    }
+
+    if ((n = read(fd, cmdline, sizeof(cmdline) - 1)) <= 0)
+        goto fail;
+    else
+        cmdline[sizeof(cmdline)-1] = '\0';
+
+    close(fd);
+    fd = -1;
+
+    if ((end = strchr(cmdline, ' ')) != NULL)
+        *end = '\0';
+
+    if ((base = strrchr(cmdline, '/')) == NULL)
+        base = cmdline;
+    else
+        base++;
+
+    if (snprintf(buf, size, "%s", base) >= (int)size - 1)
+        goto fail;
+}
+
+
+static int is_member(char *item, char *list)
+{
+    char *b, *e;
+    int   l;
+
+    for (b = list; b && *b; b = e) {
+        if ((e = strchr(b, ',')) != NULL)
+            l = e - b;
+        else
+            l = strlen(b);
+
+        if (!strncmp(b, item, l) &&
+            (list[l] == ',' || list[l] == '\0'))
+            return TRUE;
+
+        if (e && *e) {
+            e++;
+            while (*e == ' ' || *e == '\t')
+                e++;
+        }
+    }
+
+    return FALSE;
+}
+
+
+static void get_nonignored_argv0(pid_t pid, char *buf, size_t size, char *list)
+{
+    while (pid > 1) {
+        get_argv0(pid, buf, size);
+
+        if (!is_member(buf, list))
+            return;
+
+        pid = get_ppid(pid);
+    }
+}
+
+
 #define PKGNAME_LEN 256
 static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 {
     pid_t pid = msg->instance_id;
-    mrp_attr_t attrs[3];
+    mrp_attr_t attrs[4];
     char pidbuf[32];
 
     asm_to_lib_t *reply;
@@ -1202,7 +1355,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             if (aul_app_get_pkgname_bypid(pid, buf, PKGNAME_LEN) == AUL_R_OK) {
                 mrp_resource_set_definition_t *def;
 
-                mrp_log_info("application real name: %s\n", buf);
+                mrp_log_info("application real name: %s", buf);
 
                 def = mrp_resource_set_get_definition_by_binary(buf);
 
@@ -1212,6 +1365,10 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     effective_auto_release = def->auto_release;
                     effective_dont_wait = def->dont_wait;
                 }
+            }
+            else {
+                get_nonignored_argv0(pid, buf, PKGNAME_LEN, ctx->ignored_argv0);
+                mrp_log_info("application name from proc: '%s'", buf);
             }
 
             handle = get_next_handle(client);
@@ -1300,7 +1457,10 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 attrs[1].type = mqi_string;
                 attrs[1].name = "policy";
                 attrs[1].value.string = rset_data->strict ? "strict":"relaxed";
-                attrs[2].name = NULL;
+                attrs[2].type = mqi_string;
+                attrs[2].name = "appid";
+                attrs[2].value.string = buf;
+                attrs[3].name = NULL;
 
                 if (rset_data->rset_mask & AP) {
                     if (mrp_resource_set_add_resource(client_class->rset,
@@ -1829,6 +1989,7 @@ static int asm_init(mrp_plugin_t *plugin)
     ctx->audio_recording = args[ARG_ASM_AUDIO_RECORDING].str;
     ctx->video_playback = args[ARG_ASM_VIDEO_PLAYBACK].str;
     ctx->video_recording = args[ARG_ASM_VIDEO_RECORDING].str;
+    ctx->ignored_argv0 = args[ARG_ASM_IGNORED_ARGV0].str;
 
     if (!init_event_config()) {
         mrp_log_error("Failed to initialize event/class mapping.");
@@ -1998,7 +2159,8 @@ static mrp_plugin_arg_t args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ASM_AUDIO_RECORDING, STRING, "audio_recording", "audio_recording"),
     MRP_PLUGIN_ARGIDX(ARG_ASM_VIDEO_PLAYBACK, STRING, "video_playback", "video_playback"),
     MRP_PLUGIN_ARGIDX(ARG_ASM_VIDEO_RECORDING, STRING, "video_recording", "video_recording"),
-    MRP_PLUGIN_ARGIDX(ARG_ASM_EVENT_CONFIG, UNDECL, NULL, NULL)
+    MRP_PLUGIN_ARGIDX(ARG_ASM_EVENT_CONFIG, UNDECL, NULL, NULL),
+    MRP_PLUGIN_ARGIDX(ARG_ASM_IGNORED_ARGV0, STRING, "ignored_argv0", "")
 };
 
 
