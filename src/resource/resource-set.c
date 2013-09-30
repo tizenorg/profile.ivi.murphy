@@ -632,7 +632,7 @@ static int add_to_def_hash(mrp_resource_set_definition_t *def)
     MRP_ASSERT(copy, "can't allocate memory");
 
     copy->binary_name  = mrp_strdup(def->binary_name);
-    copy->class_name   = mrp_strdup(def->binary_name);
+    copy->class_name   = mrp_strdup(def->class_name);
     copy->auto_release = def->auto_release;
     copy->dont_wait    = def->dont_wait;
 
