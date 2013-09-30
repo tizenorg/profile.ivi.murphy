@@ -630,7 +630,7 @@ static void init_def_hash(void)
 
         def_hash = mrp_htbl_create(&cfg);
 
-        MRP_ASSERT(id_hash, "failed to make def_hash for binaries");
+        MRP_ASSERT(def_hash, "failed to make def_hash for binaries");
     }
 }
 
