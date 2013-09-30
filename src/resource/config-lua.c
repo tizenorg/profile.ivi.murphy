@@ -662,7 +662,8 @@ static int appclass_create(lua_State *L)
     int share = -1;
     mrp_resource_order_t order = 0;
     const char *name = NULL;
-    mrp_resource_set_definition_t *defs, *d;
+    mrp_resource_set_definition_t *defs = NULL;
+    mrp_resource_set_definition_t *d;
 
     MRP_LUA_ENTER;
 
