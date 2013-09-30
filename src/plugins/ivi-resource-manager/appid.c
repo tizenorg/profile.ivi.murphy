@@ -41,7 +41,7 @@
 
 #include "appid.h"
 
-#define APP_DIR   "/opt/apps"
+#define APP_DIR   "/opt/usr/apps"
 #define APP_MAX   1024
 
 typedef struct appid_map_s   appid_map_t;
