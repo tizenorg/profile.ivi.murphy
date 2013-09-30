@@ -40,6 +40,7 @@
 
 #include <murphy/resource/client-api.h>
 #include <murphy/resource/common-api.h>
+#include <murphy/resource/config-api.h>
 
 #include "resource-set.h"
 #include "application-class.h"
@@ -56,9 +57,12 @@
 static MRP_LIST_HOOK(resource_set_list);
 static uint32_t resource_set_count;
 static mrp_htbl_t *id_hash;
+static mrp_htbl_t *def_hash;
 
 static int add_to_id_hash(mrp_resource_set_t *);
 static void remove_from_id_hash(mrp_resource_set_t *);
+
+static int add_to_def_hash(mrp_resource_set_definition_t *);
 
 static mrp_resource_t *find_resource_by_name(mrp_resource_set_t *,const char*);
 #if 0
@@ -74,6 +78,31 @@ uint32_t mrp_get_resource_set_count(void)
 {
     return resource_set_count;
 }
+
+int
+mrp_resource_set_add_definition_for_binary(mrp_resource_set_definition_t *def)
+{
+    MRP_ASSERT(def, "invalid argument");
+
+    if (add_to_def_hash(def) < 0) {
+        mrp_log_error("attempt to add multiple resource definition for '%s'",
+                      def->binary_name);
+        return -1;
+    }
+
+    return 0;
+}
+
+mrp_resource_set_definition_t *
+mrp_resource_set_get_definition_by_binary(const char *binary_name)
+{
+    mrp_resource_set_definition_t *def;
+
+    MRP_ASSERT(binary_name, "invalid_argument");
+
+    return def_hash ? mrp_htbl_lookup(def_hash, binary_name) : NULL;
+}
+
 
 mrp_resource_set_t *mrp_resource_set_create(mrp_resource_client_t *client,
                                             bool auto_release,
@@ -586,6 +615,46 @@ static void remove_from_id_hash(mrp_resource_set_t *rset)
                           "resource-set '%u' from id hash", rset->id);
         }
     }
+}
+
+static void init_def_hash(void)
+{
+    mrp_htbl_config_t cfg;
+
+    if (!def_hash) {
+        cfg.nentry  = 32;
+        cfg.comp    = mrp_string_comp;
+        cfg.hash    = mrp_string_hash;
+        cfg.free    = NULL;
+        cfg.nbucket = cfg.nentry;
+
+        def_hash = mrp_htbl_create(&cfg);
+
+        MRP_ASSERT(id_hash, "failed to make def_hash for binaries");
+    }
+}
+
+static int add_to_def_hash(mrp_resource_set_definition_t *def)
+{
+    mrp_resource_set_definition_t *copy;
+
+    MRP_ASSERT(def, "invalid argument");
+    MRP_ASSERT(def->binary_name && def->class_name, "inavlid definition");
+
+    init_def_hash();
+
+    copy = mrp_allocz(sizeof(mrp_resource_set_definition_t));
+    MRP_ASSERT(copy, "can't allocate memory");
+
+    copy->binary_name  = mrp_strdup(def->binary_name);
+    copy->class_name   = mrp_strdup(def->binary_name);
+    copy->auto_release = def->auto_release;
+    copy->dont_wait    = def->dont_wait;
+
+    if (!mrp_htbl_insert(def_hash, copy->binary_name, copy))
+        return -1;
+
+    return 0;
 }
 
 static mrp_resource_t *find_resource_by_name(mrp_resource_set_t *rset,
