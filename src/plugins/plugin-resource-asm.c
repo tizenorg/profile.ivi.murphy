@@ -1153,10 +1153,15 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             uint32_t handle;
             resource_set_data_t *d;
             client_t *client;
-            const rset_class_data_t *orig;
-            rset_class_data_t new, *rset_data;
+            const rset_class_data_t *rset_data;
             client_class_t *client_class;
             bool merged;
+
+            /* the effective values that are really used */
+            char *effective_class = NULL;
+            bool effective_auto_release = FALSE;
+            bool effective_dont_wait = FALSE;
+            uint32_t effective_priority = 0;
 
             /* aul buffer */
             char buf[PKGNAME_LEN];
@@ -1178,16 +1183,18 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 mrp_htbl_insert(ctx->clients, u_to_p(pid), client);
             }
 
-            orig = map_slp_media_type_to_murphy(
+            rset_data = map_slp_media_type_to_murphy(
                     (ASM_sound_events_t) msg->sound_event);
 
-            if (!orig) {
+            if (!rset_data) {
                 mrp_log_error("unknown resource type: %d", msg->sound_event);
                 goto error;
             }
 
-            memcpy(&new, orig, sizeof(rset_class_data_t));
-            rset_data = &new;
+            effective_class = rset_data->rset_class;
+            effective_priority = rset_data->priority;
+            effective_auto_release = rset_data->auto_release;
+            effective_dont_wait = rset_data->dont_wait;
 
             /* ask for the real id of the application and see if Murphy
              * has some special treatment for it */
@@ -1200,14 +1207,10 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 def = mrp_resource_set_get_definition_by_binary(buf);
 
                 if (def) {
-                    mrp_free(rset_data->rset_class);
-                    rset_data->rset_class = mrp_strdup(def->class_name);
-                    if (!rset_data->rset_class)
-                        goto error;
-
-                    rset_data->auto_release = def->auto_release;
-                    rset_data->dont_wait = def->dont_wait;
-                    rset_data->priority = def->priority;
+                    effective_class = def->class_name;
+                    effective_priority = def->priority;
+                    effective_auto_release = def->auto_release;
+                    effective_dont_wait = def->dont_wait;
                 }
             }
 
@@ -1232,7 +1235,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             /* ok, see if we already have a client_class struct for the type */
 
             client_class = mrp_htbl_lookup(client->classes,
-                    rset_data->rset_class);
+                    effective_class);
 
             if (!client_class) {
                 client_class = mrp_allocz(sizeof(client_class_t));
@@ -1241,7 +1244,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
                 mrp_list_init(&client_class->asm_clients);
                 client_class->ctx = ctx;
-                client_class->class_name = rset_data->rset_class;
+                client_class->class_name = effective_class;
                 client_class->client = client;
                 client_class->rset_data = rset_data;
                 client_class->rset = NULL;
@@ -1253,7 +1256,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 
                 d->client_class = client_class;
 
-                mrp_htbl_insert(client->classes, rset_data->rset_class,
+                mrp_htbl_insert(client->classes, effective_class,
                         client_class);
 
                 merged = FALSE;
@@ -1265,11 +1268,11 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 merged = TRUE;
             }
 
-            if (strcmp(rset_data->rset_class, "earjack") == 0) {
+            if (strcmp(effective_class, "earjack") == 0) {
                 mrp_log_info("earjack status request was received");
                 d->earjack = TRUE;
             }
-            else if (strcmp(rset_data->rset_class, "monitor") == 0) {
+            else if (strcmp(effective_class, "monitor") == 0) {
                 mrp_log_info("monitor resource was received");
                 /* TODO: tell the available state changes to this pid
                  * via the monitor resource? */
@@ -1280,8 +1283,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 /* a normal resource request */
 
                 client_class->rset = mrp_resource_set_create(
-                        ctx->resource_client, rset_data->auto_release,
-                        rset_data->dont_wait, rset_data->priority,
+                        ctx->resource_client, effective_auto_release,
+                        effective_dont_wait, effective_priority,
                         event_cb, client_class);
 
                 if (!client_class->rset) {
@@ -1346,7 +1349,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 }
 
                 if (mrp_application_class_add_resource_set(
-                            rset_data->rset_class, ctx->zone,
+                            effective_class, ctx->zone,
                             client_class->rset, 0) < 0) {
                     mrp_log_error("Failed to put the rset in a class!");
                     remove_asm_client_from_class(client_class, d);
@@ -1465,7 +1468,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                     goto error;
                 }
 
-               if (!client) {
+                /* FIXME: edit to use effective resource classes */
+
+                if (!client) {
                     mrp_log_error("client '%u' not found", pid);
                     goto error;
                 }
