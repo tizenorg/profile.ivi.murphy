@@ -42,6 +42,8 @@
 
 #include <audio-session-manager.h>
 
+#include <aul.h>
+
 #include <murphy/common.h>
 #include <murphy/common/process.h>
 #include <murphy/core.h>
@@ -78,6 +80,8 @@ typedef struct {
     bool shared;                               /* agrees to share access */
     uint32_t priority;                         /* priority within class */
     bool strict;                               /* strict or relaxed policy ? */
+    bool auto_release;                         /* automatically release the resource set */
+    bool dont_wait;                            /* doesn't block in the beginning */
 } rset_class_data_t;
 
 typedef struct {
@@ -219,6 +223,8 @@ static const char *asm_event_name[] = {
     mandatory:  TRUE,                                           \
     shared:     _shared,                                        \
     strict:     _strict,                                        \
+    auto_release: FALSE,                                        \
+    dont_wait:  FALSE,                                          \
     }
 
 #define MANDATORY TRUE
@@ -258,7 +264,7 @@ static rset_class_data_t type_map[] = {
     MAP_EVENT(EMERGENCY            , "phone"  , AVPR, !SHARED, !STRICT),
     MAP_EVENT(EXCLUSIVE_RESOURCE   , "player" , APR,  !SHARED, !STRICT),
 
-    { NULL, NULL, NONE, FALSE, FALSE, FALSE, 0 }
+    { NULL, NULL, NONE, FALSE, FALSE, FALSE, 0, FALSE, FALSE }
 };
 
 
@@ -1117,6 +1123,7 @@ static void pid_watch_cb(pid_t pid, mrp_process_state_t s, void *userdata)
 }
 
 
+#define PKGNAME_LEN 256
 static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
 {
     pid_t pid = msg->instance_id;
@@ -1146,9 +1153,13 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             uint32_t handle;
             resource_set_data_t *d;
             client_t *client;
-            const rset_class_data_t *rset_data;
+            const rset_class_data_t *orig;
+            rset_class_data_t new, *rset_data;
             client_class_t *client_class;
             bool merged;
+
+            /* aul buffer */
+            char buf[PKGNAME_LEN];
 
             mrp_log_info("REQUEST: REGISTER");
 
@@ -1167,12 +1178,37 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 mrp_htbl_insert(ctx->clients, u_to_p(pid), client);
             }
 
-            rset_data = map_slp_media_type_to_murphy(
+            orig = map_slp_media_type_to_murphy(
                     (ASM_sound_events_t) msg->sound_event);
 
-            if (!rset_data) {
+            if (!orig) {
                 mrp_log_error("unknown resource type: %d", msg->sound_event);
                 goto error;
+            }
+
+            memcpy(&new, orig, sizeof(rset_class_data_t));
+            rset_data = &new;
+
+            /* ask for the real id of the application and see if Murphy
+             * has some special treatment for it */
+
+            if (aul_app_get_pkgname_bypid(pid, buf, PKGNAME_LEN) == AUL_R_OK) {
+                mrp_resource_set_definition_t *def;
+
+                mrp_log_info("application real name: %s\n", buf);
+
+                def = mrp_resource_set_get_definition_by_binary(buf);
+
+                if (def) {
+                    mrp_free(rset_data->rset_class);
+                    rset_data->rset_class = mrp_strdup(def->class_name);
+                    if (!rset_data->rset_class)
+                        goto error;
+
+                    rset_data->auto_release = def->auto_release;
+                    rset_data->dont_wait = def->dont_wait;
+                    rset_data->priority = def->priority;
+                }
             }
 
             handle = get_next_handle(client);
@@ -1244,7 +1280,8 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 /* a normal resource request */
 
                 client_class->rset = mrp_resource_set_create(
-                        ctx->resource_client, 0, 0, rset_data->priority,
+                        ctx->resource_client, rset_data->auto_release,
+                        rset_data->dont_wait, rset_data->priority,
                         event_cb, client_class);
 
                 if (!client_class->rset) {
@@ -1509,6 +1546,7 @@ noreply:
     mrp_free(reply);
     return NULL;
 }
+#undef PKGNAME_LEN
 
 
 static void process_cb_msg(lib_to_asm_cb_t *msg, asm_data_t *ctx)
