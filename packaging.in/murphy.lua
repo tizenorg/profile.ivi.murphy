@@ -62,12 +62,52 @@ if m:plugin_exists('ivi-resource-manager') then
 end
 
 -- define application classes
-application_class { name="interrupt", priority=99, modal=true , share=false, order="fifo" }
-application_class { name="emergency", priority=80, modal=false, share=false, order="fifo" }
-application_class { name="alert"    , priority=51, modal=false, share=false, order="fifo" }
-application_class { name="navigator", priority=50, modal=false, share=true , order="fifo" }
-application_class { name="phone"    , priority=6 , modal=false, share=true , order="lifo" }
-application_class { name="camera"   , priority=5 , modal=false, share=false, order="lifo" }
+application_class {
+    name     = "interrupt",
+    priority = 99,
+    modal    = true ,
+    share    = false,
+    order    = "fifo"
+}
+
+application_class {
+    name     = "emergency",
+    priority = 80,
+    modal    = false,
+    share    = false,
+    order    = "fifo"
+}
+application_class {
+    name     = "alert",
+    priority = 51,
+    modal    = false,
+    share    = false,
+    order    = "fifo"
+}
+
+application_class {
+    name     = "navigator",
+    priority = 50,
+    modal    = false,
+    share    = true,
+    order    = "fifo"
+}
+
+application_class {
+    name     = "phone",
+    priority = 6 ,
+    modal    = false,
+    share    = true ,
+    order    = "lifo"
+}
+application_class {
+    name     = "camera",
+    priority = 5,
+    modal    = false,
+    share    = false,
+    order    = "lifo"
+}
+
 application_class { name="event"    , priority=4 , modal=false, share=true , order="fifo" }
 application_class { name="game"     , priority=3 , modal=false, share=false, order="lifo" }
 --# doesn't need to be created here, ivi-resource-manager creates it if loaded
