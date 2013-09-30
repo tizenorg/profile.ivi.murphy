@@ -54,31 +54,33 @@
 #define MRP_RESOURCE_MAX  (sizeof(mrp_resource_mask_t) * 8)
 #define MRP_ATTRIBUTE_MAX (sizeof(mrp_attribute_mask_t) * 8)
 
-typedef enum   mrp_resource_state_e     mrp_resource_state_t;
-typedef enum   mrp_resource_order_e     mrp_resource_order_t;
-typedef enum   mrp_resource_access_e    mrp_resource_access_t;
-typedef enum   mrp_resource_event_e     mrp_resource_event_t;
+typedef enum   mrp_resource_state_e          mrp_resource_state_t;
+typedef enum   mrp_resource_order_e          mrp_resource_order_t;
+typedef enum   mrp_resource_access_e         mrp_resource_access_t;
+typedef enum   mrp_resource_event_e          mrp_resource_event_t;
 
-typedef struct mrp_resource_client_s    mrp_resource_client_t;
-typedef union  mrp_attr_value_u         mrp_attr_value_t;
-typedef struct mrp_attr_def_s           mrp_attr_def_t;
-typedef struct mrp_attr_s               mrp_attr_t;
-typedef struct mrp_zone_def_s           mrp_zone_def_t;
-typedef struct mrp_zone_s               mrp_zone_t;
-typedef struct mrp_application_class_s  mrp_application_class_t;
-typedef struct mrp_resource_owner_s     mrp_resource_owner_t;
-typedef struct mrp_resource_set_s       mrp_resource_set_t;
-typedef struct mrp_resource_def_s       mrp_resource_def_t;
-typedef struct mrp_resource_s           mrp_resource_t;
-typedef struct mrp_resource_mgr_ftbl_s  mrp_resource_mgr_ftbl_t;
-typedef struct mrp_resource_mgr_s       mrp_resource_mgr_t;
+typedef struct mrp_resource_client_s         mrp_resource_client_t;
+typedef union  mrp_attr_value_u              mrp_attr_value_t;
+typedef struct mrp_attr_def_s                mrp_attr_def_t;
+typedef struct mrp_attr_s                    mrp_attr_t;
+typedef struct mrp_zone_def_s                mrp_zone_def_t;
+typedef struct mrp_zone_s                    mrp_zone_t;
+typedef struct mrp_application_class_s       mrp_application_class_t;
+typedef struct mrp_resource_owner_s          mrp_resource_owner_t;
+typedef struct mrp_resource_set_s            mrp_resource_set_t;
+typedef struct mrp_resource_def_s            mrp_resource_def_t;
+typedef struct mrp_resource_s                mrp_resource_t;
+typedef struct mrp_resource_mgr_ftbl_s       mrp_resource_mgr_ftbl_t;
+typedef struct mrp_resource_mgr_s            mrp_resource_mgr_t;
 
-typedef struct mrp_resource_ownersref_s mrp_resource_ownersref_t;
-typedef struct mrp_resource_setref_s    mrp_resource_setref_t;
+typedef struct mrp_resource_ownersref_s      mrp_resource_ownersref_t;
+typedef struct mrp_resource_setref_s         mrp_resource_setref_t;
 
-typedef uint32_t                        mrp_resource_mask_t;
-typedef uint32_t                        mrp_attribute_mask_t;
-typedef uint32_t                        mrp_zone_mask_t;
+typedef struct mrp_resource_set_definition_s mrp_resource_set_definition_t;
+
+typedef uint32_t                             mrp_resource_mask_t;
+typedef uint32_t                             mrp_attribute_mask_t;
+typedef uint32_t                             mrp_zone_mask_t;
 
 
 enum mrp_resource_state_e {
@@ -150,7 +152,13 @@ struct mrp_resource_mgr_ftbl_s  {
     mrp_manager_commit_func_t   commit;
 };
 
-
+struct mrp_resource_set_definition_s {
+    const char *binary_name;
+    const char *class_name;
+    bool        auto_release;
+    bool        dont_wait;
+    uint32_t    priority;
+};
 
 #endif  /* __MURPHY_DATA_TYPES_H__ */
 

@@ -104,6 +104,8 @@ static mqi_handle_t get_database_table(void);
 static void insert_into_application_class_table(const char *, uint32_t);
 
 
+
+
 mrp_application_class_t *mrp_application_class_create(const char *name,
                                                     uint32_t pri,
                                                     bool modal,
