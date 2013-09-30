@@ -363,7 +363,7 @@ static void audio_update_resources(mrp_resmgr_audio_t *audio,
         class_name = mrp_application_class_get_name(class->class);
         resources = &class->resources;
 
-        if (!strcmp(class_name, "player") || !strcmp(class_name, "base")) {
+        if (!strcmp(class_name, "player") || !strcmp(class_name, "base") || 1) {
             nar = 0;
 
             mrp_list_foreach_back(resources, rentry, rn) {
@@ -416,7 +416,7 @@ static void audio_grant_resources(mrp_resmgr_audio_t *audio,
         class_name = mrp_application_class_get_name(class->class);
         resources = &class->resources;
         base_class = !strcmp(class_name, "player") ||
-            !strcmp(class_name, "base");
+            !strcmp(class_name, "base") || 1;
 
         if (!base_class || audio->nactive[zoneid]) {
             mrp_list_foreach_back(resources, rentry, rn) {
