@@ -68,6 +68,9 @@ mrp_resource_set_t *mrp_resource_set_create(mrp_resource_client_t *client,
                                             void *user_data);
 void mrp_resource_set_destroy(mrp_resource_set_t *resource_set);
 
+mrp_resource_set_definition_t *
+mrp_resource_set_get_definition_by_binary(const char *binary_name);
+
 uint32_t mrp_get_resource_set_id(mrp_resource_set_t *resource_set);
 
 mrp_resource_state_t
