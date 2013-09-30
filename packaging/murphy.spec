@@ -25,7 +25,7 @@
 
 Summary: Murphy policy framework
 Name: murphy
-Version: 0.0.35
+Version: 0.0.36
 Release: 1
 License: BSD-3-Clause
 Group: System/Service
