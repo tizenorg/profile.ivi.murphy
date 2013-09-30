@@ -47,6 +47,9 @@ int mrp_application_class_print(char *buf, int len, bool with_resource_sets);
 
 int mrp_resource_owner_print(char *buf, int len);
 
+int mrp_resource_set_add_definition_for_binary(
+                                    mrp_resource_set_definition_t *definition);
+
 
 #endif  /* __MURPHY_RESOURCE_CONFIG_API_H__ */
 
