@@ -1,7 +1,8 @@
-* Mon Sep 30 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.36
+* Tue Oct 01 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.37
 - packaging: enabled ivi-resource-manager.
 - resolver: update target based on direct dependencies.
 - Fixes TIVI-1132.
+- Fixes TIVI-1920.
 
 * Sat Sep 21 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.35
 - packaging: added support for driving mode.
