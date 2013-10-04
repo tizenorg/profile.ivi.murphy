@@ -34,7 +34,7 @@
 
 #include <murphy/common.h>
 #include <murphy/core.h>
-#include <murphy/common/dbus.h>
+#include <murphy/common/dbus-libdbus.h>
 #include <murphy/common/process.h>
 
 #include <murphy-db/mdb.h>
@@ -49,10 +49,12 @@
 
 enum {
     ARG_AMB_DBUS_ADDRESS,
+    ARG_AMB_DBUS_BUS,
     ARG_AMB_CONFIG_FILE,
     ARG_AMB_ID,
     ARG_AMB_TPORT_ADDRESS,
     ARG_AMB_STARTUP_DELAY,
+    ARG_AMB_FORCE_SUBSCRIPTION,
 };
 
 enum amb_type {
@@ -98,7 +100,7 @@ method return sender=:1.69 -> dest=:1.91 reply_serial=2
 
 typedef struct {
     char *name;
-    int type;
+    mrp_dbus_type_t type;
     union {
         int32_t i;
         uint32_t u;
@@ -133,6 +135,7 @@ typedef struct {
     const char *config_file;
     const char *amb_id;
     const char *tport_addr;
+    bool force_subscription;
     lua_State *L;
     mrp_list_hook_t lua_properties;
 
@@ -220,7 +223,7 @@ static void lua_amb_destroy(void *data)
 
     MRP_LUA_ENTER;
 
-    mrp_log_info("> lua_amb_destroy");
+    mrp_log_info("AMB: lua_amb_destroy");
 
     MRP_UNUSED(prop);
 
@@ -248,7 +251,7 @@ static int amb_constructor(lua_State *L)
 
     MRP_LUA_ENTER;
 
-    mrp_debug("> amb_constructor, stack size: %d", lua_gettop(L));
+    mrp_debug("AMB: amb_constructor, stack size: %d", lua_gettop(L));
 
     prop = (lua_amb_property_t *)
             mrp_lua_create_object(L, PROPERTY_CLASS, NULL, 0);
@@ -265,7 +268,7 @@ static int amb_constructor(lua_State *L)
         strncpy(buf, field_name, field_name_len);
         buf[field_name_len] = '\0';
 
-        mrp_log_info("field name: %s", buf);
+        /* mrp_log_info("field name: %s", buf); */
 
         if (strncmp(field_name, "dbus_data", field_name_len) == 0) {
 
@@ -339,7 +342,7 @@ static int amb_constructor(lua_State *L)
                 prop->dbus_data.signame == NULL ||
                 prop->dbus_data.objectname == NULL ||
                 (!prop->dbus_data.undefined_object_path &&
-                  prop->dbus_data.obj == NULL)) {
+                 prop->dbus_data.obj == NULL)) {
                 error = "missing data";
                 goto error;
             }
@@ -384,7 +387,7 @@ static int amb_constructor(lua_State *L)
     w->ctx = ctx;
     w->lua_prop = prop;
     w->prop.initialized = FALSE;
-    w->prop.type = DBUS_TYPE_INVALID;
+    w->prop.type = MRP_DBUS_TYPE_INVALID;
     w->prop.name = mrp_strdup(w->lua_prop->dbus_data.name);
 
     if (!w->prop.name) {
@@ -425,10 +428,9 @@ static int amb_constructor(lua_State *L)
     MRP_LUA_LEAVE(1);
 
 error:
-    /* TODO: delete the allocated data */
     destroy_prop(global_ctx, w);
 
-    mrp_log_error("< amb_constructor error: %s", error);
+    mrp_log_error("AMB: amb_constructor error: %s", error);
     MRP_LUA_LEAVE(0);
 }
 
@@ -444,7 +446,7 @@ static int amb_getfield(lua_State *L)
     if (!prop)
         goto error;
 
-    mrp_debug("> amb_getfield");
+    mrp_debug("AMB: amb_getfield");
 
     if (strncmp(field_name, AMB_NAME, field_name_len) == 0) {
         if (prop->name)
@@ -517,7 +519,7 @@ static int amb_setfield(lua_State *L)
 
     MRP_UNUSED(L);
 
-    mrp_debug("> amb_setfield");
+    mrp_debug("AMB: amb_setfield");
 
     MRP_LUA_LEAVE(0);
 }
@@ -525,61 +527,57 @@ static int amb_setfield(lua_State *L)
 /* lua config end */
 
 static bool parse_elementary_value(lua_State *L,
-        DBusMessageIter *iter, dbus_property_watch_t *w)
+        mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
 {
-    dbus_int32_t i32_val;
-    dbus_int32_t i16_val;
-    dbus_uint32_t u32_val;
-    dbus_uint16_t u16_val;
+    int32_t i32_val;
+    int16_t i16_val;
+    uint32_t u32_val;
+    uint16_t u16_val;
     uint8_t byte_val;
-    dbus_bool_t b_val;
     double d_val;
     char *s_val;
 
-    char sig;
+    mrp_dbus_type_t sig;
 
     MRP_UNUSED(w);
 
-    if (!iter)
-        goto error;
-
-    sig = dbus_message_iter_get_arg_type(iter);
+    sig = mrp_dbus_msg_arg_type(msg, NULL);
 
     switch (sig) {
-        case DBUS_TYPE_INT32:
-            dbus_message_iter_get_basic(iter, &i32_val);
+        case MRP_DBUS_TYPE_INT32:
+            mrp_dbus_msg_read_basic(msg, sig, &i32_val);
             lua_pushinteger(L, i32_val);
             break;
-        case DBUS_TYPE_INT16:
-            dbus_message_iter_get_basic(iter, &i16_val);
+        case MRP_DBUS_TYPE_INT16:
+            mrp_dbus_msg_read_basic(msg, sig, &i16_val);
             lua_pushinteger(L, i16_val);
             break;
-        case DBUS_TYPE_UINT32:
-            dbus_message_iter_get_basic(iter, &u32_val);
+        case MRP_DBUS_TYPE_UINT32:
+            mrp_dbus_msg_read_basic(msg, sig, &u32_val);
             lua_pushinteger(L, u32_val);
             break;
-        case DBUS_TYPE_UINT16:
-            dbus_message_iter_get_basic(iter, &u16_val);
+        case MRP_DBUS_TYPE_UINT16:
+            mrp_dbus_msg_read_basic(msg, sig, &u16_val);
             lua_pushinteger(L, u16_val);
             break;
-        case DBUS_TYPE_BOOLEAN:
-            dbus_message_iter_get_basic(iter, &b_val);
-            lua_pushboolean(L, b_val == TRUE);
+        case MRP_DBUS_TYPE_BOOLEAN:
+            mrp_dbus_msg_read_basic(msg, sig, &u32_val);
+            lua_pushboolean(L, u32_val == TRUE);
             break;
-        case DBUS_TYPE_BYTE:
-            dbus_message_iter_get_basic(iter, &byte_val);
+        case MRP_DBUS_TYPE_BYTE:
+            mrp_dbus_msg_read_basic(msg, sig, &byte_val);
             lua_pushinteger(L, byte_val);
             break;
-        case DBUS_TYPE_DOUBLE:
-            dbus_message_iter_get_basic(iter, &d_val);
+        case MRP_DBUS_TYPE_DOUBLE:
+            mrp_dbus_msg_read_basic(msg, sig, &d_val);
             lua_pushnumber(L, d_val);
             break;
-        case DBUS_TYPE_STRING:
-            dbus_message_iter_get_basic(iter, &s_val);
+        case MRP_DBUS_TYPE_STRING:
+            mrp_dbus_msg_read_basic(msg, sig, &s_val);
             lua_pushstring(L, s_val);
             break;
         default:
-            mrp_log_info("> parse_elementary_value: unknown type");
+            mrp_log_error("AMB: parse_elementary_value: unknown type");
             goto error;
     }
 
@@ -589,182 +587,151 @@ error:
     return FALSE;
 }
 
-static bool parse_value(lua_State *L, DBusMessageIter *iter,
+static bool parse_value(lua_State *L, mrp_dbus_msg_t *msg,
         dbus_property_watch_t *w);
 
 static bool parse_struct(lua_State *L,
-        DBusMessageIter *iter, dbus_property_watch_t *w)
+        mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
 {
     int i = 1;
-    DBusMessageIter new_iter;
-
-    if (!iter)
-        return FALSE;
 
     /* initialize the table */
     lua_newtable(L);
 
-    dbus_message_iter_recurse(iter, &new_iter);
+    mrp_dbus_msg_enter_container(msg, MRP_DBUS_TYPE_STRUCT, NULL);
 
-    while (dbus_message_iter_get_arg_type(&new_iter) != DBUS_TYPE_INVALID) {
+    while (mrp_dbus_msg_arg_type(msg, NULL) != MRP_DBUS_TYPE_INVALID) {
 
         /* struct "index" */
         lua_pushinteger(L, i++);
 
-        parse_value(L, &new_iter, w);
-        dbus_message_iter_next(&new_iter);
+        parse_value(L, msg, w);
 
         /* put the values to the table */
         lua_settable(L, -3);
     }
+
+    mrp_dbus_msg_exit_container(msg);
 
     return TRUE;
 }
 
 
 static bool parse_dict_entry(lua_State *L,
-        DBusMessageIter *iter, dbus_property_watch_t *w)
+        mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
 {
-    DBusMessageIter new_iter;
+    mrp_dbus_msg_enter_container(msg, MRP_DBUS_TYPE_DICT_ENTRY, NULL);
 
-    if (!iter)
-        return FALSE;
-
-    dbus_message_iter_recurse(iter, &new_iter);
-
-    while (dbus_message_iter_get_arg_type(&new_iter) != DBUS_TYPE_INVALID) {
+    while (mrp_dbus_msg_arg_type(msg, NULL) != MRP_DBUS_TYPE_INVALID) {
 
         /* key must be elementary, value can be anything */
-
-        parse_elementary_value(L, &new_iter, w);
-        dbus_message_iter_next(&new_iter);
-
-        parse_value(L, &new_iter, w);
-        dbus_message_iter_next(&new_iter);
+        parse_elementary_value(L, msg, w);
+        parse_value(L, msg, w);
 
         /* put the values to the table */
         lua_settable(L, -3);
     }
 
+    mrp_dbus_msg_exit_container(msg); /* dict entry */
+
     return TRUE;
 }
 
 static bool parse_array(lua_State *L,
-        DBusMessageIter *iter, dbus_property_watch_t *w)
+        mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
 {
-    DBusMessageIter new_iter;
-    int element_type;
-
-    if (!iter)
-        return FALSE;
-
     /* the lua array */
     lua_newtable(L);
 
-    element_type = dbus_message_iter_get_element_type(iter);
-
-    dbus_message_iter_recurse(iter, &new_iter);
+    mrp_dbus_msg_enter_container(msg, MRP_DBUS_TYPE_ARRAY, NULL);
 
     /* the problem: if the value inside array is a dict entry, the
      * indexing of elements need to be done with dict keys instead
      * of numbers. */
 
-    if (element_type == DBUS_TYPE_DICT_ENTRY) {
-        while (dbus_message_iter_get_arg_type(&new_iter)
-            != DBUS_TYPE_INVALID) {
-
-            parse_dict_entry(L, &new_iter, w);
-            dbus_message_iter_next(&new_iter);
+    if (mrp_dbus_msg_arg_type(msg, NULL) == MRP_DBUS_TYPE_DICT_ENTRY) {
+        while (mrp_dbus_msg_arg_type(msg, NULL) != MRP_DBUS_TYPE_INVALID) {
+            parse_dict_entry(L, msg, w);
         }
     }
-
     else {
         int i = 1;
 
-        while (dbus_message_iter_get_arg_type(&new_iter)
-            != DBUS_TYPE_INVALID) {
+        while (mrp_dbus_msg_arg_type(msg, NULL) != MRP_DBUS_TYPE_INVALID) {
 
             /* array index */
             lua_pushinteger(L, i++);
 
-            parse_value(L, &new_iter, w);
-            dbus_message_iter_next(&new_iter);
+            parse_value(L, msg, w);
 
             /* put the values to the table */
             lua_settable(L, -3);
         }
     }
 
+    mrp_dbus_msg_exit_container(msg); /* array */
+
     return TRUE;
 }
 
-static bool parse_value(lua_State *L, DBusMessageIter *iter,
+static bool parse_value(lua_State *L, mrp_dbus_msg_t *msg,
         dbus_property_watch_t *w)
 {
-    char curr;
+    mrp_dbus_type_t curr;
 
-    if (!iter)
-        return FALSE;
-
-    curr = dbus_message_iter_get_arg_type(iter);
+    curr = mrp_dbus_msg_arg_type(msg, NULL);
 
     switch (curr) {
-        case DBUS_TYPE_BYTE:
-        case DBUS_TYPE_BOOLEAN:
-        case DBUS_TYPE_INT16:
-        case DBUS_TYPE_INT32:
-        case DBUS_TYPE_UINT16:
-        case DBUS_TYPE_UINT32:
-        case DBUS_TYPE_DOUBLE:
-        case DBUS_TYPE_STRING:
-            return parse_elementary_value(L, iter, w);
-        case DBUS_TYPE_ARRAY:
-            return parse_array(L, iter, w);
-        case DBUS_TYPE_STRUCT:
-            return parse_struct(L, iter, w);
-        case DBUS_TYPE_DICT_ENTRY:
+        case MRP_DBUS_TYPE_BYTE:
+        case MRP_DBUS_TYPE_BOOLEAN:
+        case MRP_DBUS_TYPE_INT16:
+        case MRP_DBUS_TYPE_INT32:
+        case MRP_DBUS_TYPE_UINT16:
+        case MRP_DBUS_TYPE_UINT32:
+        case MRP_DBUS_TYPE_DOUBLE:
+        case MRP_DBUS_TYPE_STRING:
+            return parse_elementary_value(L, msg, w);
+        case MRP_DBUS_TYPE_ARRAY:
+            return parse_array(L, msg, w);
+        case MRP_DBUS_TYPE_STRUCT:
+            return parse_struct(L, msg, w);
+        case MRP_DBUS_TYPE_DICT_ENTRY:
             goto error; /* these are handled from parse_array */
-        case DBUS_TYPE_INVALID:
+        case MRP_DBUS_TYPE_INVALID:
             return TRUE;
         default:
             break;
     }
 
 error:
-    mrp_log_error("failed to parse D-Bus property (sig[i] %c)", curr);
+    mrp_log_error("AMB: failed to parse D-Bus property (sig[i] %c)", curr);
     return FALSE;
 }
 
-static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
+static void lua_property_handler(mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
 {
-    DBusMessageIter msg_iter;
-    DBusMessageIter variant_iter;
+#if 0
     char *variant_sig = NULL;
+#endif
 
     if (!w || !msg) {
-        mrp_log_error("amb: no dbus property watch set");
-        goto error;
+        mrp_log_error("AMB: no dbus property watch set");
+        goto end;
     }
 
-    if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
-        mrp_log_error("amb: error message from ambd");
-        goto error;
+    if (w->lua_prop->handler_ref == LUA_NOREF) {
+        mrp_log_error("AMB: no lua reference");
+        goto end;
     }
 
-    dbus_message_iter_init(msg, &msg_iter);
-
-    if (dbus_message_iter_get_arg_type(&msg_iter) != DBUS_TYPE_VARIANT) {
-        mrp_log_error("amb: message parameter wasn't a variant");
-        goto error;
+    if (mrp_dbus_msg_type(msg) == MRP_DBUS_MESSAGE_TYPE_ERROR) {
+        mrp_log_error("AMB: error message from ambd");
+        goto end;
     }
 
-    dbus_message_iter_recurse(&msg_iter, &variant_iter);
-
-    variant_sig = dbus_message_iter_get_signature(&variant_iter);
-
-    if (!variant_sig) {
-        mrp_log_error("amb: could not get variant signature");
-        goto error;
+    if (!mrp_dbus_msg_enter_container(msg, MRP_DBUS_TYPE_VARIANT, NULL)) {
+        mrp_log_error("AMB: message parameter wasn't a variant");
+        goto end;
     }
 
     /*
@@ -772,16 +739,22 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
             variant_sig, w->lua_prop->dbus_data.signature);
     */
 
+
+#if 0
+    /* FIXME: check this when the D-Bus API has support */
+    variant_sig = dbus_message_iter_get_signature(&variant_iter);
+
+    if (!variant_sig) {
+        mrp_log_error("amb: could not get variant signature");
+        goto error;
+    }
+
     /* check if we got what we were expecting */
     if (strcmp(variant_sig, w->lua_prop->dbus_data.signature) != 0) {
         mrp_log_error("amb: dbus data signature didn't match");
         goto error;
     }
-
-    if (w->lua_prop->handler_ref == LUA_NOREF) {
-        mrp_log_error("amb: no lua reference");
-        goto error;
-    }
+#endif
 
     /* load the function pointer to the stack */
     lua_rawgeti(w->ctx->L, LUA_REGISTRYINDEX, w->lua_prop->handler_ref);
@@ -790,49 +763,41 @@ static void lua_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     mrp_lua_push_object(w->ctx->L, w->lua_prop);
 
     /* parse values to the stack */
-    parse_value(w->ctx->L, &variant_iter, w);
+    parse_value(w->ctx->L, msg, w);
 
     /* call the handler function */
     lua_pcall(w->ctx->L, 2, 0, 0);
 
-    dbus_free(variant_sig);
+    mrp_dbus_msg_exit_container(msg);
 
+end:
+    /* TODO: clean up the variant sig string */
     return;
-
-error:
-    if (variant_sig)
-        dbus_free(variant_sig);
-    mrp_log_error("amb: failed to process an incoming D-Bus message");
 }
 
 
-static void basic_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
+static void basic_property_handler(mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
 {
-    DBusMessageIter msg_iter;
-    DBusMessageIter variant_iter;
-
-    dbus_int32_t i32_val;
-    dbus_int32_t i16_val;
-    dbus_uint32_t u32_val;
-    dbus_uint16_t u16_val;
+    int32_t i32_val;
+    int16_t i16_val;
+    uint32_t u32_val;
+    uint16_t u16_val;
     uint8_t byte_val;
-    dbus_bool_t b_val;
     double d_val;
     char *s_val;
 
     if (!w || !msg) {
-        mrp_log_error("amb: no dbus property watch set");
+        mrp_log_error("AMB: no dbus property watch set");
         goto error;
     }
 
-    dbus_message_iter_init(msg, &msg_iter);
-
-    if (dbus_message_iter_get_arg_type(&msg_iter) != DBUS_TYPE_VARIANT) {
-        mrp_log_error("amb: message parameter wasn't a variant");
+    if (!mrp_dbus_msg_enter_container(msg, MRP_DBUS_TYPE_VARIANT, NULL)) {
+        mrp_log_error("AMB: message parameter wasn't a variant");
         goto error;
     }
 
-    dbus_message_iter_recurse(&msg_iter, &variant_iter);
+#if 0
+    /* FIXME: check the type later */
 
     if (dbus_message_iter_get_arg_type(&variant_iter)
                         != w->prop.type) {
@@ -840,43 +805,47 @@ static void basic_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
                 dbus_message_iter_get_arg_type(&variant_iter), w->prop.type);
         goto error;
     }
+#endif
 
     switch (w->prop.type) {
-        case DBUS_TYPE_INT32:
-            dbus_message_iter_get_basic(&variant_iter, &i32_val);
+        case MRP_DBUS_TYPE_INT32:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_INT32, &i32_val);
             w->prop.value.i = i32_val;
             break;
-        case DBUS_TYPE_INT16:
-            dbus_message_iter_get_basic(&variant_iter, &i16_val);
+        case MRP_DBUS_TYPE_INT16:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_INT16, &i16_val);
             w->prop.value.i = i16_val;
             break;
-        case DBUS_TYPE_UINT32:
-            dbus_message_iter_get_basic(&variant_iter, &u32_val);
+        case MRP_DBUS_TYPE_UINT32:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_UINT32, &u32_val);
             w->prop.value.u = u32_val;
             break;
-        case DBUS_TYPE_UINT16:
-            dbus_message_iter_get_basic(&variant_iter, &u16_val);
+        case MRP_DBUS_TYPE_UINT16:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_UINT16, &u16_val);
             w->prop.value.u = u16_val;
             break;
-        case DBUS_TYPE_BOOLEAN:
-            dbus_message_iter_get_basic(&variant_iter, &b_val);
-            w->prop.value.u = b_val;
+        case MRP_DBUS_TYPE_BOOLEAN:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_BOOLEAN, &u32_val);
+            w->prop.value.u = u32_val;
             break;
-        case DBUS_TYPE_BYTE:
-            dbus_message_iter_get_basic(&variant_iter, &byte_val);
+        case MRP_DBUS_TYPE_BYTE:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_BYTE, &byte_val);
             w->prop.value.u = byte_val;
             break;
-        case DBUS_TYPE_DOUBLE:
-            dbus_message_iter_get_basic(&variant_iter, &d_val);
+        case MRP_DBUS_TYPE_DOUBLE:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_DOUBLE, &d_val);
             w->prop.value.f = d_val;
             break;
-        case DBUS_TYPE_STRING:
-            dbus_message_iter_get_basic(&variant_iter, &s_val);
+        case MRP_DBUS_TYPE_STRING:
+            mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_STRING, &s_val);
             w->prop.value.s = mrp_strdup(s_val);
             break;
         default:
+            mrp_dbus_msg_exit_container(msg);
             goto error;
     }
+
+    mrp_dbus_msg_exit_container(msg);
 
     if (w->cb)
         w->cb(&w->prop, w->user_data);
@@ -884,18 +853,18 @@ static void basic_property_handler(DBusMessage *msg, dbus_property_watch_t *w)
     return;
 
 error:
-    mrp_log_error("amb: failed to parse property value");
+    mrp_log_error("AMB: failed to parse property value");
     return;
 }
 
-static int property_signal_handler(mrp_dbus_t *dbus, DBusMessage *msg,
+static int property_signal_handler(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg,
         void *data)
 {
     dbus_property_watch_t *w = (dbus_property_watch_t *) data;
 
     MRP_UNUSED(dbus);
 
-    mrp_debug("amb: received property signal, going for %s handling",
+    mrp_log_info("AMB: received property signal, going for %s handling",
             w->tdata ? "basic" : "lua");
 
     if (w->tdata) {
@@ -908,14 +877,14 @@ static int property_signal_handler(mrp_dbus_t *dbus, DBusMessage *msg,
     return TRUE;
 }
 
-static void property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
+static void property_reply_handler(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg,
         void *data)
 {
     dbus_property_watch_t *w = (dbus_property_watch_t *) data;
 
     MRP_UNUSED(dbus);
 
-    mrp_debug("amb: received property method reply, going for %s handling",
+    mrp_log_info("AMB: received property method reply, going for %s handling",
             w->tdata ? "basic" : "lua");
 
     if (w->tdata) {
@@ -927,7 +896,7 @@ static void property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
 }
 
 
-static void find_property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
+static void find_property_reply_handler(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg,
         void *data)
 {
     dbus_property_watch_t *w = (dbus_property_watch_t *) data;
@@ -935,21 +904,20 @@ static void find_property_reply_handler(mrp_dbus_t *dbus, DBusMessage *msg,
 
     MRP_UNUSED(dbus);
 
-    if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_ERROR) {
-        mrp_log_error("Error when trying to find an AMB object path");
+    if (mrp_dbus_msg_type(msg) == MRP_DBUS_MESSAGE_TYPE_ERROR) {
+        mrp_log_error("AMB: Error when trying to find an AMB object path");
         goto error;
     }
 
-    if (!dbus_message_get_args(msg, NULL, DBUS_TYPE_OBJECT_PATH, &obj,
-            DBUS_TYPE_INVALID)) {
-        mrp_log_error("Error fetching the object path from the message");
+    if(!mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_OBJECT_PATH, &obj)) {
+        mrp_log_error("AMB: Error fetching the object path from the message");
         goto error;
     }
 
     mrp_free((char *) w->lua_prop->dbus_data.obj);
     w->lua_prop->dbus_data.obj = mrp_strdup(obj);
 
-    mrp_debug("amb: path for property %s: %s", w->lua_prop->dbus_data.name,
+    mrp_debug("AMB: path for property %s: %s", w->lua_prop->dbus_data.name,
             w->lua_prop->dbus_data.obj);
 
     subscribe_property(w->ctx, w);
@@ -965,13 +933,13 @@ static int find_property_object(data_t *ctx, dbus_property_watch_t *w,
     if (!ctx || !w || !prop)
         return -1;
 
-    mrp_log_info("finding object path of property '%s'", prop);
+    mrp_log_info("AMB: finding object path of property '%s'", prop);
 
     mrp_dbus_call(ctx->dbus,
             ctx->amb_addr, "/",
             "org.automotive.Manager",
             "findProperty", 3000, find_property_reply_handler, w,
-            DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+            MRP_DBUS_TYPE_STRING, prop, MRP_DBUS_TYPE_INVALID);
 
     return 0;
 }
@@ -984,7 +952,7 @@ static int subscribe_property(data_t *ctx, dbus_property_watch_t *w)
     const char *name = w->lua_prop->dbus_data.name;
     const char *signame = w->lua_prop->dbus_data.signame;
 
-    mrp_log_info("subscribing to signal '%s.%s' at '%s'",
+    mrp_log_info("AMB: subscribing to signal '%s.%s' at '%s'",
             iface, signame, obj);
 
     mrp_dbus_subscribe_signal(ctx->dbus, property_signal_handler, w, NULL,
@@ -997,9 +965,9 @@ static int subscribe_property(data_t *ctx, dbus_property_watch_t *w)
             ctx->amb_addr, obj,
             "org.freedesktop.DBus.Properties",
             "Get", 3000, property_reply_handler, w,
-            DBUS_TYPE_STRING, &iface,
-            DBUS_TYPE_STRING, &name,
-            DBUS_TYPE_INVALID);
+            MRP_DBUS_TYPE_STRING, iface,
+            MRP_DBUS_TYPE_STRING, name,
+            MRP_DBUS_TYPE_INVALID);
 
     return 0;
 }
@@ -1008,24 +976,24 @@ static int subscribe_property(data_t *ctx, dbus_property_watch_t *w)
 static void print_basic_property(dbus_basic_property_t *prop)
 {
     switch (prop->type) {
-        case DBUS_TYPE_INT32:
-        case DBUS_TYPE_INT16:
-            mrp_debug("Property %s : %i", prop->name, prop->value.i);
+        case MRP_DBUS_TYPE_INT32:
+        case MRP_DBUS_TYPE_INT16:
+            mrp_debug("AMB: Property %s : %i", prop->name, prop->value.i);
             break;
-        case DBUS_TYPE_UINT32:
-        case DBUS_TYPE_UINT16:
-        case DBUS_TYPE_BOOLEAN:
-        case DBUS_TYPE_BYTE:
-            mrp_debug("Property %s : %u", prop->name, prop->value.u);
+        case MRP_DBUS_TYPE_UINT32:
+        case MRP_DBUS_TYPE_UINT16:
+        case MRP_DBUS_TYPE_BOOLEAN:
+        case MRP_DBUS_TYPE_BYTE:
+            mrp_debug("AMB: Property %s : %u", prop->name, prop->value.u);
             break;
-        case DBUS_TYPE_DOUBLE:
-            mrp_debug("Property %s : %f", prop->name, prop->value.f);
+        case MRP_DBUS_TYPE_DOUBLE:
+            mrp_debug("AMB: Property %s : %f", prop->name, prop->value.f);
             break;
-        case DBUS_TYPE_STRING:
-            mrp_debug("Property %s : %s", prop->name, prop->value.s);
+        case MRP_DBUS_TYPE_STRING:
+            mrp_debug("AMB: Property %s : %s", prop->name, prop->value.s);
             break;
         default:
-            mrp_log_error("Unknown value in property");
+            mrp_log_error("AMB: Unknown value in property");
     }
 }
 
@@ -1038,7 +1006,7 @@ static void basic_property_updated(dbus_basic_property_t *prop, void *userdata)
     basic_table_data_t *tdata = w->tdata;
     mqi_handle_t tx;
 
-    mrp_debug("> basic_property_updated");
+    mrp_debug("AMB: basic_property_updated");
 
     print_basic_property(prop);
 
@@ -1100,7 +1068,7 @@ static void basic_property_updated(dbus_basic_property_t *prop, void *userdata)
         }
 
         if (ret < 0) {
-            mrp_log_error("failed to bind value to update operation");
+            mrp_log_error("AMB: failed to bind value to update operation");
             goto end;
         }
 
@@ -1148,26 +1116,26 @@ static basic_table_data_t *create_basic_property_table(const char *table_name,
         goto error;
 
     switch (type) {
-        case DBUS_TYPE_INT32:
-        case DBUS_TYPE_INT16:
+        case MRP_DBUS_TYPE_INT32:
+        case MRP_DBUS_TYPE_INT16:
             tdata->type = mqi_integer;
             update_format = "%d";
             /* insert_format = "%d"; */
             break;
-        case DBUS_TYPE_UINT32:
-        case DBUS_TYPE_UINT16:
-        case DBUS_TYPE_BOOLEAN:
-        case DBUS_TYPE_BYTE:
+        case MRP_DBUS_TYPE_UINT32:
+        case MRP_DBUS_TYPE_UINT16:
+        case MRP_DBUS_TYPE_BOOLEAN:
+        case MRP_DBUS_TYPE_BYTE:
             tdata->type = mqi_unsignd;
             update_format = "%u";
             /* insert_format = "%u"; */
             break;
-        case DBUS_TYPE_DOUBLE:
+        case MRP_DBUS_TYPE_DOUBLE:
             tdata->type = mqi_floating;
             update_format = "%f";
             /* insert_format = "%f"; */
             break;
-        case DBUS_TYPE_STRING:
+        case MRP_DBUS_TYPE_STRING:
             tdata->type = mqi_varchar;
             update_format = "%s";
             /* insert_format = "'%s'"; */
@@ -1198,7 +1166,7 @@ static basic_table_data_t *create_basic_property_table(const char *table_name,
             tdata->defs, NULL);
 
     if (!tdata->table) {
-        mrp_log_error("creating table '%s' failed", table_name);
+        mrp_log_error("AMB: creating table '%s' failed", table_name);
         goto error;
     }
 
@@ -1212,16 +1180,16 @@ static basic_table_data_t *create_basic_property_table(const char *table_name,
     tdata->update_operation = mql_precompile(buf);
 
     if (!tdata->update_operation) {
-        mrp_log_error("buggy buf: '%s'", buf);
+        mrp_log_error("AMB: buggy buf: '%s'", buf);
         goto error;
     }
 
-    mrp_log_info("amb: compiled update statement '%s'", buf);
+    mrp_log_info("AMB: compiled update statement '%s'", buf);
 
     return tdata;
 
 error:
-    mrp_log_error("amb: failed to create table %s", table_name);
+    mrp_log_error("AMB: failed to create table %s", table_name);
     delete_basic_table_data(tdata);
     return NULL;
 }
@@ -1231,7 +1199,7 @@ static int load_config(lua_State *L, const char *path)
     if (!luaL_loadfile(L, path) && !lua_pcall(L, 0, 0, 0))
         return TRUE;
     else {
-        mrp_log_error("plugin-lua: failed to load config file %s.", path);
+        mrp_log_error("AMB: failed to load config file %s.", path);
         mrp_log_error("%s", lua_tostring(L, -1));
         lua_settop(L, 0);
 
@@ -1248,10 +1216,10 @@ static void amb_startup_timer(mrp_timer_t *t, void *data)
 
     /* check that ambd hasn't crashed meanwhile */
 
-    if (ctx->amb_state != MRP_PROCESS_STATE_READY)
+    if (!ctx->force_subscription && ctx->amb_state != MRP_PROCESS_STATE_READY)
         return;
 
-    mrp_log_info("delayed querying of amb properties\n");
+    mrp_log_info("AMB: delayed querying of ambd properties\n");
 
     /* query the ambd property D-Bus paths again and start listening to
      * the signals. */
@@ -1274,7 +1242,7 @@ static void amb_watch(const char *id, mrp_process_state_t state, void *data)
     if (strcmp(id, ctx->amb_id) != 0)
         return;
 
-    mrp_log_info("ambd state changed to %s",
+    mrp_log_info("AMB: ambd state changed to %s",
             state == MRP_PROCESS_STATE_READY ? "ready" : "not ready");
 
 
@@ -1282,7 +1250,7 @@ static void amb_watch(const char *id, mrp_process_state_t state, void *data)
             ctx->amb_state == MRP_PROCESS_STATE_READY) {
         mrp_list_hook_t *p, *n;
 
-        mrp_log_error("lost connection to ambd");
+        mrp_log_error("AMB: lost connection to ambd");
 
         /* stop listening to the ambd signals */
 
@@ -1299,7 +1267,7 @@ static void amb_watch(const char *id, mrp_process_state_t state, void *data)
     else if (state == MRP_PROCESS_STATE_READY &&
             ctx->amb_state != MRP_PROCESS_STATE_READY) {
 
-        mrp_log_info("amb was started up\n");
+        mrp_log_info("AMB: ambd was started up\n");
 
         /* give amb some time to get the D-Bus interface ready */
 
@@ -1355,7 +1323,7 @@ static int update_amb_property(char *name, enum amb_type type, void *value,
     if (!mrp_transport_send(ctx->t, msg))
         goto end;
 
-    mrp_log_info("Sent message to AMB");
+    mrp_log_info("AMB: Sent message to ambd");
 
     ret = 0;
 
@@ -1404,7 +1372,7 @@ static bool update_func(lua_State *L, void *data,
     MRP_UNUSED(L);
 
     if (!signature || signature[0] != 'o') {
-        mrp_log_error("amb: invalid signature '%s'", signature ? signature : "NULL");
+        mrp_log_error("AMB: invalid signature '%s'", signature ? signature : "NULL");
         goto error;
     }
 
@@ -1521,7 +1489,7 @@ static void connection_evt(mrp_transport_t *lt, void *user_data)
     mrp_log_info("AMB connection!");
 
     if (ctx->t) {
-        mrp_log_error("Already connected");
+        mrp_log_error("AMB: already connected");
     }
     else {
         ctx->t = mrp_transport_accept(lt, ctx, 0);
@@ -1546,8 +1514,6 @@ static int create_transport(mrp_mainloop_t *ml, data_t *ctx)
 
     static mrp_transport_evt_t evt; /* static members are initialized to zero */
 
-    mrp_log_info("> create_transport");
-
     evt.closed = closed_evt;
     evt.connection = connection_evt;
     evt.recvdata = recvdata_evt;
@@ -1556,7 +1522,7 @@ static int create_transport(mrp_mainloop_t *ml, data_t *ctx)
     alen = mrp_transport_resolve(NULL, ctx->tport_addr, &addr, sizeof(addr),
             &atype);
     if (alen <= 0) {
-        mrp_log_error("failed to resolve address");
+        mrp_log_error("AMB: failed to resolve address");
         goto error;
     }
 
@@ -1574,7 +1540,7 @@ static int create_transport(mrp_mainloop_t *ml, data_t *ctx)
                     }
                 }
                 else {
-                    mrp_log_error("a file where the socket should be created");
+                    mrp_log_error("AMB: a file where the socket should be");
                     goto error;
                 }
             }
@@ -1584,17 +1550,17 @@ static int create_transport(mrp_mainloop_t *ml, data_t *ctx)
 
     ctx->lt = mrp_transport_create(ml, atype, &evt, ctx, flags);
     if (ctx->lt == NULL) {
-        mrp_log_error("failed to create transport");
+        mrp_log_error("AMB: failed to create transport");
         goto error;
     }
 
     if (!mrp_transport_bind(ctx->lt, &addr, alen)) {
-        mrp_log_error("failed to bind transport to address");
+        mrp_log_error("AMB: failed to bind transport to address");
         goto error;
     }
 
     if (!mrp_transport_listen(ctx->lt, 1)) {
-        mrp_log_error("failed to listen on transport");
+        mrp_log_error("AMB: failed to listen on transport");
         goto error;
     }
 
@@ -1630,12 +1596,16 @@ static int amb_init(mrp_plugin_t *plugin)
     ctx->amb_id = args[ARG_AMB_ID].str;
     ctx->tport_addr = args[ARG_AMB_TPORT_ADDRESS].str;
     ctx->amb_startup_delay = args[ARG_AMB_STARTUP_DELAY].u32;
+    ctx->force_subscription = args[ARG_AMB_FORCE_SUBSCRIPTION].bln;
 
-    mrp_log_info("amb dbus address: %s", ctx->amb_addr);
-    mrp_log_info("amb config file: %s", ctx->config_file);
-    mrp_log_info("amb transport address: %s", ctx->tport_addr);
+    mrp_log_info("AMB: D-Bus address: %s", ctx->amb_addr);
+    mrp_log_info("AMB: config file: %s", ctx->config_file);
+    mrp_log_info("AMB: transport address: %s", ctx->tport_addr);
+    mrp_log_info("AMB: %s D-Bus subscription",
+            ctx->force_subscription ? "forced" : "didn't force");
 
-    ctx->dbus = mrp_dbus_connect(plugin->ctx->ml, "system", NULL);
+    ctx->dbus = mrp_dbus_connect(plugin->ctx->ml, args[ARG_AMB_DBUS_BUS].str,
+            NULL);
 
     if (!ctx->dbus)
         goto error;
@@ -1681,20 +1651,20 @@ static int amb_init(mrp_plugin_t *plugin)
 
     mrp_process_set_state("murphy-amb", MRP_PROCESS_STATE_READY);
 
-    if (mrp_process_set_watch(ctx->amb_id, plugin->ctx->ml, amb_watch, ctx) < 0)
-        goto process_watch_failed;
+    if (mrp_process_set_watch(ctx->amb_id, plugin->ctx->ml, amb_watch, ctx) < 0) {
+        /* let's not quit yet? */
+        mrp_log_error("AMB: setting the ambd status watch failed");
+    }
 
     ctx->amb_state = mrp_process_query_state(ctx->amb_id);
 
     /* query amb properties after amb has had time to ready the interface */
 
-    if (ctx->amb_state == MRP_PROCESS_STATE_READY)
+    if (ctx->force_subscription || ctx->amb_state == MRP_PROCESS_STATE_READY) {
+        mrp_log_info("added the ambd timer after %u ms", ctx->amb_startup_delay);
         mrp_add_timer(ctx->ml, ctx->amb_startup_delay, amb_startup_timer, ctx);
+    }
 
-    return TRUE;
-
-process_watch_failed:
-    /* let's not quit yet? */
     return TRUE;
 
 error:
@@ -1753,12 +1723,13 @@ static void amb_exit(mrp_plugin_t *plugin)
 
 #define AMB_DESCRIPTION "A plugin for Automotive Message Broker D-Bus API."
 #define AMB_HELP        "Access Automotive Message Broker."
-#define AMB_VERSION     MRP_VERSION_INT(0, 0, 1)
+#define AMB_VERSION     MRP_VERSION_INT(0, 0, 2)
 #define AMB_AUTHORS     "Ismo Puustinen <ismo.puustinen@intel.com>"
 
 static mrp_plugin_arg_t args[] = {
     MRP_PLUGIN_ARGIDX(ARG_AMB_DBUS_ADDRESS, STRING, "amb_address",
             "org.automotive.message.broker"),
+    MRP_PLUGIN_ARGIDX(ARG_AMB_DBUS_BUS, STRING, "dbus_bus", "system"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_CONFIG_FILE, STRING, "config_file",
             "/etc/murphy/plugins/amb/config.lua"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_ID, STRING, "amb_id", "ambd"),
@@ -1766,6 +1737,8 @@ static mrp_plugin_arg_t args[] = {
             "unxs:/tmp/murphy/amb"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_STARTUP_DELAY, UINT32, "amb_startup_delay",
             2000),
+    MRP_PLUGIN_ARGIDX(ARG_AMB_FORCE_SUBSCRIPTION, BOOL,
+            "force_subscription", false),
 };
 
 MURPHY_REGISTER_PLUGIN("amb",
