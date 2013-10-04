@@ -1129,10 +1129,10 @@ endif
 endif
 
 # automotive message broker plugin
-if DBUS_ENABLED
+if LIBDBUS_ENABLED
 AMB_PLUGIN_SOURCES = plugins/plugin-amb.c
-AMB_PLUGIN_CFLAGS  = $(DBUS_CFLAGS)
-AMB_PLUGIN_LIBS    = libmurphy-dbus.la
+AMB_PLUGIN_CFLAGS  = $(LIBDBUS_CFLAGS)
+AMB_PLUGIN_LIBS    = libmurphy-dbus-libdbus.la
 
 if !DISABLED_PLUGIN_AMB
 if BUILTIN_PLUGIN_AMB
