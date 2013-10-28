@@ -1598,11 +1598,12 @@ endif
 # telephony plugin
 TELEPHONY_PLUGIN_SOURCES =  plugins/plugin-telephony.c		\
                             plugins/telephony/telephony.c	\
+                            plugins/telephony/utils.c		\
                             plugins/telephony/ofono.c		\
-			    plugins/telephony/resctl.c
+                            plugins/telephony/resctl.c
 
 #TELEPHONY_PLUGIN_HEADERS =  plugins/telephony/telephony.h
-TELEPHONY_PLUGIN_CFLAGS  =
+TELEPHONY_PLUGIN_CFLAGS  = $(LIBDBUS_CFLAGS)
 TELEPHONY_PLUGIN_LIBS    =
 #TELEPHONY_PLUGINdir     = $(includedir)/murphy/telephony
 
