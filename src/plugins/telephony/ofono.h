@@ -30,7 +30,7 @@
 #ifndef __MURPHY_TELEPHONY_OFONO_H__
 #define __MURPHY_TELEPHONY_OFONO_H__
 
-#include <murphy/common/dbus.h>
+#include <murphy/common/dbus-libdbus.h>
 #include "telephony.h"
 
 
@@ -84,6 +84,7 @@ typedef struct _call_s {
     char              *info;         /* for calls initiated by SIM Toolkit */
     uint8_t            icon_id;      /* icon identifier */
     bool               remoteheld;   /* is remote holding the call */
+    bool               remote_mpy;   /* is remote in multiparty call */
     ofono_modem_t     *modem;        /* pointer back to modem */
 } ofono_call_t;
 
