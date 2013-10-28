@@ -79,21 +79,4 @@ int tel_exit_listeners(void);
 void tel_watcher(int event, tel_call_t *call, void *data);
 
 
-/******************************************************************************
- * Utility macros.
- */
-
-#define FAIL_IF(cond, retval, err, args...) \
-    do { if (MRP_UNLIKELY(cond)) { \
-            if (MRP_LIKELY(err != NULL)) mrp_log_error(err, ## args); \
-            return retval; \
-       } } while(0)
-
-#define FAIL_IF_NULL(ptr, retval, err, args...) \
-    do { if (MRP_UNLIKELY((ptr) == NULL)) { \
-            if (MRP_LIKELY(err != NULL)) mrp_log_error(err, ## args); \
-            return retval; \
-       } } while(0)
-
-
 #endif /* __MURPHY_TELEPHONY_H__ */
