@@ -87,7 +87,7 @@ static void telephony_exit(mrp_plugin_t *plugin)
 }
 
 
-#define TELEPHONY_VERSION MRP_VERSION_INT(0, 0, 1)
+#define TELEPHONY_VERSION MRP_VERSION_INT(0, 1, 0)
 
 #define TELEPHONY_DESCRIPTION "A telephony plugin for Murphy."
 

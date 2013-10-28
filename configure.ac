@@ -472,7 +472,7 @@ if test "$enable_telephony" = "yes"; then
     if test "$enable_gpl" = "no"; then
         AC_MSG_ERROR([Telephony support requires the --enable-gpl option.])
     fi
-    PKG_CHECK_MODULES(OFONO, ofono >= 1.3)
+    PKG_CHECK_MODULES(OFONO, ofono >= 1.1)
 else
     AC_MSG_NOTICE([Telephony support is disabled.])
 fi
