@@ -101,6 +101,12 @@ else
     m:info("No domain-control plugin found...")
 end
 
+if m:plugin_exists('system-controller') then
+    m:load_plugin('system-controller')
+else
+    m:info("No system-controller plugin found...")
+end
+
 
 -- load IVI resource manager plugin if exists
 if m:plugin_exists('ivi-resource-manager') then

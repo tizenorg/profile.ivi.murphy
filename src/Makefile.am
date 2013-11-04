@@ -1506,6 +1506,28 @@ endif
 endif
 endif
 
+# system-controller
+if SYSTEMCTL_ENABLED
+SYSTEMCTL_PLUGIN_SOURCES = plugins/system-controller/plugin-system-controller.c
+SYSTEMCTL_PLUGIN_CFLAGS  = $(WEBSOCKETS_CFLAGS)
+SYSTEMCTL_PLUGIN_LIBS    =
+
+if !DISABLED_PLUGIN_SYSTEMCTL
+if BUILTIN_PLUGIN_SYSTEMCTL
+BUILTIN_PLUGINS += $(SYSTEMCTL_PLUGIN_SOURCES)
+BUILTIN_CFLAGS  += $(SYSTEMCTL_PLUGIN_CFLAGS)
+BUILTIN_LIBS    += $(SYSTEMCTL_PLUGIN_LIBS)
+else
+plugin_system_controller_la_SOURCES = $(SYSTEMCTL_PLUGIN_SOURCES)
+plugin_system_controller_la_CFLAGS  = $(SYSTEMCTL_PLUGIN_CFLAGS) \
+				 $(MURPHY_CFLAGS) $(AM_CFLAGS)
+plugin_system_controller_la_LDFLAGS = -module -avoid-version
+plugin_system_controller_la_LIBADD  = $(SYSTEMCTL_PLUGIN_LIBS)
+plugin_LTLIBRARIES    += plugin-system-controller.la
+endif
+endif
+endif
+
 
 
 # telephony plugin
