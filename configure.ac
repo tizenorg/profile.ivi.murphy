@@ -648,6 +648,7 @@ AM_CONDITIONAL(DISABLED_PLUGIN_DOMAIN_CONTROL,
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMD,  [check_if_disabled systemd])
 AM_CONDITIONAL(DISABLED_PLUGIN_TELEPHONY, [check_if_disabled telephony])
 AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_ASM,     [check_if_disabled resource-asm])
+AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMCTL,  [check_if_disabled system-controller])
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
@@ -663,6 +664,7 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_LUA,      [check_if_internal lua])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMD,  [check_if_internal systemd])
 AM_CONDITIONAL(BUILTIN_PLUGIN_TELEPHONY, [check_if_internal telephony])
 AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_ASM,      [check_if_internal resource-asm])
+AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMCTL, [check_if_internal system-controller])
 
 # Check for Check (unit test framework).
 PKG_CHECK_MODULES(CHECK, 
