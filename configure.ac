@@ -443,6 +443,33 @@ fi
 AM_CONDITIONAL(RESOURCE_ASM_ENABLED, [test "$enable_resource_asm" = "yes"])
 AC_SUBST(RESOURCE_ASM_ENABLED)
 
+# Check if system-controller (plugin) support should be enabled.
+AC_ARG_ENABLE(system-controller,
+              [  --enable-system-controller enable system-controller support],
+	      [enable_systemctl=$enableval], [enable_systemctl=auto])
+
+if test "$enable_systemctl" != "no"; then
+    if test "$enable_systemctl" = "auto"; then
+        enable_systemctl="$enable_websockets"
+    else
+        if test "$enable_websockets" != "yes"; then
+            AC_MSG_ERROR([System controller requires websocket support.])
+        fi
+    fi
+else
+    AC_MSG_NOTICE([System controller support is disabled.])
+fi
+
+if test "$enable_systemctl" = "yes"; then
+    AC_MSG_NOTICE([System controller support is enabled.])
+    AC_DEFINE([SYSTEMD_ENABLED], 1, [Enable systemd support ?])
+else
+    AC_MSG_NOTICE([System controller support is disabled.])
+fi
+
+AM_CONDITIONAL(SYSTEMCTL_ENABLED, [test "$enable_systemctl" = "yes"])
+AC_SUBST(SYSTEMCTL_ENABLED)
+
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
 MURPHY_LIBS=""
@@ -545,6 +572,7 @@ AM_CONDITIONAL(DISABLED_PLUGIN_DOMAIN_CONTROL,
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMD,  [check_if_disabled systemd])
 AM_CONDITIONAL(DISABLED_PLUGIN_TELEPHONY, [check_if_disabled telephony])
 AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_ASM,     [check_if_disabled resource-asm])
+AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMCTL,[check_if_disabled system-controller])
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
@@ -560,6 +588,7 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_LUA,      [check_if_internal lua])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMD,  [check_if_internal systemd])
 AM_CONDITIONAL(BUILTIN_PLUGIN_TELEPHONY, [check_if_internal telephony])
 AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_ASM,      [check_if_internal resource-asm])
+AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMCTL,[check_if_internal system-controller])
 
 # Check for Check (unit test framework).
 PKG_CHECK_MODULES(CHECK, 
@@ -694,6 +723,7 @@ echo "Resource management support: $with_resources"
 echo "Websockets support: $enable_websockets"
 echo "systemd support: $enable_systemd"
 echo "Telephony support: $enable_telephony"
+echo "System controller support: $enable_systemctl"
 echo "Plugins:"
 echo "  - linked-in:"
 for plugin in ${INTERNAL_PLUGINS:-none}; do
