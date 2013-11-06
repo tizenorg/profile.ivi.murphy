@@ -73,6 +73,7 @@ enum amb_type {
 #define AMB_INTERFACE           "interface"
 #define AMB_MEMBER              "property"
 #define AMB_SIGMEMBER           "notification"
+#define AMB_OBJECTNAME          "objectname"
 #define AMB_SIGNATURE           "signature"
 #define AMB_BASIC_TABLE_NAME    "basic_table_name"
 #define AMB_OUTPUTS             "outputs"
@@ -114,8 +115,9 @@ typedef struct {
     struct {
         const char *obj;
         const char *iface;
-        const char *name;
-        const char *signame;
+        const char *name;            /* property name ("GearPosition") */
+        const char *signame;         /* signal name ("GearPositionChanged") */
+        const char *objectname;      /* amb object to query ("Transmission") */
         const char *signature;
         bool undefined_object_path;
     } dbus_data;
@@ -286,16 +288,19 @@ static int amb_constructor(lua_State *L)
                     goto error;
                 }
 
-                if (strcmp(key, "signature") == 0) {
+                if (strcmp(key, AMB_SIGNATURE) == 0) {
                     prop->dbus_data.signature = mrp_strdup(value);
                 }
-                else if (strcmp(key, "property") == 0) {
+                else if (strcmp(key, AMB_MEMBER) == 0) {
                     prop->dbus_data.name = mrp_strdup(value);
                 }
-                else if (strcmp(key, "notification") == 0) {
+                else if (strcmp(key, AMB_SIGMEMBER) == 0) {
                     prop->dbus_data.signame = mrp_strdup(value);
                 }
-                else if (strcmp(key, "obj") == 0) {
+                else if (strcmp(key, AMB_OBJECTNAME) == 0) {
+                    prop->dbus_data.objectname = mrp_strdup(value);
+                }
+                else if (strcmp(key, AMB_OBJECT) == 0) {
                     if (strcmp(value, "undefined") == 0) {
                         /* need to query AMB for finding the object path */
                         mrp_log_info("querying AMB for correct path");
@@ -307,7 +312,7 @@ static int amb_constructor(lua_State *L)
                         prop->dbus_data.obj = mrp_strdup(value);
                     }
                 }
-                else if (strcmp(key, "interface") == 0) {
+                else if (strcmp(key, AMB_INTERFACE) == 0) {
                     prop->dbus_data.iface = mrp_strdup(value);
                 }
                 else {
@@ -321,11 +326,15 @@ static int amb_constructor(lua_State *L)
             if (prop->dbus_data.signame == NULL)
                 prop->dbus_data.signame = mrp_strdup(prop->dbus_data.name);
 
+            if (prop->dbus_data.objectname == NULL)
+                prop->dbus_data.objectname = mrp_strdup(prop->dbus_data.name);
+
             /* check that we have all necessary data */
             if (prop->dbus_data.signature == NULL ||
                 prop->dbus_data.iface == NULL ||
                 prop->dbus_data.name == NULL ||
                 prop->dbus_data.signame == NULL ||
+                prop->dbus_data.objectname == NULL ||
                 (!prop->dbus_data.undefined_object_path &&
                   prop->dbus_data.obj == NULL)) {
                 error = "missing data";
@@ -468,7 +477,11 @@ static int amb_getfield(lua_State *L)
         lua_pushstring(L, prop->dbus_data.signame);
         lua_settable(L, -3);
 
-        lua_pushstring(L, "signature");
+        lua_pushstring(L, AMB_OBJECTNAME);
+        lua_pushstring(L, prop->dbus_data.objectname);
+        lua_settable(L, -3);
+
+        lua_pushstring(L, AMB_SIGNATURE);
         lua_pushstring(L, prop->dbus_data.signature);
         lua_settable(L, -3);
     }
@@ -1245,7 +1258,7 @@ static void amb_startup_timer(mrp_timer_t *t, void *data)
                 mrp_list_entry(p, dbus_property_watch_t, hook);
 
         if (w->lua_prop->dbus_data.undefined_object_path)
-            find_property_object(ctx, w, w->lua_prop->dbus_data.name);
+            find_property_object(ctx, w, w->lua_prop->dbus_data.objectname);
         else
             subscribe_property(ctx, w);
     }
