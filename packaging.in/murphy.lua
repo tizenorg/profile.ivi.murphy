@@ -267,25 +267,19 @@ mdb.select {
     condition = "key = 'ExteriorBrightness'"
 }
 
-mdb.table {
-    name = "amb_nightmode",
-    index = { "id" },
-    create = true,
-    columns = {
-        { "id", mdb.unsigned },
-        { "night_mode", mdb.unsigned }
-    }
-}
-
 element.lua {
     name    = "nightmode",
     inputs  = { brightness = mdb.select.exterior_brightness },
     oldmode = -1;
     outputs = {
-    mdb.table {
-        name = "mandatory_placeholder_to_prevent_spurious_updates",
+        mdb.table {
+            name = "amb_nightmode",
+            index = { "id" },
             create = true,
-            columns = { { "id", mdb.unsigned } }
+            columns = {
+                { "id", mdb.unsigned },
+                { "night_mode", mdb.unsigned }
+            }
         }
     },
     update = function(self)
@@ -335,25 +329,20 @@ sink.lua {
 
 -- Driving mode processing chain
 
-mdb.table {
-    name = "amb_drivingmode",
-    index = { "id" },
-    create = true,
-    columns = {
-        { "id", mdb.unsigned },
-        { "driving_mode", mdb.unsigned }
-    }
-}
 
 element.lua {
     name    = "drivingmode",
     inputs  = { speed = mdb.select.vehicle_speed },
     oldmode = -1;
     outputs = {
-    mdb.table {
-        name = "another_mandatory_placeholder_to_prevent_spurious_updates",
+        mdb.table {
+            name = "amb_drivingmode",
+            index = { "id" },
             create = true,
-            columns = { { "id", mdb.unsigned } }
+            columns = {
+                { "id", mdb.unsigned },
+                { "driving_mode", mdb.unsigned }
+            }
         }
     },
     update = function(self)
@@ -392,6 +381,66 @@ sink.lua {
     type = "u",
     initiate = builtin.method.amb_initiate,
     update = builtin.method.amb_update
+}
+
+-- turn signals (left, right)
+
+mdb.select {
+    name = "winker",
+    table = "amb_turn_signal",
+    columns = { "value" },
+    condition = "key = 'TurnSignal'"
+}
+
+-- regulation (on), use "select_driving_mode"
+
+-- shift position (parking, reverse, other)
+
+mdb.select {
+    name = "gear_position",
+    table = "amb_gear_position",
+    columns = { "value" },
+    condition = "key = 'GearPosition'"
+}
+
+-- cameras (back, front, left, right)
+
+element.lua {
+    name    = "camera_state",
+    inputs  = { winker = mdb.select.winker, gear = mdb.select.gear_position },
+    oldmode = -1;
+    outputs = {
+        mdb.table {
+            name = "target_camera_state",
+            index = { "id" },
+            create = true,
+            columns = {
+                { "id", mdb.unsigned },
+                { "front_camera", mdb.unsigned },
+                { "back_camera", mdb.unsigned },
+                { "right_camera", mdb.unsigned },
+                { "left_camera", mdb.unsigned }
+            }
+        }
+    },
+    update = function(self)
+
+        front_camera = 0
+        back_camera = 0
+        right_camera = 0
+        left_camera = 0
+
+        if self.inputs.gear == 128 then
+            back_camera = 1
+        elseif self.inputs.winker == 1 then
+            right_camera = 1
+        elseif self.inputs.winker == 2 then
+            left_camera = 1
+        end
+
+        mdb.table.target_camera_state:replace({ id = 0, front_camera = front_camera, back_camera = back_camera, right_camera = right_camera, left_camera = left_camera })
+
+    end
 }
 
 -- load the telephony plugin
