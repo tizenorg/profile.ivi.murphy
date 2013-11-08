@@ -35,8 +35,13 @@
 #include <murphy/common/wsck-transport.h>
 #include <murphy/common/json.h>
 #include <murphy/core/plugin.h>
+#include <murphy/core/lua-bindings/murphy.h>
+#include <murphy/core/lua-bindings/lua-json.h>
+#include <murphy/core/lua-utils/object.h>
+#include <murphy/core/lua-utils/funcbridge.h>
 
 #include "system-controller.h"
+
 
 #define DEFAULT_ADDRESS "wsck:127.0.0.1:18081/ico_syc_protocol"
 
@@ -54,11 +59,20 @@ enum {
  */
 
 typedef struct {
-    mrp_context_t   *ctx;                /* murphy context */
-    mrp_transport_t *lt;                 /* transport we listen on */
-    const char      *addr;               /* address we listen on */
-    mrp_list_hook_t  clients;            /* connected clients */
-    int              id;                 /* next client id */
+    mrp_context_t    *ctx;                /* murphy context */
+    mrp_transport_t  *lt;                 /* transport we listen on */
+    const char       *addr;               /* address we listen on */
+    mrp_list_hook_t   clients;            /* connected clients */
+    int               id;                 /* next client id */
+    lua_State        *L;                  /* murphy Lua state */
+    struct {
+        mrp_funcbridge_t *generic;
+        mrp_funcbridge_t *window;
+        mrp_funcbridge_t *input;
+        mrp_funcbridge_t *user;
+        mrp_funcbridge_t *resource;
+        mrp_funcbridge_t *inputdev;
+    } handler;
 } sysctl_t;
 
 
@@ -68,10 +82,54 @@ typedef struct {
 
 typedef struct {
     int              id;                 /* client id */
+    pid_t            pid;                /* client pid */
+    char            *app;                /* client app id */
     sysctl_t        *sc;                 /* system controller context */
     mrp_transport_t *t;                  /* client transport */
     mrp_list_hook_t  hook;               /* to list of clients */
 } client_t;
+
+
+typedef struct {
+    sysctl_t         *sc;                /* system controller */
+} sysctl_lua_t;
+
+typedef enum {
+    SYSCTL_IDX_GENERIC = 1,
+    SYSCTL_IDX_WINDOW,
+    SYSCTL_IDX_INPUT,
+    SYSCTL_IDX_USER,
+    SYSCTL_IDX_RESOURCE,
+    SYSCTL_IDX_INPUTDEV,
+} sysctl_lua_index_t;
+
+
+static int  sysctl_lua_create(lua_State *L);
+static void sysctl_lua_destroy(void *data);
+static int  sysctl_lua_getfield(lua_State *L);
+static int  sysctl_lua_setfield(lua_State *L);
+static int  sysctl_lua_stringify(lua_State *L);
+static int  sysctl_lua_send(lua_State *L);
+
+#define SYSCTL_LUA_CLASS MRP_LUA_CLASS(sysctl, lua)
+
+MRP_LUA_METHOD_LIST_TABLE(sysctl_lua_methods,
+                          MRP_LUA_METHOD_CONSTRUCTOR(sysctl_lua_create)
+                          MRP_LUA_METHOD(send_message, sysctl_lua_send));
+
+MRP_LUA_METHOD_LIST_TABLE(sysctl_lua_overrides,
+                          MRP_LUA_OVERRIDE_CALL     (sysctl_lua_create)
+                          MRP_LUA_OVERRIDE_GETFIELD (sysctl_lua_getfield)
+                          MRP_LUA_OVERRIDE_SETFIELD (sysctl_lua_setfield)
+                          MRP_LUA_OVERRIDE_STRINGIFY(sysctl_lua_stringify));
+
+MRP_LUA_CLASS_DEF(sysctl, lua, sysctl_lua_t,
+                  sysctl_lua_destroy, sysctl_lua_methods, sysctl_lua_overrides);
+
+
+
+
+static sysctl_t *scptr;
 
 
 static client_t *create_client(sysctl_t *sc, mrp_transport_t *lt)
@@ -110,6 +168,54 @@ static void destroy_client(client_t *c)
 
         mrp_free(c);
     }
+}
+
+
+static client_t *find_client_by_id(sysctl_t *sc, int id)
+{
+    mrp_list_hook_t *p, *n;
+    client_t        *c;
+
+    mrp_list_foreach(&sc->clients, p, n) {
+        c = mrp_list_entry(p, typeof(*c), hook);
+
+        if (c->id == id)
+            return c;
+    }
+
+    return NULL;
+}
+
+
+static client_t *find_client_by_pid(sysctl_t *sc, pid_t pid)
+{
+    mrp_list_hook_t *p, *n;
+    client_t        *c;
+
+    mrp_list_foreach(&sc->clients, p, n) {
+        c = mrp_list_entry(p, typeof(*c), hook);
+
+        if (c->pid == pid)
+            return c;
+    }
+
+    return NULL;
+}
+
+
+static client_t *find_client_by_app(sysctl_t *sc, const char *app)
+{
+    mrp_list_hook_t *p, *n;
+    client_t        *c;
+
+    mrp_list_foreach(&sc->clients, p, n) {
+        c = mrp_list_entry(p, typeof(*c), hook);
+
+        if (c->app != NULL && !strcmp(c->app, app))
+            return c;
+    }
+
+    return NULL;
 }
 
 
@@ -158,16 +264,67 @@ static int send_message(client_t *c, mrp_json_t *msg)
 
 static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
 {
-    client_t   *c   = (client_t *)user_data;
-    mrp_json_t *req = (mrp_json_t *)data;
-    const char *s;
+    client_t         *c   = (client_t *)user_data;
+    sysctl_t         *sc  = c->sc;
+    mrp_json_t       *req = (mrp_json_t *)data;
+    int               cmd, type, pid;
+    const char       *app;
+    mrp_funcbridge_t *handlers[] = {
+        [1] = sc->handler.window,
+        [2] = sc->handler.input,
+        [3] = sc->handler.user,
+        [4] = sc->handler.resource,
+        [5] = sc->handler.inputdev
+    }, *h;
+    mrp_funcbridge_value_t args[2];
+    mrp_funcbridge_value_t ret;
+    char                   rt;
 
     MRP_UNUSED(t);
 
-    s = mrp_json_object_to_string(req);
+    {
+        const char *s = mrp_json_object_to_string(req);
+        mrp_debug("system controller received message from client #%d:", c->id);
+        mrp_debug("  %s", s);
+    }
 
-    mrp_debug("system controller received message from client #%d:", c->id);
-    mrp_debug("  %s", s);
+    if (!mrp_json_get_integer(req, "command", &cmd))
+        h = sc->handler.generic;
+    else {
+        if (cmd == 0x1) {
+            if (mrp_json_get_integer(req, "pid", &pid))
+                c->pid = pid;
+            if (mrp_json_get_string(req, "appid", &app)) {
+                mrp_free(c->app);
+                c->app = mrp_strdup(app);
+            }
+
+            mrp_debug("client #%d: pid %u, appid '%s'", c->id, c->pid,
+                      c->app ? c->app : "");
+            return;
+        }
+
+        type = (cmd & 0xffff0000) >> 16;
+
+        if (1 <= type && type <= 5)
+            h = handlers[type];
+        else
+            h = NULL;
+    }
+
+    if (h != NULL || (h = sc->handler.generic) != NULL) {
+        args[0].integer = c->id;
+        args[1].pointer = mrp_json_lua_wrap(sc->L, req);
+
+        if (!mrp_funcbridge_call_from_c(sc->L, h, "do", &args[0], &rt, &ret)) {
+            mrp_log_error("Failed to dispatch system-controller message (%s).",
+                          ret.string ? ret.string : "<unknown error>");
+            mrp_free((void *)ret.string);
+        }
+    }
+    else
+        mrp_debug("No handler for system-controller message of type 0x%x.",
+                  type);
 }
 
 
@@ -222,6 +379,193 @@ static void transport_destroy(sysctl_t *sc)
 }
 
 
+static int sysctl_lua_create(lua_State *L)
+{
+    sysctl_lua_t *scl;
+
+    scl = (sysctl_lua_t *)mrp_lua_create_object(L, SYSCTL_LUA_CLASS, NULL, 0);
+
+    scl->sc = scptr;
+
+    mrp_lua_push_object(L, scl);
+
+    return 1;
+}
+
+
+static void sysctl_lua_destroy(void *data)
+{
+    MRP_UNUSED(data);
+}
+
+
+static sysctl_lua_t *sysctl_lua_check(lua_State *L, int idx)
+{
+    return (sysctl_lua_t *)mrp_lua_check_object(L, SYSCTL_LUA_CLASS, idx);
+}
+
+
+static int name_to_index(const char *name)
+{
+#define MAP(_name, _idx) if (!strcmp(name, _name)) return SYSCTL_IDX_##_idx;
+    MAP("generic_handler" , GENERIC);
+    MAP("window_handler"  , WINDOW);
+    MAP("input_handler"   , INPUT);
+    MAP("user_handler"    , USER);
+    MAP("resource_handler", RESOURCE);
+    MAP("inputdev_handler", INPUTDEV);
+    return 0;
+#undef MAP
+}
+
+
+static int sysctl_lua_getfield(lua_State *L)
+{
+    sysctl_lua_t       *scl = sysctl_lua_check(L, 1);
+    sysctl_lua_index_t  idx = name_to_index(lua_tolstring(L, 2, NULL));
+
+    lua_pop(L, 1);
+
+    switch (idx) {
+    case SYSCTL_IDX_GENERIC:
+        mrp_funcbridge_push(L, scl->sc->handler.generic);
+        break;
+    case SYSCTL_IDX_WINDOW:
+        mrp_funcbridge_push(L, scl->sc->handler.window);
+        break;
+    case SYSCTL_IDX_INPUT:
+        mrp_funcbridge_push(L, scl->sc->handler.input);
+        break;
+    case SYSCTL_IDX_USER:
+        mrp_funcbridge_push(L, scl->sc->handler.user);
+        break;
+    case SYSCTL_IDX_RESOURCE:
+        mrp_funcbridge_push(L, scl->sc->handler.resource);
+        break;
+    case SYSCTL_IDX_INPUTDEV:
+        mrp_funcbridge_push(L, scl->sc->handler.inputdev);
+        break;
+    default:
+        lua_pushnil(L);
+    }
+
+    return 1;
+}
+
+
+static int sysctl_lua_setfield(lua_State *L)
+{
+    sysctl_lua_t        *scl  = sysctl_lua_check(L, 1);
+    const char          *name = lua_tostring(L, 2);
+    sysctl_lua_index_t   idx  = name_to_index(name);
+    mrp_funcbridge_t   **hptr = NULL;
+
+    switch (idx) {
+    case SYSCTL_IDX_GENERIC:  hptr = &scl->sc->handler.generic;  break;
+    case SYSCTL_IDX_WINDOW:   hptr = &scl->sc->handler.window;   break;
+    case SYSCTL_IDX_INPUT:    hptr = &scl->sc->handler.input;    break;
+    case SYSCTL_IDX_USER:     hptr = &scl->sc->handler.user;     break;
+    case SYSCTL_IDX_RESOURCE: hptr = &scl->sc->handler.resource; break;
+    case SYSCTL_IDX_INPUTDEV: hptr = &scl->sc->handler.inputdev; break;
+    default:
+        luaL_error(L, "unknown system-controller handler '%s'", name);
+    }
+
+    if (lua_type(L, -1) != LUA_TNIL)
+        *hptr = mrp_funcbridge_create_luafunc(L, -1);
+    else
+        *hptr = NULL;
+
+    mrp_debug("handler %s (#%d) of %p set to %p", name, idx, scl, *hptr);
+
+    return 0;
+}
+
+
+static int sysctl_lua_stringify(lua_State *L)
+{
+    sysctl_lua_t *scl = sysctl_lua_check(L, 1);
+
+    if (scl != NULL)
+        lua_pushfstring(L, "<system-controller %p>", scl);
+    else
+        lua_pushstring(L, "<error (not a system-controller)>");
+
+    return 1;
+}
+
+
+static int sysctl_lua_send(lua_State *L)
+{
+    sysctl_lua_t *scl = sysctl_lua_check(L, 1);
+    client_t     *c;
+    mrp_json_t   *msg;
+    int           success;
+
+    switch (lua_type(L, 2)) {
+    case LUA_TSTRING:
+        c = find_client_by_app(scl->sc, lua_tostring(L, 2));
+        break;
+
+    case LUA_TNUMBER:
+        c = find_client_by_id(scl->sc, lua_tointeger(L, 2));
+        break;
+
+    default:
+        luaL_error(L, "invalid argument, client id or name expected");
+    }
+
+    msg = mrp_json_lua_get(L, 3);
+
+    lua_pop(L, 3);
+
+    if (c != NULL && msg != NULL) {
+        mrp_debug("sending message %s to client #%d",
+                  mrp_json_object_to_string(msg), c->id);
+        success = send_message(c, msg);
+    }
+    else
+        success = FALSE;
+
+    mrp_json_unref(msg);
+    lua_pushboolean(L, success);
+
+    return 1;
+}
+
+
+static int sc_lua_get(lua_State *L)
+{
+    sysctl_lua_t *scl = mrp_lua_create_object(L, SYSCTL_LUA_CLASS, NULL, 0);
+
+    scl->sc = scptr;
+
+    mrp_lua_push_object(L, scl);
+
+    return 1;
+}
+
+
+static int register_lua_bindings(sysctl_t *sc)
+{
+    static luaL_reg methods[] = {
+        { "get_system_controller", sc_lua_get },
+        { NULL, NULL }
+    };
+    static mrp_lua_bindings_t bindings = {
+        .meta    = "murphy",
+        .methods = methods,
+    };
+
+    if ((sc->L = mrp_lua_get_lua_state()) == NULL)
+        return FALSE;
+
+    mrp_lua_create_object_class(sc->L, SYSCTL_LUA_CLASS);
+
+    return mrp_lua_register_murphy_bindings(&bindings);
+}
+
+
 static int plugin_init(mrp_plugin_t *plugin)
 {
     sysctl_t *sc;
@@ -231,14 +575,19 @@ static int plugin_init(mrp_plugin_t *plugin)
     if (sc != NULL) {
         mrp_list_init(&sc->clients);
 
-        sc->id      = 1;
-        sc->ctx     = plugin->ctx;
-        sc->addr    = plugin->args[ARG_ADDRESS].str;
+        sc->id   = 1;
+        sc->ctx  = plugin->ctx;
+        sc->addr = plugin->args[ARG_ADDRESS].str;
 
         if (!transport_create(sc))
             goto fail;
 
-        return TRUE;
+        if (!register_lua_bindings(sc))
+            goto fail;
+
+        scptr = sc;
+
+       return TRUE;
     }
 
 
@@ -256,6 +605,8 @@ static int plugin_init(mrp_plugin_t *plugin)
 static void plugin_exit(mrp_plugin_t *plugin)
 {
     sysctl_t *sc = (sysctl_t *)plugin->data;
+
+    scptr = NULL;
 
     transport_destroy(sc);
 
