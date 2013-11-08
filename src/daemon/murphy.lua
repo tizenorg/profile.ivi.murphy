@@ -218,13 +218,43 @@ element.lua {
 	     end
 }
 
+-- test system controller message dispatching
+sc = m:get_system_controller()
 
---
+if sc then
+    sc.generic_handler = function (cid, msg)
+        print('*** generic handler: ' .. tostring(msg))
+    end
 
-json = m:JSON({ a = 'foo', b = 'bar', foobar = { 1, 2, 3, 5, 6 } })
+    sc.window_handler = function (cid, msg)
+        print('*** window handler: ' .. tostring(msg))
+    end
+    sc.input_handler = function (cid, msg)
+        print('*** input handler: ' .. tostring(msg))
+    end
+    sc.user_handler = function (cid, msg)
+        print('*** user handler: ' .. tostring(msg))
+    end
+    sc.resource_handler = function (cid, msg)
+        print('*** resource handler: ' .. tostring(msg))
 
-print(tostring(json))
+        reply = m.JSON({ command = 'reply to client #' .. tostring(cid) })
 
+        if sc:send_message(cid, reply) then
+            print('*** reply OK')
+        else
+            print('*** reply FAILED')
+        end
+    end
+    sc.inputdev_handler = function (cid, msg)
+        print('*** inputdev handler: ' .. tostring(msg))
+    end
+end
+
+
+-- test initial limited transport bindings
+
+--[[
 
 function connect_cb(self, peer, data)
     print('incoming connection from ' .. peer .. ' on ' .. tostring(self))
@@ -245,8 +275,6 @@ t = m:Transport({ connect = connect_cb,
                   recv    = recv_cb,
                   data    = 'foo',
                   address = 'wsck:127.0.0.1:18081/ico_syc_protocol' })
-
-print(tostring(t))
 
 t:listen()
 
@@ -281,3 +309,4 @@ function test_rs_create(iterations)
         r = nil
     end
 end
+--]]
