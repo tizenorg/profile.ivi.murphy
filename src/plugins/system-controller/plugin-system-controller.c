@@ -288,8 +288,10 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
         mrp_debug("  %s", s);
     }
 
-    if (!mrp_json_get_integer(req, "command", &cmd))
-        h = sc->handler.generic;
+    if (!mrp_json_get_integer(req, "command", &cmd)) {
+        h    = sc->handler.generic;
+        type = 0;
+    }
     else {
         if (cmd == 0x1) {
             if (mrp_json_get_integer(req, "pid", &pid))
@@ -512,7 +514,7 @@ static int sysctl_lua_send(lua_State *L)
         break;
 
     default:
-        luaL_error(L, "invalid argument, client id or name expected");
+        return luaL_error(L, "invalid argument, client id or name expected");
     }
 
     msg = mrp_json_lua_get(L, 3);
