@@ -262,6 +262,65 @@ static int send_message(client_t *c, mrp_json_t *msg)
 }
 
 
+static const char *message_name(int code)
+{
+#define MAX_CLASS   0x08
+#define MAX_TYPE    0x30
+#define CLASS(code) (((code) & 0xf0000) >> 16)
+#define TYPE(code)  (((code) & 0x0ffff))
+    static char *names[MAX_CLASS + 1][MAX_TYPE + 1];
+    static int   setup = 1;
+
+    int   c = CLASS(code), t = TYPE(code);
+    char *n;
+
+    if (setup) {
+        memset(names, 0, sizeof(names));
+
+#define MAP(msg, code) names[CLASS(code)][TYPE(code)] = #msg;
+        MAP(MSG_CMD_SEND_APPID          , 0x00000001);
+        MAP(MSG_CMD_CREATE              , 0x00010001);
+        MAP(MSG_CMD_DESTROY             , 0x00010002);
+        MAP(MSG_CMD_SHOW                , 0x00010003);
+        MAP(MSG_CMD_HIDE                , 0x00010004);
+        MAP(MSG_CMD_MOVE                , 0x00010005);
+        MAP(MSG_CMD_CHANGE_ACTIVE       , 0x00010006);
+        MAP(MSG_CMD_CHANGE_LAYER        , 0x00010007);
+        MAP(MSG_CMD_CHANGE_ATTR         , 0x00010008);
+        MAP(MSG_CMD_NAME                , 0x00010009);
+        MAP(MSG_CMD_MAP_THUMB           , 0x00010011);
+        MAP(MSG_CMD_UNMAP_THUMB         , 0x00010012);
+        MAP(MSG_CMD_SHOW_LAYER          , 0x00010020);
+        MAP(MSG_CMD_HIDE_LAYER          , 0x00010021);
+        MAP(MSG_CMD_CHANGE_LAYER_ATTR   , 0x00010022);
+        MAP(MSG_CMD_ADD_INPUT           , 0x00020001);
+        MAP(MSG_CMD_DEL_INPUT           , 0x00020002);
+        MAP(MSG_CMD_SEND_INPUT          , 0x00020003);
+        MAP(MSG_CMD_CHANGE_USER         , 0x00030001);
+        MAP(MSG_CMD_GET_USERLIST        , 0x00030002);
+        MAP(MSG_CMD_GET_LASTINFO        , 0x00030003);
+        MAP(MSG_CMD_SET_LASTINFO        , 0x00030004);
+        MAP(MSG_CMD_ACQUIRE_RES         , 0x00040001);
+        MAP(MSG_CMD_RELEASE_RES         , 0x00040002);
+        MAP(MSG_CMD_DEPRIVE_RES         , 0x00040003);
+        MAP(MSG_CMD_WAITING_RES         , 0x00040004);
+        MAP(MSG_CMD_REVERT_RES          , 0x00040005);
+        MAP(MSG_CMD_SET_REGION          , 0x00050001);
+        MAP(MSG_CMD_UNSET_REGION        , 0x00050002);
+        MAP(MSG_CMD_CREATE_RES          , 0x00040011);
+        MAP(MSG_CMD_DESTORY_RES         , 0x00040012);
+        MAP(MSG_CMD_NOTIFY_CHANGED_STATE, 0x00060001);
+#undef MAP
+
+        return false;
+    }
+
+    if (c > MAX_CLASS || t > MAX_TYPE || (n = names[c][t]) == NULL)
+        return "<unknown message>";
+    else
+        return n;
+}
+
 static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
 {
     client_t         *c   = (client_t *)user_data;
@@ -317,6 +376,8 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
     if (h != NULL || (h = sc->handler.generic) != NULL) {
         args[0].integer = c->id;
         args[1].pointer = mrp_json_lua_wrap(sc->L, req);
+
+        mrp_json_add_string(req, "MESSAGE", message_name(cmd));
 
         if (!mrp_funcbridge_call_from_c(sc->L, h, "do", &args[0], &rt, &ret)) {
             mrp_log_error("Failed to dispatch system-controller message (%s).",
