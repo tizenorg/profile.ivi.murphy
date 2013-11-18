@@ -1415,9 +1415,22 @@ endif
 
 # system-controller
 if SYSTEMCTL_ENABLED
-SYSTEMCTL_PLUGIN_SOURCES = plugins/system-controller/plugin-system-controller.c
-SYSTEMCTL_PLUGIN_CFLAGS  = $(WEBSOCKETS_CFLAGS)
-SYSTEMCTL_PLUGIN_LIBS    =
+SYSTEMCTL_PLUGIN_SOURCES = \
+			plugins/system-controller/plugin-system-controller.c \
+			plugins/system-controller/wayland/wayland.c \
+			plugins/system-controller/wayland/output.c \
+			plugins/system-controller/wayland/layer.c \
+			plugins/system-controller/wayland/window.c \
+			plugins/system-controller/wayland/animation.c \
+			plugins/system-controller/wayland/scripting.c \
+			plugins/system-controller/wayland/ico-window-manager.c \
+			plugins/system-controller/wayland/ico-input-manager.c
+SYSTEMCTL_PLUGIN_CFLAGS  = \
+			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) \
+			-Iico-uxf-weston-plugin
+SYSTEMCTL_PLUGIN_LIBS    = \
+			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) \
+			-lico-uxf-weston-plugin
 
 if !DISABLED_PLUGIN_SYSTEMCTL
 if BUILTIN_PLUGIN_SYSTEMCTL

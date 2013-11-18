@@ -363,6 +363,36 @@ AC_SUBST(SYSTEMD_ENABLED)
 AC_SUBST(SYSTEMD_CFLAGS)
 AC_SUBST(SYSTEMD_LIBS)
 
+# Check if system-controller (plugin) support should be enabled.
+AC_ARG_ENABLE(system-controller,
+              [  --enable-system-controller enable system-controller support],
+	      [enable_systemctl=$enableval], [enable_systemctl=auto])
+
+if test "$enable_systemctl" != "no"; then
+    if test "$enable_systemctl" = "auto"; then
+        enable_systemctl="$enable_websockets"
+    else
+        if test "$enable_websockets" != "yes"; then
+            AC_MSG_ERROR([System controller requires websocket support.])
+        fi
+    fi
+else
+    AC_MSG_NOTICE([System controller support is disabled.])
+fi
+
+if test "$enable_systemctl" = "yes"; then
+    AC_MSG_NOTICE([System-controller support is enabled.])
+    AC_DEFINE([SYSTEMCTL_ENABLED], 1, [Enable system-controller support ?])
+    PKG_CHECK_MODULES(WAYLAND_CLIENT, wayland-client)
+else
+    AC_MSG_NOTICE([System-controller support is disabled.])
+fi
+
+AM_CONDITIONAL(SYSTEMCTL_ENABLED, [test "$enable_systemctl" = "yes"])
+AC_SUBST(SYSTEMCTL_ENABLED)
+AC_SUBST(WAYLAND_CLIENT_CFLAGS)
+AC_SUBST(WAYLAND_CLIENT_LIBS)
+
 # Check if telephony was enabled.
 AC_ARG_ENABLE(telephony,
               [  --enable-telephony           enable telephony support],
