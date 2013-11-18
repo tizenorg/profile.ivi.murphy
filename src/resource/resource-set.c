@@ -97,11 +97,9 @@ mrp_resource_set_add_definition_for_binary(mrp_resource_set_definition_t *def)
 mrp_resource_set_definition_t *
 mrp_resource_set_get_definition_by_binary(const char *binary_name)
 {
-    mrp_resource_set_definition_t *def;
-
     MRP_ASSERT(binary_name, "invalid_argument");
 
-    return def_hash ? mrp_htbl_lookup(def_hash, binary_name) : NULL;
+    return def_hash ? mrp_htbl_lookup(def_hash, (void *)binary_name) : NULL;
 }
 
 
@@ -652,7 +650,7 @@ static int add_to_def_hash(mrp_resource_set_definition_t *def)
     copy->auto_release = def->auto_release;
     copy->dont_wait    = def->dont_wait;
 
-    if (!mrp_htbl_insert(def_hash, copy->binary_name, copy))
+    if (!mrp_htbl_insert(def_hash, (void *)copy->binary_name, copy))
         return -1;
 
     return 0;
