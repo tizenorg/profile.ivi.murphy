@@ -148,19 +148,12 @@ void mrp_wayland_layer_visibility_request(mrp_wayland_layer_t *layer,
 void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
                               mrp_wayland_layer_update_t *u)
 {
-    mrp_wayland_window_manager_t *wm;
-    mrp_wayland_interface_t *interface;
-    mrp_wayland_t *wl;
     int32_t layerid;
     mrp_wayland_layer_update_mask_t mask;
     char buf[2048];
 
     MRP_ASSERT(layer && layer->wm && layer->wm->interface &&
                layer->wm->interface->wl && u, "invalid argument");
-
-    wm = layer->wm;
-    interface = wm->interface;
-    wl = interface->wl;
 
     layerid = layer->layerid;
 

@@ -46,7 +46,6 @@ static int id_compare(const void *, const void *);
 static const char *get_display_name(mrp_wayland_t *w);
 static void display_io_watch(mrp_io_watch_t *, int, mrp_io_event_t, void *);
 static void object_create(mrp_wayland_interface_t *, uint32_t, uint32_t);
-static void object_destroy(mrp_wayland_object_t *);
 static void global_available_callback(void *, struct wl_registry *, uint32_t,
                                       const char *, uint32_t);
 static void global_remove_callback(void *, struct wl_registry *, uint32_t);
@@ -96,6 +95,7 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
 
 void mrp_wayland_destroy(mrp_wayland_t *wl)
 {
+    MRP_UNUSED(wl);
 }
 
 bool mrp_wayland_connect(mrp_wayland_t *wl)
@@ -283,6 +283,7 @@ static void display_io_watch(mrp_io_watch_t *iow,
     char evlist[1024];
     char *p, *e;
 
+    MRP_UNUSED(fd);
 
     MRP_ASSERT(wl, "invalid user data");
     MRP_ASSERT(iow == wl->iow, "mismatching io watch");
@@ -358,8 +359,8 @@ static void object_create(mrp_wayland_interface_t *wif,
     factory = &wif->object_factory;
 
     if (!(obj = mrp_allocz(factory->size))) {
-        mrp_log_error("can't allocate %u byte memory for %u/'%s' object",
-                      factory->size, name, wif->name);
+        mrp_log_error("can't allocate %zd byte memory for %u/'%s' object",
+                      factory->size, (unsigned int)name, wif->name);
         return;
     }
 
@@ -394,10 +395,6 @@ static void object_create(mrp_wayland_interface_t *wif,
 }
 
 
-static void object_destroy(mrp_wayland_object_t *object)
-{
-}
-
 static void global_available_callback(void *data,
                                       struct wl_registry *registry,
                                       uint32_t name,
@@ -425,5 +422,8 @@ static void global_remove_callback(void *data,
                                    struct wl_registry *wl_registry,
                                    uint32_t name)
 {
+    MRP_UNUSED(data);
+    MRP_UNUSED(wl_registry);
+
     mrp_debug("object %u is down", name);
 }

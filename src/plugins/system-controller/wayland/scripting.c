@@ -48,6 +48,8 @@
 #include "window.h"
 #include "layer.h"
 #include "animation.h"
+#include "output.h"
+#include "ico-window-manager.h"
 
 #define WINDOW_MANAGER_CLASS   MRP_LUA_CLASS_SIMPLE(window_manager)
 #define ANIMATION_CLASS        MRP_LUA_CLASS_SIMPLE(animation)
@@ -219,6 +221,8 @@ void mrp_scripting_window_manager_init(lua_State *L)
     mrp_lua_create_object_class(L, ANIMATION_CLASS);
     mrp_lua_create_object_class(L, UPDATE_MASK_CLASS);
     register_methods(L);
+
+    MRP_UNUSED(string_copy);
 }
 
 static int  window_manager_create(lua_State *L)
@@ -446,7 +450,7 @@ static int  animation_getfield(lua_State *L)
 static int  animation_setfield(lua_State *L)
 {
     scripting_animation_t *an;
-    mrp_wayland_animation_t *anims, *a;
+    mrp_wayland_animation_t *anims;
     field_t fld;
     animation_def_t *def;
     mrp_wayland_animation_type_t type;
@@ -592,7 +596,6 @@ static int update_mask_stringify(lua_State *L)
 {
     scripting_update_mask_t *um;
     uint32_t m, mask;
-    field_t fld;
     char buf[4096];
     char *p, *e;
     const char *name;
@@ -624,10 +627,13 @@ static void update_mask_destroy(void *data)
 {
     scripting_update_mask_t *um = (scripting_update_mask_t *)data;
 
+    MRP_UNUSED(um);
 }
 
 static int integer_copy(mrp_wayland_t *wl,void *uval,mrp_json_t *jval,int mask)
 {
+    MRP_UNUSED(wl);
+
     if (mrp_json_is_type(jval, MRP_JSON_INTEGER)) {
         *(int32_t *)uval = mrp_json_integer_value(jval);
         return mask;
@@ -638,6 +644,8 @@ static int integer_copy(mrp_wayland_t *wl,void *uval,mrp_json_t *jval,int mask)
 
 static int string_copy(mrp_wayland_t *wl,void *uval,mrp_json_t *jval,int mask)
 {
+    MRP_UNUSED(wl);
+
     if (mrp_json_is_type(jval, MRP_JSON_STRING)) {
         *(const char **)uval = mrp_json_string_value(jval);
         return mask;
@@ -657,7 +665,7 @@ static int layer_copy(mrp_wayland_t *wl,void *uval,mrp_json_t *jval,int mask)
     layerid = mrp_json_integer_value(jval);
 
     if (!(layer = mrp_wayland_layer_find(wl, layerid))) {
-      e is temporary */
+        /* this is temporary */
         {
             mrp_wayland_layer_update_t lu;
 
@@ -710,9 +718,7 @@ static bool window_request_bridge(lua_State *L,
     scripting_winmgr_t *winmgr;
     scripting_animation_t *an;
     mrp_wayland_t *wl;
-    mrp_wayland_window_t *win;
     mrp_wayland_window_update_t u;
-    mrp_wayland_layer_t *layer;
     mrp_wayland_animation_t *anims;
     uint32_t framerate;
     mrp_json_t *json;
@@ -723,6 +729,8 @@ static bool window_request_bridge(lua_State *L,
     int m;
     bool success;
 
+    MRP_UNUSED(L);
+    MRP_UNUSED(data);
     MRP_UNUSED(ret_val);
     MRP_ASSERT(signature && args && ret_type, "invalid argument");
 
@@ -805,6 +813,8 @@ static void window_update_callback(mrp_wayland_t *wl,
     mrp_funcbridge_value_t args[3], ret;
     char t;
     bool success;
+
+    MRP_UNUSED(filter);
 
     MRP_ASSERT(wl && win, "invalid argument");
 
@@ -1142,8 +1152,7 @@ static bool register_methods(lua_State *L)
         *(d->ptr) = f = mrp_funcbridge_create_cfunc(L, d->name, d->sign,
                                                     d->func, d->data);
         if (!f) {
-            mrp_log_error("%s: failed to register builtin function '%s'",
-                          d->name);
+            mrp_log_error("failed to register builtin function '%s'", d->name);
             success = false;
         }
     }

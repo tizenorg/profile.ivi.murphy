@@ -217,7 +217,6 @@ void mrp_wayland_window_geometry_request(mrp_wayland_window_t *win,
     mrp_wayland_window_manager_t *wm;
     mrp_wayland_window_update_t u;
     mrp_wayland_animation_t *anims;
-    mrp_wayland_animation_type_t at;
     bool have_move_animation;
     bool have_resize_animation;
 

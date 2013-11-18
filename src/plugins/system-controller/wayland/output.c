@@ -73,6 +73,8 @@ static bool output_constructor(mrp_wayland_t *wl, mrp_wayland_object_t *obj)
         .scale    = scale_callback
     };
 
+    MRP_UNUSED(wl);
+
     mrp_wayland_output_t *out = (mrp_wayland_output_t *)obj;
     int sts;
 
@@ -95,6 +97,8 @@ static void geometry_callback(void *data,
                               int32_t transform)
 {
     mrp_wayland_output_t *out = (mrp_wayland_output_t *)data;
+
+    MRP_UNUSED(transform);
 
     MRP_ASSERT(out, "invalid argument");
     MRP_ASSERT(wl_output == (struct wl_output *)out->proxy,
@@ -134,6 +138,11 @@ static void mode_callback(void *data,
 {
     mrp_wayland_output_t *out = (mrp_wayland_output_t *)data;
 
+    MRP_UNUSED(flags);
+    MRP_UNUSED(width);
+    MRP_UNUSED(height);
+    MRP_UNUSED(refresh);
+
     MRP_ASSERT(out, "invalid argument");
     MRP_ASSERT(wl_output == (struct wl_output *)out->proxy,
                "confused with data structures");
@@ -159,6 +168,8 @@ static void scale_callback(void *data,
                            int32_t factor)
 {
     mrp_wayland_output_t *out = (mrp_wayland_output_t *)data;
+
+    MRP_UNUSED(factor);
 
     MRP_ASSERT(out, "invalid argument");
     MRP_ASSERT(wl_output == (struct wl_output *)out->proxy,

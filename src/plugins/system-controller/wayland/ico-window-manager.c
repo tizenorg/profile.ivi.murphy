@@ -144,7 +144,6 @@ static void window_created_callback(void *data,
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
     mrp_wayland_t *wl;
     mrp_wayland_window_update_t u;
-    mrp_wayland_window_t *win;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
@@ -221,6 +220,8 @@ static void window_visible_callback(void *data,
     mrp_wayland_window_t *win;
     mrp_wayland_window_update_t u;
 
+    MRP_UNUSED(hint);
+
     MRP_ASSERT(wm && wm->interface, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
                "confused with data structures");
@@ -251,6 +252,8 @@ static void window_configure_callback(void *data,
     mrp_wayland_window_t *win;
     mrp_wayland_t *wl;
     mrp_wayland_window_update_t u;
+
+    MRP_UNUSED(hint);
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
@@ -354,6 +357,8 @@ static void app_surfaces_callback(void *data,
 {
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
 
+    MRP_UNUSED(surfaces);
+
     MRP_ASSERT(wm, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
                "confused with data structures");
@@ -374,6 +379,14 @@ static void map_surface_callback(void *data,
                                  uint32_t format)
 {
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
+
+    MRP_UNUSED(event);
+    MRP_UNUSED(type);
+    MRP_UNUSED(target);
+    MRP_UNUSED(width);
+    MRP_UNUSED(height);
+    MRP_UNUSED(stride);
+    MRP_UNUSED(format);
 
     MRP_ASSERT(wm, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
@@ -482,7 +495,6 @@ static int32_t set_window_animation(mrp_wayland_window_t *win,
     struct ico_window_mgr *ico_window_mgr;
     mrp_wayland_animation_t *a;
     int32_t flags;
-    int sts;
 
     ico_window_mgr = (struct ico_window_mgr *)win->wm->proxy;
     flags = ICO_WINDOW_MGR_FLAGS_NO_CONFIGURE;
@@ -510,7 +522,6 @@ static void set_window_geometry(mrp_wayland_window_t *win,
 {
     struct ico_window_mgr *ico_window_mgr;
     mrp_wayland_window_update_mask_t mask;
-    mrp_wayland_animation_type_t anim_type;
     uint32_t node;
     int32_t x, y;
     int32_t width, height;
