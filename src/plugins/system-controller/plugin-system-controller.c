@@ -42,6 +42,11 @@
 
 #include "system-controller.h"
 
+#include "resource-manager/scripting-resource-manager.h"
+#include "application/scripting-application.h"
+#include "wayland/scripting-wayland.h"
+
+
 
 #define DEFAULT_ADDRESS "wsck:127.0.0.1:18081/ico_syc_protocol"
 
@@ -656,6 +661,10 @@ static int register_lua_bindings(sysctl_t *sc)
     if ((sc->L = mrp_lua_get_lua_state()) == NULL)
         return FALSE;
 
+    mrp_resmgr_scripting_init(sc->L);
+    mrp_application_scripting_init(sc->L);
+    mrp_wayland_scripting_init(sc->L);
+
     mrp_lua_create_object_class(sc->L, SYSCTL_LUA_CLASS);
 
     return mrp_lua_register_murphy_bindings(&bindings);
@@ -673,9 +682,9 @@ static int plugin_init(mrp_plugin_t *plugin)
     if (sc != NULL) {
         mrp_list_init(&sc->clients);
 
-        sc->id   = 1;
-        sc->ctx  = plugin->ctx;
-        sc->addr = plugin->args[ARG_ADDRESS].str;
+        sc->id      = 1;
+        sc->ctx     = plugin->ctx;
+        sc->addr    = plugin->args[ARG_ADDRESS].str;
 
         if (!transport_create(sc))
             goto fail;
@@ -719,7 +728,7 @@ static void plugin_exit(mrp_plugin_t *plugin)
 #define PLUGIN_VERSION     MRP_VERSION_INT(0, 0, 1)
 
 static mrp_plugin_arg_t plugin_args[] = {
-    MRP_PLUGIN_ARGIDX(ARG_ADDRESS, STRING, "address", DEFAULT_ADDRESS)
+    MRP_PLUGIN_ARGIDX(ARG_ADDRESS, STRING, "address", DEFAULT_ADDRESS),
 };
 
 MURPHY_REGISTER_PLUGIN("system-controller",
