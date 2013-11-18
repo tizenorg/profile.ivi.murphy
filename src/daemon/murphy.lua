@@ -51,7 +51,7 @@ else
 end
 
 -- load the dbus resource plugin
-if m:plugin_exists('resource-dbus') then
+if m:plugin_exists('resource-dbus.disabled') then
     m:try_load_plugin('resource-dbus', {
         dbus_bus = "system",
         dbus_service = "org.Murphy",
@@ -100,7 +100,6 @@ if m:plugin_exists('system-controller') then
 else
     m:info("No system-controller plugin found...")
 end
-
 
 -- load IVI resource manager plugin if exists
 if m:plugin_exists('ivi-resource-manager') then
@@ -229,63 +228,87 @@ element.lua {
 }
 
 -- test system controller message dispatching
+w = window_manager({
+  window_update = function(self, j, m)
+                      print(j)
+                      print(m)
+                  end
+  })
+
 sc = m:get_system_controller()
 
 if sc then
-    sc.generic_handler = function (cid, msg)
+    sc.generic_handler = function (self, cid, msg)
         print('*** generic handler: ' .. tostring(msg))
     end
 
-    sc.window_handler = function (cid, msg)
+    sc.window_handler = function (self, cid, msg)
         print('*** window handler: ' .. tostring(msg))
+
+        local a = animation({})
+        if msg.command == 0x10003 then       -- ico SHOW command
+            local raise_mask = 0x01000000
+            local lower_mask = 0x02000000
+
+            if msg.arg and msg.arg.anim_name then
+                print('kukkuluuuruuu')
+                local time = msg.arg.time
+                time = m:AND(time, m:NEG(m:OR(raise_mask, lower_mask)))
+                time = 200
+                if m:AND(msg.arg.anim_time, raise_mask) then
+                    msg.arg.raise = 1
+                elseif m:AND(msg.arg.anim_time, lower_mask) then
+                    msg.arg.raise = 0
+                end
+                a.show = { msg.arg.anim_name, time }
+                print('time: ' .. tostring(a.show[2]))
+            end
+            print('##### SHOW')
+            print(tostring(msg))
+            w:window_request(msg.arg, a, 0)
+        elseif msg.command == 0x10004 then   -- ico HIDE command
+            local raise_mask = 0x01000000
+            local lower_mask = 0x02000000
+
+            if msg.arg and msg.arg.anim_name then
+                local time = msg.arg.time
+                time = m:AND(time, m:NEG(m:OR(raise_mask, lower_mask)))
+                time = 200
+                if m:AND(msg.arg.anim_time, raise_mask) then
+                    msg.arg.raise = 1
+                end
+                if m:AND(msg.arg.anim_time, lower_mask) then
+                    msg.arg.raise = 0
+                end
+                print('##### HIDE')
+                a.hide = { msg.arg.anim_name, time }
+                print('time: ' .. tostring(a.show[2]))
+            end
+            print(tostrint(msg))
+            w:window_request(msg.arg, a, 0)
+        elseif msg.command == 0x10020 then   -- ico SHOW_LAYER command
+            print('##### SHOW_LAYER')
+            w:window_request(msg.arg, a, 0)
+        end
     end
-    sc.input_handler = function (cid, msg)
+    sc.input_handler = function (self, cid, msg)
         print('*** input handler: ' .. tostring(msg))
     end
-    sc.user_handler = function (cid, msg)
+    sc.user_handler = function (self, cid, msg)
         print('*** user handler: ' .. tostring(msg))
     end
-    sc.resource_handler = function (cid, msg)
+    sc.resource_handler = function (self, cid, msg)
         print('*** resource handler: ' .. tostring(msg))
 
         reply = m.JSON({ command = 'reply to client #' .. tostring(cid) })
 
-        if sc:send_message(cid, reply) then
+        if sc:send_message(self, cid, reply) then
             print('*** reply OK')
         else
             print('*** reply FAILED')
         end
     end
-    sc.inputdev_handler = function (cid, msg)
+    sc.inputdev_handler = function (self, cid, msg)
         print('*** inputdev handler: ' .. tostring(msg))
     end
 end
-
-
--- test initial limited transport bindings
-
---[[
-
-function connect_cb(self, peer, data)
-    print('incoming connection from ' .. peer .. ' on ' .. tostring(self))
-    accepted = self:accept()
-    print('accepted: ' .. tostring(accepted))
-end
-
-function closed_cb(self, error, data)
-    print('connection closed by peer')
-end
-
-function recv_cb(self, msg, data)
-    print('got message ' .. tostring(msg))
-end
-
-t = m:Transport({ connect = connect_cb,
-                  closed  = closed_cb,
-                  recv    = recv_cb,
-                  data    = 'foo',
-                  address = 'wsck:127.0.0.1:18081/ico_syc_protocol' })
-
-t:listen()
-
---]]
