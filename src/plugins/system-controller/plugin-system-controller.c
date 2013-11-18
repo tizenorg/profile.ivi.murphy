@@ -636,6 +636,8 @@ static int plugin_init(mrp_plugin_t *plugin)
 {
     sysctl_t *sc;
 
+    MRP_UNUSED(find_client_by_pid);
+
     sc = mrp_allocz(sizeof(*sc));
 
     if (sc != NULL) {
