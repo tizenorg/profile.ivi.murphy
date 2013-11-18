@@ -27,8 +27,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __MURPHY_DATA_TYPES_H__
-#define __MURPHY_DATA_TYPES_H__
+#ifndef __MURPHY_RESOURCE_DATA_TYPES_H__
+#define __MURPHY_RESOURCE_DATA_TYPES_H__
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -160,7 +160,7 @@ struct mrp_resource_set_definition_s {
     uint32_t    priority;
 };
 
-#endif  /* __MURPHY_DATA_TYPES_H__ */
+#endif  /* __MURPHY_RESOURCE_DATA_TYPES_H__ */
 
 /*
  * Local Variables:
