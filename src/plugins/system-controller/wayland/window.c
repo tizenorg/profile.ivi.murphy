@@ -331,6 +331,7 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
         !(win = mrp_wayland_window_find(wl, u->surfaceid)))
     {
         mrp_debug("can't find window %u: request rejected", u->surfaceid);
+        return;
     }
 
     MRP_ASSERT(win->wm, "confused with data structures");
