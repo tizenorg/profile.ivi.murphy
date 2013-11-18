@@ -1519,9 +1519,36 @@ endif
 
 # system-controller
 if SYSTEMCTL_ENABLED
-SYSTEMCTL_PLUGIN_SOURCES = plugins/system-controller/plugin-system-controller.c
-SYSTEMCTL_PLUGIN_CFLAGS  = $(WEBSOCKETS_CFLAGS)
-SYSTEMCTL_PLUGIN_LIBS    =
+SYSTEMCTL_DIR = plugins/system-controller
+SYSTEMCTL_PLUGIN_SOURCES =                                             \
+	$(SYSTEMCTL_DIR)/plugin-system-controller.c                    \
+	$(SYSTEMCTL_DIR)/resource-manager/resource-manager.c           \
+	$(SYSTEMCTL_DIR)/resource-manager/scripting-resource-manager.c \
+	$(SYSTEMCTL_DIR)/application/application.c                     \
+	$(SYSTEMCTL_DIR)/application/scripting-application.c           \
+	$(SYSTEMCTL_DIR)/wayland/wayland.c                             \
+	$(SYSTEMCTL_DIR)/wayland/output.c                              \
+	$(SYSTEMCTL_DIR)/wayland/layer.c                               \
+	$(SYSTEMCTL_DIR)/wayland/area.c                                \
+	$(SYSTEMCTL_DIR)/wayland/window.c                              \
+	$(SYSTEMCTL_DIR)/wayland/animation.c                           \
+	$(SYSTEMCTL_DIR)/wayland/ico-window-manager.c                  \
+	$(SYSTEMCTL_DIR)/wayland/ico-input-manager.c                   \
+	$(SYSTEMCTL_DIR)/wayland/scripting-wayland.c                   \
+	$(SYSTEMCTL_DIR)/wayland/scripting-window-manager.c            \
+	$(SYSTEMCTL_DIR)/wayland/scripting-animation.c                 \
+	$(SYSTEMCTL_DIR)/wayland/scripting-window.c                    \
+	$(SYSTEMCTL_DIR)/wayland/scripting-output.c                    \
+	$(SYSTEMCTL_DIR)/wayland/scripting-area.c                      \
+	$(SYSTEMCTL_DIR)/wayland/scripting-layer.c
+
+SYSTEMCTL_PLUGIN_CFLAGS  = \
+			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) \
+			-Iico-uxf-weston-plugin \
+                        -I$(top_builddir)/src/$(SYSTEMCTL_DIR)
+SYSTEMCTL_PLUGIN_LIBS    = \
+			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) \
+			-lico-uxf-weston-plugin
 
 if !DISABLED_PLUGIN_SYSTEMCTL
 if BUILTIN_PLUGIN_SYSTEMCTL
