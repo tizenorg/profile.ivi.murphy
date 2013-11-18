@@ -486,6 +486,36 @@ AC_SUBST(TELEPHONY_ENABLED)
 AC_SUBST(TELEPHONY_CFLAGS)
 AC_SUBST(TELEPHONY_LIBS)
 
+# Check if system-controller (plugin) support should be enabled.
+AC_ARG_ENABLE(system-controller,
+              [  --enable-system-controller enable system-controller support],
+	      [enable_systemctl=$enableval], [enable_systemctl=auto])
+
+if test "$enable_systemctl" != "no"; then
+    if test "$enable_systemctl" = "auto"; then
+        enable_systemctl="$enable_websockets"
+    else
+        if test "$enable_websockets" != "yes"; then
+            AC_MSG_ERROR([System controller requires websocket support.])
+        fi
+    fi
+else
+    AC_MSG_NOTICE([System controller support is disabled.])
+fi
+
+if test "$enable_systemctl" = "yes"; then
+    AC_MSG_NOTICE([System-controller support is enabled.])
+    AC_DEFINE([SYSTEMCTL_ENABLED], 1, [Enable system-controller support ?])
+    PKG_CHECK_MODULES(WAYLAND_CLIENT, wayland-client)
+else
+    AC_MSG_NOTICE([System-controller support is disabled.])
+fi
+
+AM_CONDITIONAL(SYSTEMCTL_ENABLED, [test "$enable_systemctl" = "yes"])
+AC_SUBST(SYSTEMCTL_ENABLED)
+AC_SUBST(WAYLAND_CLIENT_CFLAGS)
+AC_SUBST(WAYLAND_CLIENT_LIBS)
+
 # Check if dlog support was enabled.
 AC_ARG_ENABLE(dlog,
               [  --enable-dlog           enable dlog support],
@@ -542,6 +572,16 @@ if test "$enable_resource_asm" = "yes"; then
 fi
 AM_CONDITIONAL(RESOURCE_ASM_ENABLED, [test "$enable_resource_asm" = "yes"])
 AC_SUBST(RESOURCE_ASM_ENABLED)
+
+PKG_CHECK_MODULES(AIL, ail, [have_ail=yes], [have_ail=no])
+if test "$have_ail" = "no" ; then
+    AC_MSG_ERROR([AIL development headers not found.])
+fi
+AC_SUBST(AIL_CFLAGS)
+AC_SUBST(AIL_LIBS)
+
+enable_ail="$have_ail"
+
 
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
@@ -818,6 +858,8 @@ echo "Resource management support: $with_resources"
 echo "Websockets support: $enable_websockets"
 echo "systemd support: $enable_systemd"
 echo "Telephony support: $enable_telephony"
+echo "System controller support: $enable_systemctl"
+echo "AIL support: $enable_ail"
 echo "Plugins:"
 echo "  - linked-in:"
 for plugin in ${INTERNAL_PLUGINS:-none}; do
