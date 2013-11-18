@@ -1746,7 +1746,7 @@ static void free_defs(mrp_resource_set_definition_t *defs)
 
     if (defs) {
         for (d = defs;  d->binary_name;  d++)
-            mrp_free(d->binary_name);
+            mrp_free((void *)d->binary_name);
 
         mrp_free(defs);
     }
