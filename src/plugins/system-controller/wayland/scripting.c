@@ -1288,8 +1288,8 @@ static animation_def_t *animation_check(lua_State *L, int t)
 {
     animation_def_t *def;
     size_t i, tlen;
-    const char *name;
-    int16_t time;
+    const char *name = NULL;
+    int16_t time = -1;
 
     t = (t < 0) ? lua_gettop(L) + t + 1 : t;
 

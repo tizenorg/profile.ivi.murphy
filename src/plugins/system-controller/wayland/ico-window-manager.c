@@ -52,21 +52,21 @@ struct mrp_ico_window_manager_s {
 static bool window_manager_constructor(mrp_wayland_t *,mrp_wayland_object_t *);
 
 static void window_created_callback(void *, struct ico_window_mgr *, uint32_t,
-                                    const char *, int32_t, const char *);
+                                    const char *,int32_t,const char *,int32_t);
 static void window_name_callback(void *, struct ico_window_mgr *,
                                  uint32_t, const char *);
 static void window_destroyed_callback(void *,struct ico_window_mgr *,uint32_t);
 static void window_visible_callback(void *, struct ico_window_mgr *, uint32_t,
                                     int32_t, int32_t, int32_t);
 static void window_configure_callback(void *, struct ico_window_mgr *,uint32_t,
-                                      uint32_t, uint32_t, int32_t,int32_t,
-                                      int32_t,int32_t, int32_t);
+                                      uint32_t, int32_t, uint32_t, int32_t,
+                                      int32_t, int32_t,int32_t, int32_t);
 static void window_active_callback(void *, struct ico_window_mgr *, uint32_t,
                                    int32_t);
 static void layer_visible_callback(void *, struct ico_window_mgr *,
                                    uint32_t, int32_t);
 static void app_surfaces_callback(void *, struct ico_window_mgr *,
-                                  const char *, struct wl_array *);
+                                  const char *, int32_t, struct wl_array *);
 static void map_surface_callback(void *, struct ico_window_mgr *, int32_t,
                                  uint32_t, uint32_t, uint32_t,
                                  int32_t,int32_t, int32_t, uint32_t);
@@ -139,7 +139,8 @@ static void window_created_callback(void *data,
                                     uint32_t surfaceid,
                                     const char *winname,
                                     int32_t pid,
-                                    const char *appid)
+                                    const char *appid,
+                                    int32_t layertype)
 {
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
     mrp_wayland_t *wl;
@@ -241,6 +242,7 @@ static void window_configure_callback(void *data,
                                       struct ico_window_mgr *ico_window_mgr,
                                       uint32_t surfaceid,
                                       uint32_t node,
+                                      int32_t layertype,
                                       uint32_t layer,
                                       int32_t x,
                                       int32_t y,
@@ -343,6 +345,7 @@ static void layer_visible_callback(void *data,
 static void app_surfaces_callback(void *data,
                                   struct ico_window_mgr *ico_window_mgr,
                                   const char *appid,
+                                  int32_t pid,
                                   struct wl_array *surfaces)
 {
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
