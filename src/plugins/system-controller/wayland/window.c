@@ -88,6 +88,9 @@ mrp_wayland_window_create(mrp_wayland_t *wl, mrp_wayland_window_update_t *u)
     mrp_wayland_window_print(win, mask, buf,sizeof(buf));
     mrp_debug("window %d created%s", win->surfaceid, buf);
 
+    if (wl->window_update_callback)
+        wl->window_update_callback(wl, MRP_WAYLAND_WINDOW_CREATE, mask, win);
+
     return win;
 }
 
@@ -109,6 +112,9 @@ void mrp_wayland_window_destroy(mrp_wayland_window_t *win)
                              MRP_WAYLAND_WINDOW_NAME_MASK,
                              buf, sizeof(buf));
     mrp_debug("destroying window %d%s", win->surfaceid, buf);
+
+    if (wl->window_update_callback)
+        wl->window_update_callback(wl, MRP_WAYLAND_WINDOW_DESTROY, 0, win);
 
     mrp_free(win->name);
     mrp_free(win->appid);
@@ -330,6 +336,7 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
 }
 
 void mrp_wayland_window_update(mrp_wayland_window_t *win,
+                               mrp_wayland_window_operation_t oper,
                                mrp_wayland_window_update_t *u)
 {
     mrp_wayland_window_manager_t *wm;
@@ -365,7 +372,7 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
         mrp_debug("window %d updated%s", surfaceid, buf);
 
         if (wl->window_update_callback)
-            wl->window_update_callback(wl, mask, win);
+            wl->window_update_callback(wl, oper, mask, win);
     }
 }
 

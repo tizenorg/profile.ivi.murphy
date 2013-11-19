@@ -168,6 +168,7 @@ static bool layer_request_bridge(lua_State *, void *,
                                  const char *, mrp_funcbridge_value_t *,
                                  char *, mrp_funcbridge_value_t *);
 static void layer_update_callback(mrp_wayland_t *,
+                                  mrp_wayland_layer_operation_t,
                                   mrp_wayland_layer_update_mask_t,
                                   mrp_wayland_layer_t *);
 
@@ -175,6 +176,7 @@ static bool window_request_bridge(lua_State *, void *,
                                   const char *, mrp_funcbridge_value_t *,
                                   char *, mrp_funcbridge_value_t *);
 static void window_update_callback(mrp_wayland_t *,
+                                   mrp_wayland_window_operation_t,
                                    mrp_wayland_window_update_mask_t,
                                    mrp_wayland_window_t *);
 
@@ -1028,6 +1030,7 @@ static bool layer_request_bridge(lua_State *L,
 }
 
 static void layer_update_callback(mrp_wayland_t *wl,
+                                  mrp_wayland_layer_operation_t oper,
                                   mrp_wayland_layer_update_mask_t mask,
                                   mrp_wayland_layer_t *layer)
 {
@@ -1038,7 +1041,7 @@ static void layer_update_callback(mrp_wayland_t *wl,
     lua_State *L;
     scripting_winmgr_t *winmgr;
     mrp_json_t *json;
-    mrp_funcbridge_value_t args[3], ret;
+    mrp_funcbridge_value_t args[4], ret;
     char t;
     bool success;
 
@@ -1078,12 +1081,13 @@ static void layer_update_callback(mrp_wayland_t *wl,
     }
 
     args[0].pointer = winmgr;
-    args[1].pointer = mrp_json_lua_wrap(L, json);
-    args[2].pointer = layer_mask_create_from_c(L, mask);
+    args[1].integer = oper;
+    args[2].pointer = mrp_json_lua_wrap(L, json);
+    args[3].pointer = layer_mask_create_from_c(L, mask);
 
     memset(&ret, 0, sizeof(ret));
 
-    success = mrp_funcbridge_call_from_c(L, winmgr->layer_update, "ooo",
+    success = mrp_funcbridge_call_from_c(L, winmgr->layer_update, "odoo",
                                          args, &t, &ret);
     if (!success) {
         mrp_log_error("failed to call window_manager.%s.layer_update method "
@@ -1198,6 +1202,7 @@ static bool window_request_bridge(lua_State *L,
 }
 
 static void window_update_callback(mrp_wayland_t *wl,
+                                   mrp_wayland_window_operation_t oper,
                                    mrp_wayland_window_update_mask_t mask,
                                    mrp_wayland_window_t *win)
 {
@@ -1217,7 +1222,7 @@ static void window_update_callback(mrp_wayland_t *wl,
     scripting_winmgr_t *winmgr;
     mrp_json_t *json;
     int32_t layerid;
-    mrp_funcbridge_value_t args[3], ret;
+    mrp_funcbridge_value_t args[4], ret;
     char t;
     bool success;
 
@@ -1269,12 +1274,13 @@ static void window_update_callback(mrp_wayland_t *wl,
     }
 
     args[0].pointer = winmgr;
-    args[1].pointer = mrp_json_lua_wrap(L, json);
-    args[2].pointer = window_mask_create_from_c(L, mask);
+    args[1].integer = oper;
+    args[2].pointer = mrp_json_lua_wrap(L, json);
+    args[3].pointer = window_mask_create_from_c(L, mask);
 
     memset(&ret, 0, sizeof(ret));
 
-    success = mrp_funcbridge_call_from_c(L, winmgr->window_update, "ooo",
+    success = mrp_funcbridge_call_from_c(L, winmgr->window_update, "odoo",
                                          args, &t, &ret);
     if (!success) {
         mrp_log_error("failed to call window_manager.%s.window_update method "

@@ -35,10 +35,20 @@
 #include "wayland.h"
 
 enum mrp_wayland_active_e {
-        MRP_WAYLAND_WINDOW_ACTIVE_NONE = 0,
-        MRP_WAYLAND_WINDOW_ACTIVE_POINTER = 1,
-        MRP_WAYLAND_WINDOW_ACTIVE_KEYBOARD = 2,
-        MRP_WAYLAND_WINDOW_ACTIVE_SELECTED = 4,
+    MRP_WAYLAND_WINDOW_ACTIVE_NONE = 0,
+    MRP_WAYLAND_WINDOW_ACTIVE_POINTER = 1,
+    MRP_WAYLAND_WINDOW_ACTIVE_KEYBOARD = 2,
+    MRP_WAYLAND_WINDOW_ACTIVE_SELECTED = 4,
+};
+
+enum mrp_wayland_window_operation_e {
+    MRP_WAYLAND_WINDOW_OPERATION_NONE = 0,
+    MRP_WAYLAND_WINDOW_CREATE,
+    MRP_WAYLAND_WINDOW_DESTROY,
+    MRP_WAYLAND_WINDOW_NAMECHANGE,
+    MRP_WAYLAND_WINDOW_VISIBLE,
+    MRP_WAYLAND_WINDOW_CONFIGURE,
+    MRP_WAYLAND_WINDOW_ACTIVE
 };
 
 
@@ -133,6 +143,7 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
                                 uint32_t framerate);
 
 void mrp_wayland_window_update(mrp_wayland_window_t *win,
+                               mrp_wayland_window_operation_t oper,
                                mrp_wayland_window_update_t *u);
 
 size_t mrp_wayland_window_print(mrp_wayland_window_t *win,

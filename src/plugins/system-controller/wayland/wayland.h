@@ -53,8 +53,10 @@
     struct wl_proxy *proxy
 
 
+typedef enum mrp_wayland_layer_operation_e    mrp_wayland_layer_operation_t;
 typedef enum mrp_wayland_layer_update_mask_e  mrp_wayland_layer_update_mask_t;
 typedef enum mrp_wayland_window_update_mask_e mrp_wayland_window_update_mask_t;
+typedef enum mrp_wayland_window_operation_e   mrp_wayland_window_operation_t;
 typedef enum mrp_wayland_animation_type_e     mrp_wayland_animation_type_t;
 typedef enum mrp_wayland_active_e             mrp_wayland_active_t;
 
@@ -75,12 +77,14 @@ typedef bool (*mrp_wayland_constructor_t)(mrp_wayland_t *,
                                           mrp_wayland_object_t *);
 typedef void (*mrp_wayland_destructor_t)(mrp_wayland_object_t *);
 
-typedef void (*mrp_wayland_window_update_callback_t)(mrp_wayland_t *,
-                                              mrp_wayland_window_update_mask_t,
-                                              mrp_wayland_window_t *);
 typedef void (*mrp_wayland_layer_update_callback_t)(mrp_wayland_t *,
+                                              mrp_wayland_layer_operation_t,
                                               mrp_wayland_layer_update_mask_t,
                                               mrp_wayland_layer_t *);
+typedef void (*mrp_wayland_window_update_callback_t)(mrp_wayland_t *,
+                                              mrp_wayland_window_operation_t,
+                                              mrp_wayland_window_update_mask_t,
+                                              mrp_wayland_window_t *);
 
 struct mrp_wayland_s {
     const char *display_name;

@@ -190,7 +190,7 @@ static void window_name_callback(void *data,
     u.mask = MRP_WAYLAND_WINDOW_NAME_MASK;
     u.name = winname;
 
-    mrp_wayland_window_update(win, &u);
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_NAMECHANGE, &u);
 }
 
 static void window_destroyed_callback(void *data,
@@ -235,7 +235,7 @@ static void window_visible_callback(void *data,
     u.visible = visible;
     u.raise = raise;
 
-    mrp_wayland_window_update(win, &u);
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_VISIBLE, &u);
 }
 
 static void window_configure_callback(void *data,
@@ -281,7 +281,7 @@ static void window_configure_callback(void *data,
     else
         u.mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
 
-    mrp_wayland_window_update(win, &u);
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
 }
 
 static void window_active_callback(void *data,
@@ -311,7 +311,7 @@ static void window_active_callback(void *data,
     if ((active & MRP_WAYLAND_WINDOW_ACTIVE_SELECTED))
         u.active |= ICO_WINDOW_MGR_ACTIVE_SELECTED;
 
-    mrp_wayland_window_update(win, &u);
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_ACTIVE, &u);
 }
 
 static void layer_visible_callback(void *data,
@@ -339,7 +339,7 @@ static void layer_visible_callback(void *data,
         return;
     }
 
-    mrp_wayland_layer_update(layer, &u);
+    mrp_wayland_layer_update(layer, MRP_WAYLAND_LAYER_VISIBLE, &u);
 }
 
 static void app_surfaces_callback(void *data,

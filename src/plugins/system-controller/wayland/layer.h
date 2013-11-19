@@ -34,6 +34,12 @@
 
 #include "wayland.h"
 
+enum mrp_wayland_layer_operation_e {
+    MRP_WAYLAND_LAYER_OPERATION_NONE = 0,
+    MRP_WAYLAND_LAYER_CREATE,
+    MRP_WAYLAND_LAYER_DESTROY,
+    MRP_WAYLAND_LAYER_VISIBLE
+};
 
 struct mrp_wayland_layer_s {
     mrp_wayland_window_manager_t *wm;
@@ -72,6 +78,7 @@ void mrp_wayland_layer_visibility_request(mrp_wayland_layer_t *layer,
 void mrp_wayland_layer_request(mrp_wayland_t *wl,
                                mrp_wayland_layer_update_t *u);
 void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
+                              mrp_wayland_layer_operation_t oper,
                               mrp_wayland_layer_update_t *u);
 
 size_t mrp_wayland_layer_print(mrp_wayland_layer_t *layer,

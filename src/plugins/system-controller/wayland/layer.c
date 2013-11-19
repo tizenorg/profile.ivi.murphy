@@ -86,6 +86,9 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
     mrp_wayland_layer_print(layer, mask, buf,sizeof(buf));
     mrp_debug("layer %d created%s", layer->layerid, buf);
 
+    if (wl->layer_update_callback)
+        wl->layer_update_callback(wl, MRP_WAYLAND_LAYER_CREATE, mask, layer);
+
     return layer;
 }
 
@@ -106,6 +109,9 @@ void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer)
     mrp_wayland_layer_print(layer, MRP_WAYLAND_LAYER_NAME_MASK,
                             buf, sizeof(buf));
     mrp_debug("destroying layer %d%s", layer->layerid, buf);
+
+    if (wl->layer_update_callback)
+        wl->layer_update_callback(wl, MRP_WAYLAND_LAYER_DESTROY, 0, layer);
 
     mrp_free(layer->name);
 
@@ -167,6 +173,7 @@ void mrp_wayland_layer_request(mrp_wayland_t *wl,mrp_wayland_layer_update_t *u)
 }
 
 void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
+                              mrp_wayland_layer_operation_t oper,
                               mrp_wayland_layer_update_t *u)
 {
     mrp_wayland_window_manager_t *wm;
@@ -202,7 +209,7 @@ void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
         mrp_debug("layer %d updated%s", layerid, buf);
 
         if (wl->layer_update_callback)
-            wl->layer_update_callback(wl, mask, layer);
+            wl->layer_update_callback(wl, oper, mask, layer);
     }
 }
 
