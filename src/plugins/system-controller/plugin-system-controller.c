@@ -59,12 +59,15 @@ enum {
  * system-controller context
  */
 
+typedef struct sysctl_lua_s sysctl_lua_t;
+
 typedef struct {
     mrp_context_t    *ctx;                /* murphy context */
     mrp_transport_t  *lt;                 /* transport we listen on */
     const char       *addr;               /* address we listen on */
     mrp_list_hook_t   clients;            /* connected clients */
     int               id;                 /* next client id */
+    sysctl_lua_t     *scl;                /* singleton Lua object */
     lua_State        *L;                  /* murphy Lua state */
     struct {
         mrp_funcbridge_t *generic;
@@ -91,9 +94,9 @@ typedef struct {
 } client_t;
 
 
-typedef struct {
+struct sysctl_lua_s {
     sysctl_t         *sc;                /* system controller */
-} sysctl_lua_t;
+};
 
 typedef enum {
     SYSCTL_IDX_GENERIC = 1,
@@ -130,7 +133,7 @@ MRP_LUA_CLASS_DEF(sysctl, lua, sysctl_lua_t,
 
 
 
-static sysctl_t *scptr;
+static sysctl_t *scptr;                  /* singleton native object */
 
 
 static client_t *create_client(sysctl_t *sc, mrp_transport_t *lt)
@@ -336,7 +339,7 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
         [4] = sc->handler.resource,
         [5] = sc->handler.inputdev
     }, *h;
-    mrp_funcbridge_value_t args[2];
+    mrp_funcbridge_value_t args[4];
     mrp_funcbridge_value_t ret;
     char                   rt;
 
@@ -375,12 +378,13 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
     }
 
     if (h != NULL || (h = sc->handler.generic) != NULL) {
-        args[0].integer = c->id;
-        args[1].pointer = mrp_json_lua_wrap(sc->L, req);
+        args[0].pointer = sc->scl;
+        args[1].integer = c->id;
+        args[2].pointer = mrp_json_lua_wrap(sc->L, req);
 
         mrp_json_add_string(req, "MESSAGE", message_name(cmd));
 
-        if (!mrp_funcbridge_call_from_c(sc->L, h, "do", &args[0], &rt, &ret)) {
+        if (!mrp_funcbridge_call_from_c(sc->L, h, "odo", &args[0], &rt, &ret)) {
             mrp_log_error("Failed to dispatch system-controller message (%s).",
                           ret.string ? ret.string : "<unknown error>");
             mrp_free((void *)ret.string);
@@ -445,11 +449,13 @@ static void transport_destroy(sysctl_t *sc)
 
 static int sysctl_lua_create(lua_State *L)
 {
-    sysctl_lua_t *scl;
+    static sysctl_lua_t *scl = NULL;
 
-    scl = (sysctl_lua_t *)mrp_lua_create_object(L, SYSCTL_LUA_CLASS, NULL, 0);
-
-    scl->sc = scptr;
+    if (scl == NULL)
+        scl = (sysctl_lua_t *)mrp_lua_create_object(L, SYSCTL_LUA_CLASS,
+                                                    NULL, 0);
+    scl->sc    = scptr;
+    scptr->scl = scl;
 
     mrp_lua_push_object(L, scl);
 
