@@ -47,6 +47,8 @@ enum mrp_wayland_layer_update_mask_e {
     MRP_WAYLAND_LAYER_LAYERID_MASK   = 0x0001,
     MRP_WAYLAND_LAYER_NAME_MASK      = 0x0002,
     MRP_WAYLAND_LAYER_VISIBLE_MASK   = 0x0004,
+
+    MRP_WAYLAND_LAYER_END_MASK       = 0x0008
 };
 
 
@@ -67,6 +69,8 @@ mrp_wayland_layer_t *mrp_wayland_layer_find(mrp_wayland_t *wl,
 void mrp_wayland_layer_visibility_request(mrp_wayland_layer_t *layer,
                                           int32_t visible);
 
+void mrp_wayland_layer_request(mrp_wayland_t *wl,
+                               mrp_wayland_layer_update_t *u);
 void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
                               mrp_wayland_layer_update_t *u);
 
@@ -78,6 +82,9 @@ size_t mrp_wayland_layer_request_print(mrp_wayland_layer_update_t *u,
                                        mrp_wayland_layer_update_mask_t mask,
                                        char *buf,
                                        size_t len);
+
+const char *
+mrp_wayland_layer_update_mask_str(mrp_wayland_layer_update_mask_t mask);
 
 
 #endif /* __MURPHY_WAYLAND_LAYER_H__ */

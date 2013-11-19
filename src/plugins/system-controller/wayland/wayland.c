@@ -226,6 +226,16 @@ void mrp_wayland_register_window_update_callback(mrp_wayland_t *wl,
     wl->window_update_callback = callback;
 }
 
+void mrp_wayland_register_layer_update_callback(mrp_wayland_t *wl,
+                               mrp_wayland_layer_update_callback_t callback)
+{
+    MRP_ASSERT(wl, "invalid aruments");
+
+    mrp_debug("registering layer_update_callback");
+
+    wl->layer_update_callback = callback;
+}
+
 void mrp_wayland_set_scripting_data(mrp_wayland_t *wl, void *data)
 {
     MRP_ASSERT(wl, "invalid argument");

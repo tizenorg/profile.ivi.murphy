@@ -274,18 +274,10 @@ static void window_configure_callback(void *data,
     u.width = width;
     u.height = height;
 
-    if (!(u.layer = mrp_wayland_layer_find(wl, layer))) {
-        mrp_wayland_layer_update_t lu;
-
-        memset(&lu, 0, sizeof(mrp_wayland_layer_update_t));
-        lu.mask = MRP_WAYLAND_LAYER_LAYERID_MASK;
-        lu.layerid = layer;
-
-        u.layer = mrp_wayland_layer_create(wl, &lu);
-    }
-    if (u.layer) {
+    if (!(u.layer = mrp_wayland_layer_find(wl, layer)))
+        mrp_log_error("can't find layer %u", layer);
+    else
         u.mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
-    }
 
     mrp_wayland_window_update(win, &u);
 }
@@ -340,14 +332,12 @@ static void layer_visible_callback(void *data,
     u.mask = MRP_WAYLAND_WINDOW_VISIBLE_MASK;
     u.visible = visible;
 
-    if ((layer = mrp_wayland_layer_find(wl, layerid)))
-        mrp_wayland_layer_update(layer, &u);
-    else {
-        u.mask |= MRP_WAYLAND_LAYER_LAYERID_MASK;
-        u.layerid = layerid;
-
-        mrp_wayland_layer_create(wl, &u);
+    if (!(layer = mrp_wayland_layer_find(wl, layerid))) {
+        mrp_log_error("can't find layer %u", layerid);
+        return;
     }
+
+    mrp_wayland_layer_update(layer, &u);
 }
 
 static void app_surfaces_callback(void *data,

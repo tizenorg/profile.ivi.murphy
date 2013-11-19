@@ -53,13 +53,15 @@
 
 #define WINDOW_MANAGER_CLASS   MRP_LUA_CLASS_SIMPLE(window_manager)
 #define ANIMATION_CLASS        MRP_LUA_CLASS_SIMPLE(animation)
-#define UPDATE_MASK_CLASS      MRP_LUA_CLASS_SIMPLE(update_mask)
+#define LAYER_MASK_CLASS       MRP_LUA_CLASS_SIMPLE(layer_mask)
+#define WINDOW_MASK_CLASS      MRP_LUA_CLASS_SIMPLE(window_mask)
 
 typedef enum field_e  field_t;
 
 typedef struct scripting_winmgr_s       scripting_winmgr_t;
 typedef struct scripting_animation_s    scripting_animation_t;
-typedef struct scripting_update_mask_s  scripting_update_mask_t;
+typedef struct scripting_layer_mask_s   scripting_layer_mask_t;
+typedef struct scripting_window_mask_s  scripting_window_mask_t;
 typedef struct animation_def_s          animation_def_t;
 typedef struct funcbridge_def_s         funcbridge_def_t;
 typedef struct request_def_s            request_def_t;
@@ -87,6 +89,9 @@ enum field_e {
     SURFACE,
     VISIBLE,
     POSITION,
+    LAYER_CREATE,
+    LAYER_UPDATE,
+    LAYER_REQUEST,
     WINDOW_UPDATE,
     WINDOW_REQUEST,
 };
@@ -95,6 +100,7 @@ struct scripting_winmgr_s {
     mrp_wayland_t *wl;
     const char *name;
     const char *display;
+    mrp_funcbridge_t *layer_update;
     mrp_funcbridge_t *window_update;
 };
 
@@ -102,7 +108,11 @@ struct scripting_animation_s {
     mrp_wayland_animation_t *anims;
 };
 
-struct scripting_update_mask_s {
+struct scripting_window_mask_s {
+    uint32_t mask;
+};
+
+struct scripting_layer_mask_s {
     uint32_t mask;
 };
 
@@ -136,16 +146,30 @@ static int  animation_getfield(lua_State *);
 static int  animation_setfield(lua_State *);
 static void animation_destroy(void *);
 
-static int  update_mask_create_from_lua(lua_State *);
-static scripting_update_mask_t *update_mask_create_from_c(lua_State*,uint32_t);
-static int  update_mask_getfield(lua_State *);
-static int  update_mask_setfield(lua_State *);
-static int  update_mask_stringify(lua_State *);
-static void update_mask_destroy(void *);
+static int  layer_mask_create_from_lua(lua_State *);
+static scripting_layer_mask_t *layer_mask_create_from_c(lua_State*,uint32_t);
+static int  layer_mask_getfield(lua_State *);
+static int  layer_mask_setfield(lua_State *);
+static int  layer_mask_stringify(lua_State *);
+static void layer_mask_destroy(void *);
+
+static int  window_mask_create_from_lua(lua_State *);
+static scripting_window_mask_t *window_mask_create_from_c(lua_State*,uint32_t);
+static int  window_mask_getfield(lua_State *);
+static int  window_mask_setfield(lua_State *);
+static int  window_mask_stringify(lua_State *);
+static void window_mask_destroy(void *);
 
 static int integer_copy(mrp_wayland_t *, void *, mrp_json_t *, int);
 static int string_copy(mrp_wayland_t *, void *, mrp_json_t *, int);
 static int layer_copy(mrp_wayland_t *, void *, mrp_json_t *, int);
+
+static bool layer_request_bridge(lua_State *, void *,
+                                 const char *, mrp_funcbridge_value_t *,
+                                 char *, mrp_funcbridge_value_t *);
+static void layer_update_callback(mrp_wayland_t *,
+                                  mrp_wayland_layer_update_mask_t,
+                                  mrp_wayland_layer_t *);
 
 static bool window_request_bridge(lua_State *, void *,
                                   const char *, mrp_funcbridge_value_t *,
@@ -164,7 +188,8 @@ static field_t field_name_to_type(const char *, size_t);
 
 static char *make_id(const char *, char *, int);
 
-static uint32_t get_mask(field_t);
+static uint32_t get_layer_mask(field_t);
+static uint32_t get_window_mask(field_t);
 
 static bool register_methods(lua_State *);
 
@@ -198,20 +223,37 @@ MRP_LUA_CLASS_DEF_SIMPLE (
 );
 
 MRP_LUA_CLASS_DEF_SIMPLE (
-    update_mask,                /* class name */
-    scripting_update_mask_t,    /* userdata type */
-    update_mask_destroy,        /* userdata destructor */
+    layer_mask,                 /* class name */
+    scripting_layer_mask_t,     /* userdata type */
+    layer_mask_destroy,         /* userdata destructor */
     MRP_LUA_METHOD_LIST (       /* methods */
-       MRP_LUA_METHOD_CONSTRUCTOR (update_mask_create_from_lua)
+       MRP_LUA_METHOD_CONSTRUCTOR (layer_mask_create_from_lua)
     ),
     MRP_LUA_METHOD_LIST (       /* overrides */
-       MRP_LUA_OVERRIDE_CALL      (update_mask_create_from_lua)
-       MRP_LUA_OVERRIDE_GETFIELD  (update_mask_getfield)
-       MRP_LUA_OVERRIDE_SETFIELD  (update_mask_setfield)
-       MRP_LUA_OVERRIDE_STRINGIFY (update_mask_stringify)
+       MRP_LUA_OVERRIDE_CALL      (layer_mask_create_from_lua)
+       MRP_LUA_OVERRIDE_GETFIELD  (layer_mask_getfield)
+       MRP_LUA_OVERRIDE_SETFIELD  (layer_mask_setfield)
+       MRP_LUA_OVERRIDE_STRINGIFY (layer_mask_stringify)
     )
 );
 
+MRP_LUA_CLASS_DEF_SIMPLE (
+    window_mask,                /* class name */
+    scripting_window_mask_t,    /* userdata type */
+    window_mask_destroy,        /* userdata destructor */
+    MRP_LUA_METHOD_LIST (       /* methods */
+       MRP_LUA_METHOD_CONSTRUCTOR (window_mask_create_from_lua)
+    ),
+    MRP_LUA_METHOD_LIST (       /* overrides */
+       MRP_LUA_OVERRIDE_CALL      (window_mask_create_from_lua)
+       MRP_LUA_OVERRIDE_GETFIELD  (window_mask_getfield)
+       MRP_LUA_OVERRIDE_SETFIELD  (window_mask_setfield)
+       MRP_LUA_OVERRIDE_STRINGIFY (window_mask_stringify)
+    )
+);
+
+static mrp_funcbridge_t *layer_create;
+static mrp_funcbridge_t *layer_request;
 static mrp_funcbridge_t *window_request;
 
 
@@ -219,7 +261,8 @@ void mrp_scripting_window_manager_init(lua_State *L)
 {
     mrp_lua_create_object_class(L, WINDOW_MANAGER_CLASS);
     mrp_lua_create_object_class(L, ANIMATION_CLASS);
-    mrp_lua_create_object_class(L, UPDATE_MASK_CLASS);
+    mrp_lua_create_object_class(L, LAYER_MASK_CLASS);
+    mrp_lua_create_object_class(L, WINDOW_MASK_CLASS);
     register_methods(L);
 
     MRP_UNUSED(string_copy);
@@ -234,6 +277,7 @@ static int  window_manager_create(lua_State *L)
     scripting_winmgr_t *winmgr;
     char *name;
     const char *display = NULL;
+    mrp_funcbridge_t *layer_update = NULL;
     mrp_funcbridge_t *window_update = NULL;
     char buf[256];
 
@@ -250,6 +294,10 @@ static int  window_manager_create(lua_State *L)
 
         case DISPLAY:
             display = luaL_checkstring(L, -1);
+            break;
+
+        case LAYER_UPDATE:
+            layer_update = mrp_funcbridge_create_luafunc(L, -1);
             break;
 
         case WINDOW_UPDATE:
@@ -281,11 +329,13 @@ static int  window_manager_create(lua_State *L)
     winmgr->wl = wl;
     winmgr->name = mrp_strdup(name);
     winmgr->display = mrp_strdup(display);
+    winmgr->layer_update = layer_update;
     winmgr->window_update = window_update;
 
     mrp_wayland_output_register(wl);
     mrp_ico_window_manager_register(wl);
 
+    mrp_wayland_register_layer_update_callback(wl, layer_update_callback);
     mrp_wayland_register_window_update_callback(wl, window_update_callback);
     mrp_wayland_set_scripting_data(wl, winmgr);
 
@@ -313,6 +363,18 @@ static int  window_manager_getfield(lua_State *L)
 
         case DISPLAY:
             lua_pushstring(L, wmgr->display);
+            break;
+
+        case LAYER_CREATE:
+            mrp_funcbridge_push(L, layer_create);
+            break;
+
+        case LAYER_REQUEST:
+            mrp_funcbridge_push(L, layer_request);
+            break;
+
+        case LAYER_UPDATE:
+            mrp_funcbridge_push(L, wmgr->layer_update);
             break;
 
         case WINDOW_REQUEST:
@@ -489,11 +551,11 @@ static void animation_destroy(void *data)
     }
 }
 
-static int update_mask_create_from_lua(lua_State *L)
+static int layer_mask_create_from_lua(lua_State *L)
 {
     size_t fldnamlen;
     const char *fldnam;
-    scripting_update_mask_t *um;
+    scripting_layer_mask_t *um;
     field_t fld;
     uint32_t m;
     uint32_t mask = 0;
@@ -507,46 +569,46 @@ static int update_mask_create_from_lua(lua_State *L)
 
         if (fld == MASK)
             mask = lua_tointeger(L, -1);
-        else if ((m = get_mask(fld)))
+        else if ((m = get_layer_mask(fld)))
             mask |= m;
         else
             luaL_error(L, "bad field '%s'", fldnam);
     }
 
-    um = (scripting_update_mask_t *)mrp_lua_create_object(L, UPDATE_MASK_CLASS,
-                                                          NULL, 0);
+    um = (scripting_layer_mask_t *)mrp_lua_create_object(L, LAYER_MASK_CLASS,
+                                                         NULL, 0);
     if (!um)
-        luaL_error(L, "can't create update_mask");
+        luaL_error(L, "can't create layer_mask");
 
     um->mask = mask;
 
     MRP_LUA_LEAVE(1);
 }
 
-static scripting_update_mask_t *update_mask_create_from_c(lua_State *L,
-                                                          uint32_t mask)
+static scripting_layer_mask_t *layer_mask_create_from_c(lua_State *L,
+                                                        uint32_t mask)
 {
-    scripting_update_mask_t *um;
+    scripting_layer_mask_t *um;
 
-    um = (scripting_update_mask_t *)mrp_lua_create_object(L, UPDATE_MASK_CLASS,
-                                                          NULL, 0);
+    um = (scripting_layer_mask_t *)mrp_lua_create_object(L, LAYER_MASK_CLASS,
+                                                         NULL, 0);
     if (!um)
-        mrp_log_error("can't create update_mask");
+        mrp_log_error("can't create layer_mask");
     else
         um->mask = mask;
 
     return um;
 }
 
-static int update_mask_getfield(lua_State *L)
+static int layer_mask_getfield(lua_State *L)
 {
-    scripting_update_mask_t *um;
+    scripting_layer_mask_t *um;
     field_t fld;
     uint32_t m;
 
     MRP_LUA_ENTER;
 
-    um = (scripting_update_mask_t*)mrp_lua_check_object(L,UPDATE_MASK_CLASS,1);
+    um = (scripting_layer_mask_t*)mrp_lua_check_object(L, LAYER_MASK_CLASS, 1);
     fld = field_check(L, 2, NULL);
 
     lua_pop(L, 1);
@@ -556,7 +618,7 @@ static int update_mask_getfield(lua_State *L)
     else {
         if (fld == MASK)
             lua_pushinteger(L, um->mask);
-        else if ((m = get_mask(fld)))
+        else if ((m = get_layer_mask(fld)))
             lua_pushboolean(L, (um->mask & m) ? 1 : 0);
         else
             lua_pushnil(L);
@@ -565,15 +627,15 @@ static int update_mask_getfield(lua_State *L)
     MRP_LUA_LEAVE(1);
 }
 
-static int update_mask_setfield(lua_State *L)
+static int layer_mask_setfield(lua_State *L)
 {
-    scripting_update_mask_t *um;
+    scripting_layer_mask_t *um;
     uint32_t m;
     field_t fld;
 
     MRP_LUA_ENTER;
 
-    um = (scripting_update_mask_t*)mrp_lua_check_object(L,UPDATE_MASK_CLASS,1);
+    um = (scripting_layer_mask_t*)mrp_lua_check_object(L, LAYER_MASK_CLASS, 1);
     fld = field_check(L, 2, NULL);
 
     lua_pop(L, 2);
@@ -581,7 +643,7 @@ static int update_mask_setfield(lua_State *L)
     if (um) {
         if (fld == MASK)
             um->mask = lua_tointeger(L, 3);
-        else if ((m = get_mask(fld))) {
+        else if ((m = get_layer_mask(fld))) {
             um->mask &= ~m;
 
             if (lua_toboolean(L, 3))
@@ -592,9 +654,9 @@ static int update_mask_setfield(lua_State *L)
     MRP_LUA_LEAVE(0);
 }
 
-static int update_mask_stringify(lua_State *L)
+static int layer_mask_stringify(lua_State *L)
 {
-    scripting_update_mask_t *um;
+    scripting_layer_mask_t *um;
     uint32_t m, mask;
     char buf[4096];
     char *p, *e;
@@ -603,7 +665,148 @@ static int update_mask_stringify(lua_State *L)
 
     MRP_LUA_ENTER;
 
-    um = (scripting_update_mask_t*)mrp_lua_check_object(L,UPDATE_MASK_CLASS,1);
+    um = (scripting_layer_mask_t*)mrp_lua_check_object(L, LAYER_MASK_CLASS, 1);
+    e = (p = buf) + sizeof(buf);
+    *p = 0;
+
+    mask = um->mask;
+
+    for (m = 1;  mask && m < MRP_WAYLAND_LAYER_END_MASK && p < e;   m <<= 1) {
+        if ((mask & m)) {
+            mask &= ~m;
+
+            if ((name = mrp_wayland_layer_update_mask_str(m)))
+                p += snprintf(p, e-p, "%s%s", p > buf ? " | " : "", name);
+        }
+    }
+
+    lua_pushstring(L, (p > buf) ? buf : "<empty>");
+
+    MRP_LUA_LEAVE(1);
+}
+
+static void layer_mask_destroy(void *data)
+{
+    scripting_layer_mask_t *um = (scripting_layer_mask_t *)data;
+
+    MRP_UNUSED(um);
+}
+
+static int window_mask_create_from_lua(lua_State *L)
+{
+    size_t fldnamlen;
+    const char *fldnam;
+    scripting_window_mask_t *um;
+    field_t fld;
+    uint32_t m;
+    uint32_t mask = 0;
+
+    MRP_LUA_ENTER;
+
+    luaL_checktype(L, 2, LUA_TTABLE);
+
+    MRP_LUA_FOREACH_FIELD(L, 2, fldnam, fldnamlen) {
+        fld = field_name_to_type(fldnam, fldnamlen);
+
+        if (fld == MASK)
+            mask = lua_tointeger(L, -1);
+        else if ((m = get_window_mask(fld)))
+            mask |= m;
+        else
+            luaL_error(L, "bad field '%s'", fldnam);
+    }
+
+    um = (scripting_window_mask_t *)mrp_lua_create_object(L, WINDOW_MASK_CLASS,
+                                                          NULL, 0);
+    if (!um)
+        luaL_error(L, "can't create window_mask");
+
+    um->mask = mask;
+
+    MRP_LUA_LEAVE(1);
+}
+
+static scripting_window_mask_t *window_mask_create_from_c(lua_State *L,
+                                                          uint32_t mask)
+{
+    scripting_window_mask_t *um;
+
+    um = (scripting_window_mask_t *)mrp_lua_create_object(L, WINDOW_MASK_CLASS,
+                                                          NULL, 0);
+    if (!um)
+        mrp_log_error("can't create window_mask");
+    else
+        um->mask = mask;
+
+    return um;
+}
+
+static int window_mask_getfield(lua_State *L)
+{
+    scripting_window_mask_t *um;
+    field_t fld;
+    uint32_t m;
+
+    MRP_LUA_ENTER;
+
+    um = (scripting_window_mask_t*)mrp_lua_check_object(L,WINDOW_MASK_CLASS,1);
+    fld = field_check(L, 2, NULL);
+
+    lua_pop(L, 1);
+
+    if (!um)
+        lua_pushnil(L);
+    else {
+        if (fld == MASK)
+            lua_pushinteger(L, um->mask);
+        else if ((m = get_window_mask(fld)))
+            lua_pushboolean(L, (um->mask & m) ? 1 : 0);
+        else
+            lua_pushnil(L);
+    }
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int window_mask_setfield(lua_State *L)
+{
+    scripting_window_mask_t *um;
+    uint32_t m;
+    field_t fld;
+
+    MRP_LUA_ENTER;
+
+    um = (scripting_window_mask_t*)mrp_lua_check_object(L,WINDOW_MASK_CLASS,1);
+    fld = field_check(L, 2, NULL);
+
+    lua_pop(L, 2);
+
+    if (um) {
+        if (fld == MASK)
+            um->mask = lua_tointeger(L, 3);
+        else if ((m = get_window_mask(fld))) {
+            um->mask &= ~m;
+
+            if (lua_toboolean(L, 3))
+                um->mask |= m;
+        }
+    }
+
+    MRP_LUA_LEAVE(0);
+}
+
+static int window_mask_stringify(lua_State *L)
+{
+    scripting_window_mask_t *um;
+    uint32_t m, mask;
+    char buf[4096];
+    char *p, *e;
+    const char *name;
+
+
+    MRP_LUA_ENTER;
+
+    um = (scripting_window_mask_t*)mrp_lua_check_object(L,WINDOW_MASK_CLASS,1);
     e = (p = buf) + sizeof(buf);
     *p = 0;
 
@@ -623,9 +826,9 @@ static int update_mask_stringify(lua_State *L)
     MRP_LUA_LEAVE(1);
 }
 
-static void update_mask_destroy(void *data)
+static void window_mask_destroy(void *data)
 {
-    scripting_update_mask_t *um = (scripting_update_mask_t *)data;
+    scripting_window_mask_t *um = (scripting_window_mask_t *)data;
 
     MRP_UNUSED(um);
 }
@@ -664,26 +867,229 @@ static int layer_copy(mrp_wayland_t *wl,void *uval,mrp_json_t *jval,int mask)
 
     layerid = mrp_json_integer_value(jval);
 
-    if (!(layer = mrp_wayland_layer_find(wl, layerid))) {
-        /* this is temporary */
-        {
-            mrp_wayland_layer_update_t lu;
-
-            memset(&lu, 0, sizeof(lu));
-            lu.mask = MRP_WAYLAND_LAYER_LAYERID_MASK;
-            lu.layerid = layerid;
-
-            if (!(layer = mrp_wayland_layer_create(wl, &lu))) {
-                mrp_debug("can't find/create layer %d", layerid);
-                return 0;
-            }
-        }
-        /* end of temporary */
-    }
+    if (!(layer = mrp_wayland_layer_find(wl, layerid)))
+        return 0;
 
     *(mrp_wayland_layer_t **)uval = layer;
 
     return mask;
+}
+
+static bool layer_create_bridge(lua_State *L,
+                                void *data,
+                                const char *signature,
+                                mrp_funcbridge_value_t *args,
+                                char *ret_type,
+                                mrp_funcbridge_value_t *ret_val)
+{
+    scripting_winmgr_t *winmgr;
+    mrp_wayland_t *wl;
+    int32_t id;
+    const char *name;
+    mrp_wayland_layer_update_t u;
+    bool success;
+
+    MRP_UNUSED(L);
+    MRP_UNUSED(data);
+    MRP_UNUSED(ret_val);
+    MRP_ASSERT(signature && args && ret_type, "invalid argument");
+
+    do { /* not a loop */
+        *ret_type = MRP_FUNCBRIDGE_NO_DATA;
+
+        success = false;
+
+        if (strcmp(signature, "ods")) {
+            mrp_log_error("bad signature: expected 'ods' got '%s'",signature);
+            break;
+        }
+
+        winmgr = args[0].pointer;
+        id = args[1].integer;
+        name = args[2].string;
+
+        if (mrp_lua_get_object_classdef(winmgr) != WINDOW_MANAGER_CLASS) {
+            mrp_log_error("argument 1 is not a 'window_manager' class object");
+            break;
+        }
+
+        wl = winmgr->wl;
+
+        MRP_ASSERT(wl, "confused with data structures");
+
+        if (id < 0 || id >= MRP_WAYLAND_LAYER_MAX) {
+            mrp_log_error("argument 2 value is %d which is "
+                          "out of range (0-%d)", id, MRP_WAYLAND_LAYER_MAX);
+            break;
+        }
+
+        MRP_ASSERT(name, "arg3 (ie. name) was NULL");
+
+        success = true;
+
+        memset(&u, 0, sizeof(u));
+        u.mask = MRP_WAYLAND_LAYER_LAYERID_MASK | MRP_WAYLAND_LAYER_NAME_MASK;
+        u.layerid = id;
+        u.name = name;
+
+        mrp_wayland_layer_create(wl, &u);
+
+    } while(0);
+
+    return success;
+}
+
+static bool layer_request_bridge(lua_State *L,
+                                 void *data,
+                                 const char *signature,
+                                 mrp_funcbridge_value_t *args,
+                                 char *ret_type,
+                                 mrp_funcbridge_value_t *ret_val)
+{
+#define FIELD(f) MRP_OFFSET(mrp_wayland_layer_update_t, f)
+#define MASK(m)  MRP_WAYLAND_LAYER_ ## m ## _MASK
+#define TYPE(t)  t ## _copy
+
+    request_def_t   fields[] = {
+        { "layer"  , FIELD(layerid)  , MASK(LAYERID), TYPE(integer) },
+        { "visible", FIELD(visible)  , MASK(VISIBLE), TYPE(integer) },
+        {   NULL   ,        0        ,      0       ,      NULL     }
+    };
+
+#undef TYPE
+#undef MASK
+#undef FIELD
+
+    scripting_winmgr_t *winmgr;
+    mrp_wayland_t *wl;
+    mrp_wayland_layer_update_t u;
+    mrp_json_t *json;
+    const char *key;
+    mrp_json_t *val;
+    mrp_json_iter_t it;
+    request_def_t *f;
+    int m;
+    bool success;
+
+    MRP_UNUSED(L);
+    MRP_UNUSED(data);
+    MRP_UNUSED(ret_val);
+    MRP_ASSERT(signature && args && ret_type, "invalid argument");
+
+    do { /* not a loop */
+        *ret_type = MRP_FUNCBRIDGE_NO_DATA;
+
+        success = false;
+
+        if (strcmp(signature, "oo")) {
+            mrp_log_error("bad signature: expected 'oo' got '%s'",signature);
+            break;
+        }
+
+        winmgr = args[0].pointer;
+
+        if (mrp_lua_get_object_classdef(winmgr) != WINDOW_MANAGER_CLASS) {
+            mrp_log_error("argument 1 is not a 'window_manager' class object");
+            break;
+        }
+
+        wl = winmgr->wl;
+
+        MRP_ASSERT(wl, "confused with data structures");
+
+        success = true;
+
+        /* TODO: replace this with a function call */
+        json = *(mrp_json_t **)args[1].pointer;
+        if (!json) {
+            mrp_log_error("argument 2 is not a 'JSON' class object");
+            break;
+        }
+
+        memset(&u, 0, sizeof(u));
+
+        mrp_json_foreach_member(json, key,val, it) {
+            for (f = fields;   f->name;   f++) {
+                if (!strcmp(key, f->name)) {
+                    if ((m = f->copy(wl, (void*)&u + f->offset, val, f->mask)))
+                        u.mask |= m;
+                    else
+                        mrp_debug("'%s' field has invalid value", key);
+                    break;
+                }
+            }
+        } /* mrp_json_foreach_member */
+
+        mrp_wayland_layer_request(wl, &u);
+
+    } while(0);
+
+    return success;
+}
+
+static void layer_update_callback(mrp_wayland_t *wl,
+                                  mrp_wayland_layer_update_mask_t mask,
+                                  mrp_wayland_layer_t *layer)
+{
+    static mrp_wayland_layer_update_mask_t filter =
+        MRP_WAYLAND_LAYER_LAYERID_MASK   |
+        MRP_WAYLAND_LAYER_VISIBLE_MASK   ;
+
+    lua_State *L;
+    scripting_winmgr_t *winmgr;
+    mrp_json_t *json;
+    mrp_funcbridge_value_t args[3], ret;
+    char t;
+    bool success;
+
+    MRP_UNUSED(filter);
+
+    MRP_ASSERT(wl && layer, "invalid argument");
+
+    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_data)) {
+        mrp_log_error("window manager scripting is not initialized");
+        return;
+    }
+
+    MRP_ASSERT(wl == winmgr->wl, "confused with data structures");
+
+    if (!mask) {
+        mrp_debug("nothing to do");
+        return;
+    }
+
+    if (!(L = mrp_lua_get_lua_state())) {
+        mrp_log_error("can't update layer %u: LUA is not initialesed",
+                      layer->layerid);
+        return;
+    }
+
+    if (!(json = mrp_json_create(MRP_JSON_OBJECT))) {
+        mrp_log_error("failed to create JSON object for layer %d update",
+                      layer->layerid);
+        return;
+    }
+
+    if (!mrp_json_add_integer(json, "layer"  , layer->layerid) ||
+        !mrp_json_add_string (json, "visible", layer->visible)  )
+    {
+        mrp_log_error("failed to build JSON object for layer %d update",
+                      layer->layerid);
+    }
+
+    args[0].pointer = winmgr;
+    args[1].pointer = mrp_json_lua_wrap(L, json);
+    args[2].pointer = layer_mask_create_from_c(L, mask);
+
+    memset(&ret, 0, sizeof(ret));
+
+    success = mrp_funcbridge_call_from_c(L, winmgr->layer_update, "ooo",
+                                         args, &t, &ret);
+    if (!success) {
+        mrp_log_error("failed to call window_manager.%s.layer_update method "
+                      "(%s)", layer->name, ret.string ? ret.string : "NULL");
+        mrp_free((void *)ret.string);
+    }
 }
 
 static bool window_request_bridge(lua_State *L,
@@ -779,6 +1185,7 @@ static bool window_request_bridge(lua_State *L,
                         u.mask |= m;
                     else
                         mrp_debug("'%s' field has invalid value", key);
+                    break;
                 }
             }
         } /* mrp_json_foreach_member */
@@ -863,7 +1270,7 @@ static void window_update_callback(mrp_wayland_t *wl,
 
     args[0].pointer = winmgr;
     args[1].pointer = mrp_json_lua_wrap(L, json);
-    args[2].pointer = update_mask_create_from_c(L, mask);
+    args[2].pointer = window_mask_create_from_c(L, mask);
 
     memset(&ret, 0, sizeof(ret));
 
@@ -875,6 +1282,7 @@ static void window_update_callback(mrp_wayland_t *wl,
         mrp_free((void *)ret.string);
     }
 }
+
 
 static animation_def_t *animation_check(lua_State *L, int t)
 {
@@ -1080,9 +1488,26 @@ static field_t field_name_to_type(const char *name, size_t len)
             return POSITION;
         break;
 
+    case 12:
+        if (!strcmp(name, "layer_create"))
+            return LAYER_CREATE;
+        if (!strcmp(name, "layer_update"))
+            return LAYER_UPDATE;
+        break;
+
     case 13:
-        if (!strcmp(name, "window_update"))
-            return WINDOW_UPDATE;
+        switch (name[0]) {
+        case 'l':
+            if (!strcmp(name, "layer_request"))
+                return LAYER_REQUEST;
+            break;
+        case 'w':
+            if (!strcmp(name, "window_update"))
+                return WINDOW_UPDATE;
+            break;
+        default:
+            break;
+        }
         break;
 
     case 14:
@@ -1113,7 +1538,16 @@ static char *make_id(const char *string, char *buf, int len)
     return buf;
 }
 
-static uint32_t get_mask(field_t fld)
+static uint32_t get_layer_mask(field_t fld)
+{
+    switch (fld) {
+    case LAYER:     return MRP_WAYLAND_LAYER_LAYERID_MASK;
+    case VISIBLE:   return MRP_WAYLAND_LAYER_VISIBLE_MASK;
+    default:        return 0;
+    }
+}
+
+static uint32_t get_window_mask(field_t fld)
 {
     switch (fld) {
     case SURFACE:   return MRP_WAYLAND_WINDOW_SURFACEID_MASK;
@@ -1140,6 +1574,8 @@ static bool register_methods(lua_State *L)
 #define FUNCBRIDGE_END    { NULL, NULL, NULL, NULL, NULL }
 
     static funcbridge_def_t funcbridge_defs[] = {
+        FUNCBRIDGE(layer_create  , "ods" , NULL),
+        FUNCBRIDGE(layer_request , "oo"  , NULL),
         FUNCBRIDGE(window_request, "oood", NULL),
         FUNCBRIDGE_END
     };

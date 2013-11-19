@@ -78,6 +78,9 @@ typedef void (*mrp_wayland_destructor_t)(mrp_wayland_object_t *);
 typedef void (*mrp_wayland_window_update_callback_t)(mrp_wayland_t *,
                                               mrp_wayland_window_update_mask_t,
                                               mrp_wayland_window_t *);
+typedef void (*mrp_wayland_layer_update_callback_t)(mrp_wayland_t *,
+                                              mrp_wayland_layer_update_mask_t,
+                                              mrp_wayland_layer_t *);
 
 struct mrp_wayland_s {
     const char *display_name;
@@ -98,6 +101,7 @@ struct mrp_wayland_s {
     mrp_wayland_input_manager_t *im;
 
     mrp_wayland_window_update_callback_t window_update_callback;
+    mrp_wayland_layer_update_callback_t layer_update_callback;
     void *scripting_data;
 };
 
@@ -131,6 +135,8 @@ bool mrp_wayland_register_interface(mrp_wayland_t *wl,
                                     mrp_wayland_factory_t *factory);
 void mrp_wayland_register_window_update_callback(mrp_wayland_t *wl,
                                mrp_wayland_window_update_callback_t callback);
+void mrp_wayland_register_layer_update_callback(mrp_wayland_t *wl,
+                               mrp_wayland_layer_update_callback_t callback);
 void mrp_wayland_set_scripting_data(mrp_wayland_t *, void *);
 
 #endif /* __MURPHY_WAYLAND_H__ */

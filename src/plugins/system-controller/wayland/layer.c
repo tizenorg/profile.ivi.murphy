@@ -145,15 +145,43 @@ void mrp_wayland_layer_visibility_request(mrp_wayland_layer_t *layer,
     wm->layer_request(layer, &u);
 }
 
+void mrp_wayland_layer_request(mrp_wayland_t *wl,mrp_wayland_layer_update_t *u)
+{
+    mrp_wayland_layer_t *layer;
+    mrp_wayland_window_manager_t *wm;
+
+    MRP_ASSERT(wl && u, "invalid arguments");
+
+    if (!(u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK) ||
+        !(layer = mrp_wayland_layer_find(wl, u->layerid)))
+    {
+        mrp_debug("can't find layer %u: request rejected", u->layerid);
+        return;
+    }
+
+    MRP_ASSERT(layer->wm, "confused with data structures");
+
+    wm = layer->wm;
+
+    wm->layer_request(layer, u);
+}
+
 void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
                               mrp_wayland_layer_update_t *u)
 {
+    mrp_wayland_window_manager_t *wm;
+    mrp_wayland_interface_t *interface;
+    mrp_wayland_t *wl;
     int32_t layerid;
     mrp_wayland_layer_update_mask_t mask;
     char buf[2048];
 
     MRP_ASSERT(layer && layer->wm && layer->wm->interface &&
                layer->wm->interface->wl && u, "invalid argument");
+
+    wm = layer->wm;
+    interface = wm->interface;
+    wl = interface->wl;
 
     layerid = layer->layerid;
 
@@ -172,6 +200,9 @@ void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
     else {
         mrp_wayland_layer_print(layer, mask, buf,sizeof(buf));
         mrp_debug("layer %d updated%s", layerid, buf);
+
+        if (wl->layer_update_callback)
+            wl->layer_update_callback(wl, mask, layer);
     }
 }
 
@@ -221,6 +252,17 @@ size_t mrp_wayland_layer_request_print(mrp_wayland_layer_update_t *u,
     return p - buf;
 
 #undef PRINT
+}
+
+const char *
+mrp_wayland_layer_update_mask_str(mrp_wayland_layer_update_mask_t mask)
+{
+    switch (mask) {
+    case MRP_WAYLAND_LAYER_LAYERID_MASK:   return "layerid";
+    case MRP_WAYLAND_LAYER_NAME_MASK:      return "name";
+    case MRP_WAYLAND_LAYER_VISIBLE_MASK:   return "visible";
+    default:                               return "<unknown>";
+    }
 }
 
 static mrp_wayland_layer_update_mask_t update(mrp_wayland_layer_t *layer,

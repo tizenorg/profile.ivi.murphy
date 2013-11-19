@@ -294,20 +294,8 @@ void mrp_wayland_window_layer_request(mrp_wayland_window_t *win,
     wl = wm->interface->wl;
 
     if (!(layer = mrp_wayland_layer_find(wl, layerid))) {
-        /* this is temporary */
-        {
-            mrp_wayland_layer_update_t lu;
-
-            memset(&lu, 0, sizeof(lu));
-            lu.mask = MRP_WAYLAND_LAYER_LAYERID_MASK;
-            lu.layerid = layerid;
-
-            if (!(layer = mrp_wayland_layer_create(wl, &lu))) {
-                mrp_log_error("can't find/create layer %d", layerid);
-                return;
-            }
-        }
-        /* end of temporary */
+        mrp_log_error("can't find layer %d", layerid);
+        return;
     }
 
     memset(&u, 0, sizeof(u));
