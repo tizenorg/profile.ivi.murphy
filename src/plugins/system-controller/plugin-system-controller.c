@@ -312,7 +312,7 @@ static const char *message_name(int code)
         MAP(MSG_CMD_NOTIFY_CHANGED_STATE, 0x00060001);
 #undef MAP
 
-        return false;
+        setup = false;
     }
 
     if (c > MAX_CLASS || t > MAX_TYPE || (n = names[c][t]) == NULL)
