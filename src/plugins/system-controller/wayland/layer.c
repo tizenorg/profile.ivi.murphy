@@ -53,11 +53,13 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
     MRP_ASSERT(wl && u && (u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK),
                "invalid argument");
 
+#if 0
     if (!wl->wm) {
         mrp_log_error("failed to create layer %d: no window manager",
                       u->layerid);
         return NULL;
     }
+#endif
 
     if (!(layer = mrp_allocz(sizeof(mrp_wayland_layer_t)))) {
         mrp_log_error("failed to create layer %d: out of memory",

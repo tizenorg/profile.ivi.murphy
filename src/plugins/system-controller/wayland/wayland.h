@@ -128,13 +128,15 @@ struct mrp_wayland_object_s {
 };
 
 
-mrp_wayland_t *mrp_wayland_create(const char *display_name,
-                                  mrp_mainloop_t *ml);
+
+mrp_wayland_t *mrp_wayland_create(const char *display_name,mrp_mainloop_t *ml);
 void mrp_wayland_destroy(mrp_wayland_t *wl);
 
 bool mrp_wayland_connect(mrp_wayland_t *wl);
 void mrp_wayland_flush(mrp_wayland_t *wl);
 
+void mrp_wayland_register_window_manager(mrp_wayland_t *wl,
+                                         mrp_wayland_window_manager_t *wm);
 bool mrp_wayland_register_interface(mrp_wayland_t *wl,
                                     mrp_wayland_factory_t *factory);
 void mrp_wayland_register_window_update_callback(mrp_wayland_t *wl,

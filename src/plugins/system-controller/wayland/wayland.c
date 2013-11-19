@@ -37,6 +37,7 @@
 #include <murphy/common.h>
 
 #include "wayland.h"
+#include "layer.h"
 
 
 static uint32_t wid_hash(const void *);
@@ -51,7 +52,7 @@ static void global_available_callback(void *, struct wl_registry *, uint32_t,
 static void global_remove_callback(void *, struct wl_registry *, uint32_t);
 
 
-mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
+mrp_wayland_t *mrp_wayland_create(const char *display_name,mrp_mainloop_t *ml)
 {
     mrp_wayland_t *wl;
     mrp_htbl_config_t icfg, wcfg, lcfg;
@@ -173,6 +174,29 @@ void mrp_wayland_flush(mrp_wayland_t *wl)
         mrp_debug("calling wl_display_flush()");
         wl_display_flush(wl->display);
     }
+}
+
+static int update_layers(void *key, void *object, void *ud)
+{
+    mrp_wayland_window_manager_t *wm = (mrp_wayland_window_manager_t *)ud;
+    mrp_wayland_layer_t *layer = (mrp_wayland_layer_t *)object;
+
+    MRP_UNUSED(key);
+
+    mrp_debug("register window manager to layer %u/'%s'",
+              layer->layerid, layer->name);
+
+    layer->wm = wm;
+
+    return MRP_HTBL_ITER_MORE;
+}
+
+void mrp_wayland_register_window_manager(mrp_wayland_t *wl,
+                                         mrp_wayland_window_manager_t *wm)
+{
+    wl->wm = wm;
+
+    mrp_htbl_foreach(wl->layers, update_layers, wm);
 }
 
 

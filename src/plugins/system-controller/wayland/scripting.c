@@ -62,6 +62,7 @@ typedef struct scripting_winmgr_s       scripting_winmgr_t;
 typedef struct scripting_animation_s    scripting_animation_t;
 typedef struct scripting_layer_mask_s   scripting_layer_mask_t;
 typedef struct scripting_window_mask_s  scripting_window_mask_t;
+typedef struct layer_def_s              layer_def_t;
 typedef struct animation_def_s          animation_def_t;
 typedef struct funcbridge_def_s         funcbridge_def_t;
 typedef struct request_def_s            request_def_t;
@@ -84,12 +85,12 @@ enum field_e {
     WIDTH,
     ACTIVE,
     HEIGHT,
+    LAYERS,
     RESIZE,
     DISPLAY,
     SURFACE,
     VISIBLE,
     POSITION,
-    LAYER_CREATE,
     LAYER_UPDATE,
     LAYER_REQUEST,
     WINDOW_UPDATE,
@@ -114,6 +115,12 @@ struct scripting_window_mask_s {
 
 struct scripting_layer_mask_s {
     uint32_t mask;
+};
+
+
+struct layer_def_s {
+    int32_t id;
+    const char *name;
 };
 
 struct animation_def_s {
@@ -185,6 +192,9 @@ static int animation_push(lua_State *, mrp_wayland_animation_t *,
                           mrp_wayland_animation_type_t);
 static void animation_def_free(animation_def_t *);
 
+static layer_def_t *layer_def_check(lua_State *, int);
+static void layer_def_free(layer_def_t *);
+
 static field_t field_check(lua_State *, int, const char **);
 static field_t field_name_to_type(const char *, size_t);
 
@@ -254,7 +264,6 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
-static mrp_funcbridge_t *layer_create;
 static mrp_funcbridge_t *layer_request;
 static mrp_funcbridge_t *window_request;
 
@@ -277,11 +286,14 @@ static int  window_manager_create(lua_State *L)
     size_t fldnamlen;
     const char *fldnam;
     scripting_winmgr_t *winmgr;
+    mrp_wayland_layer_update_t lu;
     char *name;
     const char *display = NULL;
+    layer_def_t *layers = NULL;
     mrp_funcbridge_t *layer_update = NULL;
     mrp_funcbridge_t *window_update = NULL;
     char buf[256];
+    layer_def_t *l;
 
     MRP_LUA_ENTER;
 
@@ -296,6 +308,10 @@ static int  window_manager_create(lua_State *L)
 
         case DISPLAY:
             display = luaL_checkstring(L, -1);
+            break;
+
+        case LAYERS:
+            layers = layer_def_check(L, -1);
             break;
 
         case LAYER_UPDATE:
@@ -341,6 +357,19 @@ static int  window_manager_create(lua_State *L)
     mrp_wayland_register_window_update_callback(wl, window_update_callback);
     mrp_wayland_set_scripting_data(wl, winmgr);
 
+    if (layers) {
+        memset(&lu, 0, sizeof(lu));
+        lu.mask = MRP_WAYLAND_LAYER_LAYERID_MASK | MRP_WAYLAND_LAYER_NAME_MASK;
+
+        for (l = layers;  l->name;  l++) {
+            lu.layerid = l->id;
+            lu.name = l->name;
+            mrp_wayland_layer_create(wl, &lu);
+        }
+            
+        layer_def_free(layers);
+    }
+
     mrp_wayland_connect(wl);
 
     MRP_LUA_LEAVE(1);
@@ -365,10 +394,6 @@ static int  window_manager_getfield(lua_State *L)
 
         case DISPLAY:
             lua_pushstring(L, wmgr->display);
-            break;
-
-        case LAYER_CREATE:
-            mrp_funcbridge_push(L, layer_create);
             break;
 
         case LAYER_REQUEST:
@@ -877,70 +902,6 @@ static int layer_copy(mrp_wayland_t *wl,void *uval,mrp_json_t *jval,int mask)
     return mask;
 }
 
-static bool layer_create_bridge(lua_State *L,
-                                void *data,
-                                const char *signature,
-                                mrp_funcbridge_value_t *args,
-                                char *ret_type,
-                                mrp_funcbridge_value_t *ret_val)
-{
-    scripting_winmgr_t *winmgr;
-    mrp_wayland_t *wl;
-    int32_t id;
-    const char *name;
-    mrp_wayland_layer_update_t u;
-    bool success;
-
-    MRP_UNUSED(L);
-    MRP_UNUSED(data);
-    MRP_UNUSED(ret_val);
-    MRP_ASSERT(signature && args && ret_type, "invalid argument");
-
-    do { /* not a loop */
-        *ret_type = MRP_FUNCBRIDGE_NO_DATA;
-
-        success = false;
-
-        if (strcmp(signature, "ods")) {
-            mrp_log_error("bad signature: expected 'ods' got '%s'",signature);
-            break;
-        }
-
-        winmgr = args[0].pointer;
-        id = args[1].integer;
-        name = args[2].string;
-
-        if (mrp_lua_get_object_classdef(winmgr) != WINDOW_MANAGER_CLASS) {
-            mrp_log_error("argument 1 is not a 'window_manager' class object");
-            break;
-        }
-
-        wl = winmgr->wl;
-
-        MRP_ASSERT(wl, "confused with data structures");
-
-        if (id < 0 || id >= MRP_WAYLAND_LAYER_MAX) {
-            mrp_log_error("argument 2 value is %d which is "
-                          "out of range (0-%d)", id, MRP_WAYLAND_LAYER_MAX);
-            break;
-        }
-
-        MRP_ASSERT(name, "arg3 (ie. name) was NULL");
-
-        success = true;
-
-        memset(&u, 0, sizeof(u));
-        u.mask = MRP_WAYLAND_LAYER_LAYERID_MASK | MRP_WAYLAND_LAYER_NAME_MASK;
-        u.layerid = id;
-        u.name = name;
-
-        mrp_wayland_layer_create(wl, &u);
-
-    } while(0);
-
-    return success;
-}
-
 static bool layer_request_bridge(lua_State *L,
                                  void *data,
                                  const char *signature,
@@ -1074,7 +1035,7 @@ static void layer_update_callback(mrp_wayland_t *wl,
     }
 
     if (!mrp_json_add_integer(json, "layer"  , layer->layerid) ||
-        !mrp_json_add_string (json, "visible", layer->visible)  )
+        !mrp_json_add_integer(json, "visible", layer->visible)  )
     {
         mrp_log_error("failed to build JSON object for layer %d update",
                       layer->layerid);
@@ -1368,6 +1329,72 @@ static void animation_def_free(animation_def_t *def)
     }
 }
 
+static layer_def_t *layer_def_check(lua_State *L, int t)
+{
+    size_t tlen, dlen;
+    size_t size;
+    layer_def_t *layers, *l;
+    size_t i, j;
+
+    t = (t < 0) ? lua_gettop(L) + t + 1 : t;
+
+    luaL_checktype(L, t, LUA_TTABLE);
+    tlen  = lua_objlen(L, t);
+    size = sizeof(layer_def_t) * (tlen + 1);
+
+    if (!(layers = mrp_allocz(size)))
+        luaL_error(L, "can't allocate %d byte long memory", size);
+    else {
+        for (i = 0;  i < tlen;  i++) {
+            l = layers + i;
+
+            lua_pushinteger(L, (int)(i+1));
+            lua_gettable(L, t);
+
+            if (!lua_istable(L, -1))
+                goto error;
+
+            dlen = lua_objlen(L, -1);
+
+            for (j = 0;  j < dlen;  j++) {
+                lua_pushnumber(L, (int)(j+1));
+                lua_gettable(L, -2);
+
+                switch (j) {
+                case 0:    l->id = lua_tointeger(L, -1);               break;
+                case 1:    l->name = mrp_strdup(lua_tostring(L, -1));  break;
+                default:   goto error;
+                }
+
+                lua_pop(L, 1);
+            }
+
+            lua_pop(L, 1);
+
+            if (!l->name || l->id < 0 || l->id > MRP_WAYLAND_LAYER_MAX)
+                goto error;
+        }
+    }
+
+    return layers;
+
+ error:
+    layer_def_free(layers);
+    luaL_argerror(L, i+1, "malformed layer definition");
+    return NULL;
+}
+
+static void layer_def_free(layer_def_t *layers)
+{
+    layer_def_t *l;
+
+    if (layers) {
+        for (l = layers;  l->name;  l++)
+            mrp_free((void *)l->name);
+        mrp_free((void *)layers);
+    }
+}
+
 static field_t field_check(lua_State *L, int idx, const char **ret_fldnam)
 {
     const char *fldnam;
@@ -1461,6 +1488,10 @@ static field_t field_name_to_type(const char *name, size_t len)
             if (!strcmp(name, "height"))
                 return HEIGHT;
             break;
+        case 'l':
+            if (!strcmp(name, "layers"))
+                return LAYERS;
+            break;
         case 'r':
             if (!strcmp(name, "resize"))
                 return RESIZE;
@@ -1495,8 +1526,6 @@ static field_t field_name_to_type(const char *name, size_t len)
         break;
 
     case 12:
-        if (!strcmp(name, "layer_create"))
-            return LAYER_CREATE;
         if (!strcmp(name, "layer_update"))
             return LAYER_UPDATE;
         break;
@@ -1580,7 +1609,6 @@ static bool register_methods(lua_State *L)
 #define FUNCBRIDGE_END    { NULL, NULL, NULL, NULL, NULL }
 
     static funcbridge_def_t funcbridge_defs[] = {
-        FUNCBRIDGE(layer_create  , "ods" , NULL),
         FUNCBRIDGE(layer_request , "oo"  , NULL),
         FUNCBRIDGE(window_request, "oood", NULL),
         FUNCBRIDGE_END

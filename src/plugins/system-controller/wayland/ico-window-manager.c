@@ -129,10 +129,11 @@ static bool window_manager_constructor(mrp_wayland_t *wl,
     ico_window_mgr_declare_manager((struct ico_window_mgr *)wm->proxy,
                                    ICO_WINDOW_MGR_DECLARE_MANAGER_MANAGER);
 
-    wl->wm = (mrp_wayland_window_manager_t *)wm;
+    mrp_wayland_register_window_manager(wl, (mrp_wayland_window_manager_t*)wm);
 
     return true;
 }
+
 
 static void window_created_callback(void *data,
                                     struct ico_window_mgr *ico_window_mgr,
@@ -605,6 +606,7 @@ static void set_window_visible(mrp_wayland_window_t *win,
         (u->visible && win->visible) || (!u->visible && !win->visible))
     {
         visible = ICO_WINDOW_MGR_V_NOCHANGE;
+        anim_type = 0;
     }
     else {
         visible = u->visible ? ICO_WINDOW_MGR_VISIBLE_SHOW :
