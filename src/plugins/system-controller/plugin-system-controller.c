@@ -70,6 +70,7 @@ typedef struct {
     sysctl_lua_t     *scl;                /* singleton Lua object */
     lua_State        *L;                  /* murphy Lua state */
     struct {
+        mrp_funcbridge_t *client;
         mrp_funcbridge_t *generic;
         mrp_funcbridge_t *window;
         mrp_funcbridge_t *input;
@@ -99,7 +100,8 @@ struct sysctl_lua_s {
 };
 
 typedef enum {
-    SYSCTL_IDX_GENERIC = 1,
+    SYSCTL_IDX_CLIENT = 1,
+    SYSCTL_IDX_GENERIC,
     SYSCTL_IDX_WINDOW,
     SYSCTL_IDX_INPUT,
     SYSCTL_IDX_USER,
@@ -333,6 +335,7 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
     int               cmd, type, pid;
     const char       *app;
     mrp_funcbridge_t *handlers[] = {
+        [0] = sc->handler.client,
         [1] = sc->handler.window,
         [2] = sc->handler.input,
         [3] = sc->handler.user,
@@ -351,27 +354,45 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
         mrp_debug("  %s", s);
     }
 
+    /*
+     * emit a connection message if this is the fist message with an appid
+     */
+
+    if (mrp_json_get_integer(req, "pid", &pid))
+        c->pid = pid;
+
+    if (mrp_json_get_string(req, "appid", &app) && c->app == NULL) {
+        mrp_free(c->app);
+        c->app = mrp_strdup(app);
+
+        mrp_debug("client #%d: pid %u, appid '%s'", c->id, c->pid,
+                  c->app ? c->app : "");
+
+        h = sc->handler.client;
+
+        if (h != NULL) {
+            args[0].pointer = sc->scl;
+            args[1].integer = c->id;
+            args[2].pointer = mrp_json_lua_wrap(sc->L, req);
+
+            if (!mrp_funcbridge_call_from_c(sc->L, h, "odo", &args[0],
+                                            &rt, &ret)) {
+                mrp_log_error("Failed to dispatch client-connection (%s).",
+                              ret.string ? ret.string : "<unknown error>");
+                mrp_free((void *)ret.string);
+            }
+        }
+    }
+
+
     if (!mrp_json_get_integer(req, "command", &cmd)) {
         h    = sc->handler.generic;
         type = 0;
     }
     else {
-        if (cmd == 0x1) {
-            if (mrp_json_get_integer(req, "pid", &pid))
-                c->pid = pid;
-            if (mrp_json_get_string(req, "appid", &app)) {
-                mrp_free(c->app);
-                c->app = mrp_strdup(app);
-            }
-
-            mrp_debug("client #%d: pid %u, appid '%s'", c->id, c->pid,
-                      c->app ? c->app : "");
-            return;
-        }
-
         type = (cmd & 0xffff0000) >> 16;
 
-        if (1 <= type && type <= 5)
+        if (0 <= type && type <= 5)
             h = handlers[type];
         else
             h = NULL;
@@ -478,6 +499,7 @@ static sysctl_lua_t *sysctl_lua_check(lua_State *L, int idx)
 static int name_to_index(const char *name)
 {
 #define MAP(_name, _idx) if (!strcmp(name, _name)) return SYSCTL_IDX_##_idx;
+    MAP("client_handler"  , CLIENT);
     MAP("generic_handler" , GENERIC);
     MAP("window_handler"  , WINDOW);
     MAP("input_handler"   , INPUT);
@@ -497,6 +519,9 @@ static int sysctl_lua_getfield(lua_State *L)
     lua_pop(L, 1);
 
     switch (idx) {
+    case SYSCTL_IDX_CLIENT:
+        mrp_funcbridge_push(L, scl->sc->handler.client);
+        break;
     case SYSCTL_IDX_GENERIC:
         mrp_funcbridge_push(L, scl->sc->handler.generic);
         break;
@@ -531,6 +556,7 @@ static int sysctl_lua_setfield(lua_State *L)
     mrp_funcbridge_t   **hptr = NULL;
 
     switch (idx) {
+    case SYSCTL_IDX_CLIENT:   hptr = &scl->sc->handler.client;   break;
     case SYSCTL_IDX_GENERIC:  hptr = &scl->sc->handler.generic;  break;
     case SYSCTL_IDX_WINDOW:   hptr = &scl->sc->handler.window;   break;
     case SYSCTL_IDX_INPUT:    hptr = &scl->sc->handler.input;    break;
