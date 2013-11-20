@@ -143,6 +143,8 @@ struct request_def_s {
     copy_func_t copy;
 };
 
+
+
 static int  window_manager_create(lua_State *);
 static int  window_manager_getfield(lua_State *);
 static int  window_manager_setfield(lua_State *);
@@ -1167,8 +1169,13 @@ static void window_update_callback(mrp_wayland_t *wl,
                                    mrp_wayland_window_update_mask_t mask,
                                    mrp_wayland_window_t *win)
 {
+#define ADD_FIELD(n,t,m,d)                                                   \
+    if ((mask&MRP_WAYLAND_WINDOW_##m##_MASK) && !mrp_json_add_##t(json,n,d)) \
+        goto err
+
     static mrp_wayland_window_update_mask_t filter =
         MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+        MRP_WAYLAND_WINDOW_NAME_MASK      |
         MRP_WAYLAND_WINDOW_APPID_MASK     |
         MRP_WAYLAND_WINDOW_PID_MASK       |
         MRP_WAYLAND_WINDOW_NODEID_MASK    |
@@ -1216,23 +1223,21 @@ static void window_update_callback(mrp_wayland_t *wl,
     }
 
     layerid = win->layer ? win->layer->layerid : -1;
+    mask |= MRP_WAYLAND_WINDOW_SURFACEID_MASK;
 
-    if (!mrp_json_add_integer(json, "surface", win->surfaceid) ||
-        !mrp_json_add_string (json, "appid"  , win->appid    ) ||
-        !mrp_json_add_integer(json, "pid"    , win->pid      ) ||
-        !mrp_json_add_integer(json, "node"   , win->nodeid   ) ||
-        !mrp_json_add_integer(json, "layer"  , layerid       ) ||
-        !mrp_json_add_integer(json, "pos_x"  , win->x        ) ||
-        !mrp_json_add_integer(json, "pos_y"  , win->y        ) ||
-        !mrp_json_add_integer(json, "width"  , win->width    ) ||
-        !mrp_json_add_integer(json, "height" , win->height   ) ||
-        !mrp_json_add_integer(json, "visible", win->visible  ) ||
-        !mrp_json_add_integer(json, "raise"  , win->raise    ) ||
-        !mrp_json_add_integer(json, "active" , win->active   )  )
-    {
-        mrp_log_error("failed to build JSON object for window %d update",
-                      win->surfaceid);
-    }
+    ADD_FIELD ("surface", integer, SURFACEID, win->surfaceid);
+    ADD_FIELD ("name"   , string , NAME     , win->name     );
+    ADD_FIELD ("appid"  , string , APPID    , win->appid    );
+    ADD_FIELD ("pid"    , integer, PID      , win->pid      );
+    ADD_FIELD ("node"   , integer, NODEID   , win->nodeid   );
+    ADD_FIELD ("layer"  , integer, LAYER    , layerid       );
+    ADD_FIELD ("pos_x"  , integer, X        , win->x        );
+    ADD_FIELD ("pos_y"  , integer, Y        , win->y        );
+    ADD_FIELD ("width"  , integer, WIDTH    , win->width    );
+    ADD_FIELD ("height" , integer, HEIGHT   , win->height   );
+    ADD_FIELD ("visible", integer, VISIBLE  , win->visible  );
+    ADD_FIELD ("raise"  , integer, RAISE    , win->raise    );
+    ADD_FIELD ("active" , integer, ACTIVE   , win->active   );
 
     args[0].pointer = winmgr;
     args[1].integer = oper;
@@ -1248,6 +1253,14 @@ static void window_update_callback(mrp_wayland_t *wl,
                       "(%s)", winmgr->name, ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+    return;
+
+ err:
+    mrp_log_error("failed to build JSON object for window %d update",
+                  win->surfaceid);
+
+#undef ADD_FIELD
 }
 
 
