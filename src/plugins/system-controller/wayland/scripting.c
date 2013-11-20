@@ -1224,6 +1224,7 @@ static void window_update_callback(mrp_wayland_t *wl,
 
     layerid = win->layer ? win->layer->layerid : -1;
     mask |= MRP_WAYLAND_WINDOW_SURFACEID_MASK;
+    mask |= win->appid ? MRP_WAYLAND_WINDOW_APPID_MASK : 0;
 
     ADD_FIELD ("surface", integer, SURFACEID, win->surfaceid);
     ADD_FIELD ("name"   , string , NAME     , win->name     );
