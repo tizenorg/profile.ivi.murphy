@@ -147,6 +147,8 @@ static void window_created_callback(void *data,
     mrp_wayland_t *wl;
     mrp_wayland_window_update_t u;
 
+    MRP_UNUSED(layertype);
+
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
                "confused with data structures");
@@ -256,6 +258,7 @@ static void window_configure_callback(void *data,
     mrp_wayland_t *wl;
     mrp_wayland_window_update_t u;
 
+    MRP_UNUSED(layertype);
     MRP_UNUSED(hint);
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
@@ -351,6 +354,7 @@ static void app_surfaces_callback(void *data,
 {
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
 
+    MRP_UNUSED(pid);
     MRP_UNUSED(surfaces);
 
     MRP_ASSERT(wm, "invalid argument");

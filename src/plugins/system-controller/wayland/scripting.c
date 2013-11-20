@@ -37,6 +37,7 @@
 
 #include <murphy/common.h>
 #include <murphy/core/lua-bindings/murphy.h>
+#include <murphy/core/lua-utils/error.h>
 #include <murphy/core/lua-utils/object.h>
 #include <murphy/core/lua-utils/funcbridge.h>
 #include <murphy/core/lua-bindings/lua-json.h>
@@ -146,6 +147,7 @@ struct request_def_s {
 
 
 static int  window_manager_create(lua_State *);
+static int  window_manager_connect(lua_State *);
 static int  window_manager_getfield(lua_State *);
 static int  window_manager_setfield(lua_State *);
 static void window_manager_destroy(void *);
@@ -214,6 +216,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     window_manager_destroy,     /* userdata destructor */
     MRP_LUA_METHOD_LIST (       /* methods */
        MRP_LUA_METHOD_CONSTRUCTOR (window_manager_create)
+       MRP_LUA_METHOD(connect,     window_manager_connect)
     ),
     MRP_LUA_METHOD_LIST (       /* overrides */
        MRP_LUA_OVERRIDE_CALL      (window_manager_create)
@@ -296,6 +299,7 @@ static int  window_manager_create(lua_State *L)
     mrp_funcbridge_t *window_update = NULL;
     char buf[256];
     layer_def_t *l;
+    int depth;
 
     MRP_LUA_ENTER;
 
@@ -346,6 +350,8 @@ static int  window_manager_create(lua_State *L)
     if (!winmgr)
         luaL_error(L, "can't create window manager on display '%s'", display);
 
+    depth = lua_gettop(L);
+
     winmgr->wl = wl;
     winmgr->name = mrp_strdup(name);
     winmgr->display = mrp_strdup(display);
@@ -357,6 +363,7 @@ static int  window_manager_create(lua_State *L)
 
     mrp_wayland_register_layer_update_callback(wl, layer_update_callback);
     mrp_wayland_register_window_update_callback(wl, window_update_callback);
+
     mrp_wayland_set_scripting_data(wl, winmgr);
 
     if (layers) {
@@ -368,11 +375,31 @@ static int  window_manager_create(lua_State *L)
             lu.name = l->name;
             mrp_wayland_layer_create(wl, &lu);
         }
-            
+
         layer_def_free(layers);
+
     }
 
-    mrp_wayland_connect(wl);
+    lua_settop(L, depth);
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int window_manager_connect(lua_State *L)
+{
+    scripting_winmgr_t *wmgr;
+    bool success;
+
+    MRP_LUA_ENTER;
+
+    wmgr = (scripting_winmgr_t*)mrp_lua_check_object(L,WINDOW_MANAGER_CLASS,1);
+
+    if (wmgr->wl != NULL)
+        success = mrp_wayland_connect(wmgr->wl);
+    else
+        success = false;
+
+    lua_pushboolean(L, success);
 
     MRP_LUA_LEAVE(1);
 }
