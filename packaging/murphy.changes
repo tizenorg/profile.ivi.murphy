@@ -1,3 +1,9 @@
+* Fri Nov 22 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.39
+- AMB: support properties where object and property names don't match.
+- system-controller: initial system-controller support.
+- packaging: listen for TurnSignal AMB properties.
+- packaging: don't run as root, run as app (for now) instead.
+
 * Tue Oct 03 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.38
 - config: force strict prolicy for ASM-bridged shared players.
 - Fixes TIVI-1927.
