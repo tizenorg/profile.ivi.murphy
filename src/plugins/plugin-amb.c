@@ -240,7 +240,7 @@ static void destroy_prop(data_t *ctx, dbus_property_watch_t *w)
 static int amb_constructor(lua_State *L)
 {
     lua_amb_property_t *prop;
-    size_t field_name_len;
+    size_t field_name_len = 0;
     const char *field_name;
     data_t *ctx = global_ctx;
     dbus_property_watch_t *w = NULL;
@@ -252,6 +252,9 @@ static int amb_constructor(lua_State *L)
 
     prop = (lua_amb_property_t *)
             mrp_lua_create_object(L, PROPERTY_CLASS, NULL, 0);
+
+    if (!prop)
+        goto error;
 
     prop->handler_ref = LUA_NOREF;
     prop->outputs_ref = LUA_NOREF;
@@ -1050,7 +1053,7 @@ static void basic_property_updated(dbus_basic_property_t *prop, void *userdata)
                 break;
             case mqi_integer:
                 buflen = snprintf(buf, 512, "INSERT INTO %s VALUES (1, '%s', %d)",
-                    w->lua_prop->basic_table_name, prop->name, prop->value.i);
+                    w->lua_prop->basic_table_name, prop->name, (int) prop->value.i);
                 break;
             case mqi_unsignd:
                 buflen = snprintf(buf, 512, "INSERT INTO %s VALUES (1, '%s', %u)",
