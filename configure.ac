@@ -541,6 +541,17 @@ AC_SUBST(DLOG_ENABLED)
 AC_SUBST(DLOG_CFLAGS)
 AC_SUBST(DLOG_LIBS)
 
+PKG_CHECK_MODULES(AUL, aul,
+           [have_aul=yes], [have_aul=no])
+enable_aul="$have_aul"
+if test "$enable_aul" = "yes"; then
+    AC_DEFINE([AUL_ENABLED], 1, [Enable Application Utility Library support ?])
+fi
+AM_CONDITIONAL(AUL_ENABLED, [test "$enable_aul" = "yes"])
+AC_SUBST(AUL_ENABLED)
+AC_SUBST(AUL_CFLAGS)
+AC_SUBST(AUL_LIBS)
+
 # Check if Audio Session Manager plugin was enabled.
 AC_ARG_ENABLE(resource-asm,
               [  --enable-resource-asm        build Murphy Audio Session Manager plugin],
@@ -554,14 +565,6 @@ if test "$enable_resource_asm" != "no"; then
     fi
     AC_SUBST(AUDIO_SESSION_MANAGER_CFLAGS)
     AC_SUBST(AUDIO_SESSION_MANAGER_LIBS)
-
-    # check for AUL
-    PKG_CHECK_MODULES(AUL, aul, [have_aul=yes], [have_aul=no])
-    if test "$have_aul" = "no" -a "$enable_aul" = "yes"; then
-        AC_MSG_ERROR([AUL development headers not found.])
-    fi
-    AC_SUBST(AUL_CFLAGS)
-    AC_SUBST(AUL_LIBS)
 
     enable_resource_asm="$have_resource_asm"
 else
@@ -628,7 +631,7 @@ esac
 internal=""; it=""
 external=""; et=""
 disabled=""; dt=""
-for plugin in $all_plugins; do 
+for plugin in $all_plugins; do
     type=internal
 
     for p in ${dynamic_plugins//,/ }; do
@@ -708,7 +711,7 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_ASM,      [check_if_internal resource-asm
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMCTL, [check_if_internal system-controller])
 
 # Check for Check (unit test framework).
-PKG_CHECK_MODULES(CHECK, 
+PKG_CHECK_MODULES(CHECK,
                   check >= 0.9.4,
                   [has_check="yes"], [has_check="no"])
 AM_CONDITIONAL(HAVE_CHECK, test "x$has_check" = "xyes")
