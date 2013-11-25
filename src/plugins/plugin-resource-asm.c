@@ -41,8 +41,9 @@
 #include <fcntl.h>
 
 #include <audio-session-manager.h>
-
+#ifdef AUL
 #include <aul.h>
+#endif
 
 #include <murphy/common.h>
 #include <murphy/common/process.h>
@@ -1315,8 +1316,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             bool effective_auto_release = FALSE;
             bool effective_dont_wait = FALSE;
             uint32_t effective_priority = 0;
-
-            /* aul buffer */
+            /* process id buffer */
             char buf[PKGNAME_LEN];
 
             mrp_log_info("REQUEST: REGISTER");
@@ -1349,6 +1349,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
             effective_auto_release = rset_data->auto_release;
             effective_dont_wait = rset_data->dont_wait;
 
+#ifdef AUL
             /* ask for the real id of the application and see if Murphy
              * has some special treatment for it */
 
@@ -1370,6 +1371,9 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 get_nonignored_argv0(pid, buf, PKGNAME_LEN, ctx->ignored_argv0);
                 mrp_log_info("application name from proc: '%s'", buf);
             }
+#else
+            get_nonignored_argv0(pid, buf, PKGNAME_LEN, ctx->ignored_argv0);
+#endif
 
             handle = get_next_handle(client);
             d = (resource_set_data_t *) mrp_allocz(sizeof(resource_set_data_t));
