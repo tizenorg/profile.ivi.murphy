@@ -145,7 +145,9 @@ static void *wait_queue (void *arg) {
         }
 
         /* alignment is fine, since the first argument to the struct is a long */
-        write(fd, &msg, sizeof(ASM_msg_lib_to_asm_t));
+        ret = write(fd, &msg, sizeof(ASM_msg_lib_to_asm_t));
+        if (ret < 0)
+            log_write("error writing data to murphy");
     }
 
     return NULL;
