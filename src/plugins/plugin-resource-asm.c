@@ -1361,7 +1361,7 @@ static asm_to_lib_t *process_msg(lib_to_asm_t *msg, asm_data_t *ctx)
                 def = mrp_resource_set_get_definition_by_binary(buf);
 
                 if (def) {
-                    effective_class = def->class_name;
+                    effective_class = (char *) def->class_name;
                     effective_priority = def->priority;
                     effective_auto_release = def->auto_release;
                     effective_dont_wait = def->dont_wait;
