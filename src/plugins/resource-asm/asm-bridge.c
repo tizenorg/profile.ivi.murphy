@@ -158,7 +158,7 @@ static void dump_msg(ASM_msg_lib_to_asm_t *msg, ctx_t *ctx)
 
     log_write("Message id %ld:\n", msg->instance_id);
 
-    log_write("Data handle: %d\n", msg->data.handle);
+    log_write("Data handle: %d\n", (int) msg->data.handle);
     log_write("     request id:      0x%04x\n", msg->data.request_id);
     log_write("     sound event:     0x%04x\n", msg->data.sound_event);
     log_write("     sound state:     0x%04x\n", msg->data.sound_state);
@@ -289,7 +289,7 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
     struct watched_file *wf = NULL;
 
     ret = snprintf(wr_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%u.%d",
-            msg->instance_id, msg->handle);
+            msg->instance_id, (int) msg->handle);
 
     if (ret <= 0 || ret == ASM_FILENAME_SIZE)
         goto error;
@@ -306,7 +306,7 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
     if (msg->callback_expected) {
 
         ret = snprintf(rd_filename, ASM_FILENAME_SIZE, "/tmp/ASM.%u.%dr",
-            msg->instance_id, msg->handle);
+            msg->instance_id, (int) msg->handle);
 
         if (ret <= 0 || ret == ASM_FILENAME_SIZE)
             goto error;
@@ -324,9 +324,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
         if (wf) {
             /* already watched, this is a bad thing */
 
-            log_write("client %d.%u missed a callback notification\n",
-                    msg->instance_id, msg->handle);
-            close(rd_fd);
+            log_write("client %u.%d missed a callback notification\n",
+                    msg->instance_id, (int) msg->handle);
         }
         else {
             mrp_io_event_t ev;
@@ -350,6 +349,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
 
             mrp_htbl_insert(ctx->watched_files, wf->watched_file, wf);
         }
+
+        close(rd_fd);
     }
 
     /* encode the data for sending */
@@ -361,8 +362,8 @@ static int send_callback_to_client(asm_to_lib_cb_t *msg, ctx_t *ctx)
     ret = write(wr_fd, &data, sizeof(uint32_t));
 
     if (ret < (int) sizeof(uint32_t)) {
-        log_write("failed to write callback data to %d.%u\n",
-                msg->instance_id, msg->handle);
+        log_write("failed to write callback data to %u.%d\n",
+                msg->instance_id, (int) msg->handle);
         goto error;
     }
 
