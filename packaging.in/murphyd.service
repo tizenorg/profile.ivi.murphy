@@ -6,6 +6,7 @@ Type=simple
 User=app
 Group=app
 ExecStart=/usr/bin/murphyd -t systemd -vvv -f
+SmackExecLabel=User
 KillSignal=SIGTERM
 
 [Install]
