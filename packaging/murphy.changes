@@ -1,3 +1,11 @@
+* Fri Dec 13 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.40
+- enabled latest system controller snapshot (not used by default)
+- support for blacklisting/whitelisting plugins
+- support for disabling plugin loading/instantiating altogether
+- support for disabling the console
+- support for modular configuration via murphy.include & co.
+- fixed errors detected by static analysis
+
 * Fri Nov 22 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.39
 - AMB: support properties where object and property names don't match.
 - system-controller: initial system-controller support.
