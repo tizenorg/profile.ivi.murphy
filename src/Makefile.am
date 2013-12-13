@@ -1539,23 +1539,58 @@ SYSTEMCTL_PLUGIN_LIBS    = \
 			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) \
 			-lico-uxf-weston-plugin
 
+SYSTEMCTL_PLUGIN_LOADER  = linkedin-system-controller-loader.c
+
 if !DISABLED_PLUGIN_SYSTEMCTL
 if BUILTIN_PLUGIN_SYSTEMCTL
-BUILTIN_PLUGINS += $(SYSTEMCTL_PLUGIN_SOURCES)
-BUILTIN_CFLAGS  += $(SYSTEMCTL_PLUGIN_CFLAGS)
-BUILTIN_LIBS    += $(SYSTEMCTL_PLUGIN_LIBS)
+LINKEDIN_PLUGINS             += libmurphy-plugin-system-controller.la
+lib_LTLIBRARIES              += libmurphy-plugin-system-controller.la
+SYSTEMCTL_PLUGIN_CFLAGS += $(BUILTIN_CFLAGS)
+
+
+libmurphy_plugin_system_controller_ladir =				\
+		$(includedir)/murphy/system-controller
+
+libmurphy_plugin_system_controller_la_SOURCES =			 	\
+		$(SYSTEMCTL_PLUGIN_SOURCES)		 		\
+		$(SYSTEMCTL_PLUGIN_LOADER)
+
+libmurphy_plugin_system_controller_la_CFLAGS =			 	\
+		$(SYSTEMCTL_PLUGIN_CFLAGS)			 	\
+		$(AM_CFLAGS)
+
+libmurphy_plugin_system_controller_la_LDFLAGS =				\
+		-Wl,-version-script=linker-script.system-controller	\
+		-version-info @MURPHY_VERSION_INFO@
+
+libmurphy_plugin_system_controller_la_LIBADD =		\
+		libmurphy-core.la   			\
+		libmurphy-common.la			\
+		$(SYSTEMCTL_PLUGIN_LIBS)
+
+libmurphy_plugin_system_controller_la_DEPENDENCIES =	\
+		linker-script.system-controller		\
+	$(filter %.la, $(libmurphy_plugin_system_controller_la_LIBADD))
 else
 plugin_system_controller_la_SOURCES = $(SYSTEMCTL_PLUGIN_SOURCES)
 plugin_system_controller_la_CFLAGS  = $(SYSTEMCTL_PLUGIN_CFLAGS) \
-				 $(MURPHY_CFLAGS) $(AM_CFLAGS)
+				   $(MURPHY_CFLAGS) $(AM_CFLAGS)
 plugin_system_controller_la_LDFLAGS = -module -avoid-version
 plugin_system_controller_la_LIBADD  = $(SYSTEMCTL_PLUGIN_LIBS)
-plugin_LTLIBRARIES    += plugin-system-controller.la
-endif
+plugin_LTLIBRARIES                 += plugin-system-controller.la
 endif
 endif
 
+# linkedin system-controller plugin linker script generation
+linker-script.system-controller: $(SYSTEMCTL_PLUGIN_LOADER:%.c=%.h)
+	$(QUIET_GEN)$(top_builddir)/build-aux/gen-linker-script -q \
+		-c "$(libmurphy_plugin_system_controller_la_CFLAGS)" -o $@ $^
 
+clean-linker-script::
+	-rm -f linker-script.system-controller
+
+generate-linker-scripts: linker-script.system-controller
+endif
 
 # telephony plugin
 TELEPHONY_PLUGIN_SOURCES =  plugins/plugin-telephony.c		\
