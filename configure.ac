@@ -688,7 +688,8 @@ AM_CONDITIONAL(DISABLED_PLUGIN_DOMAIN_CONTROL,
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMD,  [check_if_disabled systemd])
 AM_CONDITIONAL(DISABLED_PLUGIN_TELEPHONY, [check_if_disabled telephony])
 AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_ASM,     [check_if_disabled resource-asm])
-AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMCTL,  [check_if_disabled system-controller])
+
+AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMCTL,  [test $enable_systemctl != yes])
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
