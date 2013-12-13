@@ -18,6 +18,7 @@
 %{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
 %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
 %{!?_with_smack:%{!?_without_smack:%define _with_smack 1}}
+%{!?_with_icosyscon:%{!?_without_icosyscon:%define _with_icosyscon 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
 # TODO: take care of /lib vs /lib64...
@@ -76,6 +77,11 @@ BuildRequires: pkgconfig(json)
 
 %if %{?_with_smack:1}%{!?_with_smack:0}
 BuildRequires: pkgconfig(libsmack)
+%endif
+
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+BuildRequires: ico-uxf-weston-plugin-devel
+BuildRequires: pkgconfig(ail)
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
@@ -319,6 +325,12 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-websockets"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-smack"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-smack"
+%endif
+
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-controller"
+%else
+CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-controller"
 %endif
 
 NUM_CPUS="`cat /proc/cpuinfo | tr -s '\t' ' ' | \
