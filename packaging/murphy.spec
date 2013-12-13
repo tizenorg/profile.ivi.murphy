@@ -492,6 +492,7 @@ ldconfig
 %defattr(-,root,root,-)
 %endif
 %{_libdir}/murphy/plugins
+%{_libdir}/libmurphy-plugin-system-controller.so*
 
 %files devel -f filelist.devel-includes
 %defattr(-,root,root,-)
