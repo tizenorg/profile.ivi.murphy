@@ -1,4 +1,5 @@
 with_system_controller = true
+verbose = 0
 
 m = murphy.get()
 
@@ -452,12 +453,22 @@ m:try_load_plugin('telephony')
 
 -- system controller test setup
 
-if not with_system_controller or
-   not m:plugin_exists('system-controller') then
+if not with_system_controller or not m:plugin_exists('system-controller') then
    return
 end
 
 m:load_plugin('system-controller')
+
+window_manager_operation_names = {
+    [1] = "create",
+    [2] = "destroy"
+}
+
+function window_manager_operation_name(oper)
+    local name = window_manager_operation_names[oper]
+    if name then return name end
+    return "<unknown " .. tostring(oper) .. ">"
+end
 
 window_operation_names = {
     [1] = "create",
@@ -470,6 +481,18 @@ window_operation_names = {
 
 function window_operation_name(oper)
     local name = window_operation_names[oper]
+    if name then return name end
+    return "<unknown " .. tostring(oper) .. ">"
+end
+
+layer_operation_names = {
+    [1] = "create",
+    [2] = "destroy",
+    [3] = "visible"
+}
+
+function layer_operation_name(oper)
+    local name = layer_operation_names[oper]
     if name then return name end
     return "<unknown " .. tostring(oper) .. ">"
 end
@@ -492,7 +515,17 @@ command_names = {
     [0x10022] = "change_layer_attr",
     [0x20001] = "add_input",
     [0x20002] = "del_input",
-    [0x20003] = "send_input"
+    [0x20003] = "send_input",
+    [0x40001] = "acquire_res",
+    [0x40002] = "release_res",
+    [0x40003] = "deprive_res",
+    [0x40004] = "waiting_res",
+    [0x40005] = "revert_res",
+    [0x40011] = "create_res",
+    [0x40012] = "destroy_res",
+    [0x50001] = "set_region",
+    [0x50002] = "unset_region",
+    [0x60001] = "change_state"
 }
 
 function command_name(command)
@@ -501,7 +534,45 @@ function command_name(command)
     return "<unknown " .. tostring(command) .. ">"
 end
 
-wmgr = window_manager({
+input_layer = {
+   [3] = true, -- input
+   [4] = true, -- touch
+   [5] = true  -- cursor
+}
+
+resmgr = resource_manager {
+  screen_event_handler = function(self, ev)
+                             local event = ev.event
+                             local surface = ev.surface
+
+                             if event == "grant" then
+                                 if verbose > 0 then
+                                    print("*** make visible surface "..surface)
+                                 end
+                                 local a = animation({})
+                                 local r = m:JSON({surface = surface,
+                                                   visible = 1,
+                                                   raise   = 1})
+                                 wmgr:window_request(r,a,0)
+                                 elseif event == "revoke" then
+                                 if verbose > 0 then
+                                    print("*** hide surface "..surface)
+                                 end
+                                 local a = animation({})
+                                 local r = m:JSON({surface = ev.surface,
+                                                   visible = 0})
+                                 wmgr:window_request(r,a,0)
+                             else
+                                 if verbose > 0 then
+                                    print("*** resource event: "..tostring(ev))
+                                 end
+                             end
+                         end
+}
+
+resclnt = resource_client {}
+
+wmgr = window_manager {
   geometry = function(self, w,h, v)
                   if type(v) == "function" then
                       return v(w,h)
@@ -509,10 +580,22 @@ wmgr = window_manager({
                   return v
              end,
 
+  application = function(self, appid)
+                     if appid then
+                         local app = application_lookup(appid)
+                         if not app then
+                             app = application_lookup("default")
+                         end
+                         return app
+                     end
+                     return { privileges = {screen="none", audio="none"} }
+                end,
+
   outputs = { { name  = "Center",
                 id    = 0,
+                zone  = "driver",
                 areas = { Status = {
-                              id     = 100,
+                              id     = 0,
                               pos_x  = 0,
                               pos_y  = 0,
                               width  = function(w,h) return w end,
@@ -591,6 +674,7 @@ wmgr = window_manager({
                         }
                },
                { name  = "Mid",
+                 zone  = "driver",
                  id    = 1
                }
 
@@ -603,8 +687,8 @@ wmgr = window_manager({
              {      5, "InterruptApp" , 2 },
              {      6, "OnScreen"     , 2 },
              {    101, "Input"        , 3 },
-             {    102, "Touch"        , 4 },
-             {    103, "Cursor"       , 5 },
+             {    102, "Cursor"       , 5 },
+             {    103, "Startup"      , 6 },
              { 0x1000, "Background"   , 1 },
              { 0x2000, "Normal"       , 2 },
              { 0x3000, "Fullscreen"   , 2 },
@@ -615,10 +699,32 @@ wmgr = window_manager({
   },
 
 
+  manager_update = function(self, oper)
+                       if verbose > 0 then
+                           print("### <== WINDOW MANAGER UPDATE:" ..
+                                 window_manager_operation_name(oper))
+                       end
+                       if oper == 1 then
+                           local umask = window_mask { raise   = true,
+                                                       visible = true,
+                                                       active  = true }
+                           local rmask = window_mask { active  = true }
+                           local req = m:JSON({
+                                       passthrough_update  = umask:tointeger(),
+                                       passthrough_request = rmask:tointeger()
+                           })
+                           self:manager_request(req)
+                       end
+                   end,
+
   window_update = function(self, oper, win, mask)
-                      if (verbose) then
-                          print("*** WINDOW UPDATE oper:"..window_operation_name(oper).." mask: "..tostring(mask))
-                          print(win)
+                      if verbose > 0 then
+                          print("### <== WINDOW UPDATE oper:" ..
+                                window_operation_name(oper) ..
+                                " mask: " .. tostring(mask))
+                          if verbose > 1 then
+                              print(win)
+                          end
                       end
 
                       local arg = m:JSON({ surface = win.surface,
@@ -627,8 +733,11 @@ wmgr = window_manager({
                       local command = 0
 
                       if oper == 1 then -- create
-                           if win.layertype and win.layertype == 3 then
-                               print("ignoring input panel window creation")
+                           local layertype = win.layertype
+                           if layertype and input_layer[layertype] then
+                               if verbose > 0 then
+                                   print("ignoring input panel creation")
+                               end
                                return
                            end
                            command     = 0x10001
@@ -649,13 +758,12 @@ wmgr = window_manager({
                            arg.visible = win.visible
                            arg.active  = win.active
                       elseif oper == 6 then -- active
-                           if false and win.active ~= 0 then
-                               print("### already active")
-                               return
-                           end
-                           command = 0x10006
+                           command     = 0x10006
+                           arg.active  = win.active
                       else
-                           print("### nothing to do")
+                           if verbose > 0 then
+                               print("### nothing to do")
+                           end
                            return
                       end
 
@@ -664,33 +772,98 @@ wmgr = window_manager({
                                            pid     = win.pid,
                                            arg     = arg
                       })
-                      print("### sending window message: " .. command_name(msg.command))
-                      print(msg)
-                      sc:send_message(msg.appid, msg)
+                      if verbose > 0 then
+                          print("### <== sending " ..
+                                command_name(msg.command) ..
+                                " window message to '" .. win.name .. "'")
+                          if verbose > 1 then
+                              print(msg)
+                          end
+                      end
+                      sc:send_message(sysctlid, msg)
 
-                      if (oper == 1) then -- create
-                          local a = animation({})
-                          local r = m:JSON({surface = win.surface,
-                                            visible = 1,
-                                            raise   = 1})
-                          self:window_request(r,a,0)
+                      if oper == 1 then -- create
+                          local i = input_layer[win.layertype]
+                          local p = self:application(win.appid)
+                          local s = p.privileges.screen
+
+                          if s == "system" then
+                              local a = animation({})
+                              local r = m:JSON({surface = win.surface,
+                                                visible = 1,
+                                                raise   = 1})
+                              self:window_request(r,a,0)
+                          else
+                              if i then
+                                  if verbose > 0 then
+                                      print("do not make resource for " ..
+                                            "input window")
+                                  end
+                              else
+                                  resclnt:resource_set_create("screen",
+                                                               "driver",
+                                                               win.appid,
+                                                               win.surface)
+                              end
+                          end
+                      elseif oper == 2 then -- destroy
+                          resclnt:resource_set_destroy("screen", win.surface)
+                      elseif oper == 6 then -- active
+                          if win.active then
+                              local i = input_layer[win.layertype]
+                              local p = self:application(win.appid)
+                              local s = p.privileges.screen
+                              local surface = win.surface
+                              if not i and s ~= "system" then
+                                 resclnt:resource_set_acquire("screen",surface)
+                                 resmgr:window_raise(win.appid, surface, 1)
+                              end
+                          end
                       end
                   end,
 
-  layer_update = function(self, oper, j, mask)
-                      if verbose then
-                          print("*** LAYER UPDATE oper:"..oper.." mask: "..tostring(mask))
-                          print(j)
+  layer_update = function(self, oper, layer, mask)
+                      if verbose > 0 then
+                          print("### LAYER UPDATE:" .. 
+                                layer_operation_name(oper) ..
+                                " mask: " .. tostring(mask))
+                          if verbose > 1 then
+                              print(layer)
+                          end
+                      end
+                      if oper == 3 then -- visible
+                         local command = 0x10022
+                         local msg = m:JSON({
+                                         command = command,
+                                         appid = "",
+                                         arg = m:JSON({layer = layer.id,
+                                                       visible = layer.visible
+                                         })
+                                })
+                         if verbose > 0 then
+                            print("### <== sending "..command_name(command)..
+                                  " layer message")
+                            if verbose > 1 then
+                                print(msg)
+                            end
+                         end
+                         sc:send_message(sysctlid, msg)
+                      else
+                           if verbose > 0 then
+                               print("### nothing to do")
+                           end
                       end
                  end,
+
   output_update = function(self, oper, out, mask)
                       local idx = out.index
-                      if verbose then
-                          print("*** OUTPUT UPDATE oper:"..oper.." mask: "..tostring(mask))
+                      if verbose > 0 then
+                          print("### OUTPUT UPDATE:" .. oper ..
+                                " mask: "..tostring(mask))
                       end
                       print(out)
+                      local outdef = self.outputs[idx+1]
                       if (oper == 1) then -- create
-                          local outdef = self.outputs[idx+1]
                           if outdef then
                               self:output_request(m:JSON({index = idx,
                                                           id    = outdef.id,
@@ -698,19 +871,25 @@ wmgr = window_manager({
                                                           }))
                           end
                       elseif (oper == 5) then -- done
-                          local ads = self.outputs[idx+1].areas
+                          local ads = outdef.areas
+                          local on = outdef.name
                           if ads then
-                              for name,area in pairs(ads) do
-                                  local a = m:JSON({name=name,output=out.index})
-                                  for fld,val in pairs(area) do
-                                      a[fld] = self:geometry(out.width,out.height,val)
+                              for name,ad in pairs(ads) do
+                                  local can = wmgr:canonical_name(on.."."..name)
+                                  local a = m:JSON({name   = name,
+                                                    output = out.index})
+                                  for fld,val in pairs(ad) do
+                                      a[fld] = self:geometry(out.width,
+                                                             out.height,
+                                                             val) 
                                    end
                                    self:area_create(a)
+                                   resmgr:area_create(area[can], outdef.zone)
                               end
                           end
                       end
                   end
-})
+}
 
 
 sc = m:get_system_controller()
@@ -719,100 +898,207 @@ sc = m:get_system_controller()
 sets = {}
 
 connected = false
+sysctlid = ""
 
 -- these shoud be before wmgr:connect() is called
-print("====== creating applications")
+if verbose > 0 then
+   print("====== creating applications ======")
+end
 application {
-    appid      = "default",
-    area       = "Center.Full",
-    privileges = { screen = "none", audio = "none" }
+    appid          = "default",
+    area           = "Center.Full",
+    privileges     = { screen = "none", audio = "none" },
+    resource_class = "player",
+    screen_priority = 0
 }
 
 application {
-    appid      = "org.tizen.ico.homescreen",
-    area       = "Center.Full",
-    privileges = { screen = "system", audio = "system" }
+    appid           = "weston",
+    area            = "Center.Full",
+    privileges      = { screen = "system", audio = "none" },
+    resource_class  = "implicit",
+    screen_priority = 30
 }
 
 application {
-    appid      = "org.tizen.ico.statusbar",
-    area       = "Center.Status",
-    privileges = { screen = "system", audio = "none" }
+    appid           = "org.tizen.ico.homescreen",
+    area            = "Center.Full",
+    privileges      = { screen = "system", audio = "system" },
+    resource_class  = "player",
+    screen_priority = 20
+}
+
+application {
+    appid           = "org.tizen.ico.statusbar",
+    area            = "Center.Status",
+    privileges      = { screen = "system", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 20 
 }
 
 
 if sc then
     sc.client_handler = function (self, cid, msg)
-        print('*** client handler: ' .. tostring(msg))
+        local command = msg.command
+        if verbose > 0 then
+            print('### ==> client handler:')
+            if verbose > 1 then
+                print(msg)
+            end
+        end
         if not connected then
+            print('Setting sysctlid='..msg.appid)
+            sysctlid = msg.appid
             print('Trying to connect to wayland...')
             connected = wmgr:connect()
-        else
-            print('Window manager already connected...')
+        end
+        if connected and command then
+            if command == 1 then -- send_appid
+                local reply = m:JSON({ command = 0x60001,
+                                       arg     = m:JSON({ stateid = 1,
+                                                          state   = 0})
+                                     })
+                 if verbose > 0 then
+                     print("### <== sending " ..
+                           command_name(command) .. " message")
+                     if verbose > 1 then
+                         print(reply)
+                     end
+                 end
+                 sc:send_message(sysctlid, reply)
+
+                 reply = m:JSON({ command = 0x60001,
+                                  arg     = m:JSON({ stateid = 2,
+                                                     state   = 0})
+                                })
+                 if verbose > 0 then
+                     print("### <== sending " ..
+                           command_name(command) .. " message")
+                     if verbose > 1 then
+                         print(reply)
+                     end
+                 end
+                 sc:send_message(sysctlid, reply)
+            end
         end
     end
 
     sc.generic_handler = function (self, cid, msg)
-        print('*** generic handler: ' .. tostring(msg))
+        if verbose > 0 then
+            print('### ==> generic handler:')
+            if verbose > 1 then
+               print(msg)
+            end
+        end
     end
 
     sc.window_handler = function (self, cid, msg)
-        print('*** window handler: ' .. command_name(msg.command) .. ' ' .. tostring(msg))
+        if verbose > 0 then
+            print('### ==> received ' ..
+                   command_name(msg.command) .. ' message')
+            if verbose > 1 then
+                print(tostring(msg))
+            end
+        end
 
         local a = animation({})
+        local nores = false
         if msg.command == 0x10003 then       -- ico SHOW command
             local raise_mask = 0x01000000
             local lower_mask = 0x02000000
+            local nores_mask = 0x40000000
+            local time_mask  = 0x00ffffff
             msg.arg.visible = 1
-            if msg.arg and msg.arg.anim_name then
-                local time = msg.arg.time
-                time = m:AND(time, m:NEG(m:OR(raise_mask, lower_mask)))
-                time = 200
-                if m:AND(msg.arg.anim_time, raise_mask) then
-                    msg.arg.raise = 1
-                elseif m:AND(msg.arg.anim_time, lower_mask) then
-                    msg.arg.raise = 0
+            if msg.arg then
+                local time = 200
+                if  msg.arg.anim_time then
+                    local t = msg.arg.anim_time
+                    time = m:AND(t, time_mask)
+                    nores = m:AND(t, nores_mask)
+                    if m:AND(t, raise_mask) then
+                        msg.arg.raise = 1
+                    elseif m:AND(t, lower_mask) then
+                        msg.arg.raise = 0
+                    end
                 end
-                a.show = { msg.arg.anim_name, time }
-                print('time: ' .. tostring(a.show[2]))
+                if msg.arg.anim_name then
+                    a.show = { msg.arg.anim_name, time }
+                    print('time: ' .. tostring(a.show[2]))
+                end
             end
-            print('##### SHOW')
-            print(tostring(msg.arg))
-            wmgr:window_request(msg.arg, a, 0)
+            if not nores then
+                local p = wmgr:application(msg.appid)
+                local s = p.privileges.screen
+                if s == "system" then
+                    nores = true
+                end
+            end
+            if verbose > 2 then
+                print('### ==> SHOW')
+                print(tostring(msg.arg))
+            end
+            if nores then
+                wmgr:window_request(msg.arg, a, 0)
+            else
+                local surface = msg.arg.surface
+                resclnt:resource_set_acquire("screen", surface)
+                resmgr:window_raise(msg.appid, surface, 1)
+            end
         elseif msg.command == 0x10004 then   -- ico HIDE command
             local raise_mask = 0x01000000
             local lower_mask = 0x02000000
+            local nores_mask = 0x40000000
+            local time_mask  = 0x00ffffff
             msg.arg.visible = 0
-            if msg.arg and msg.arg.anim_name then
-                local time = msg.arg.time
-                time = m:AND(time, m:NEG(m:OR(raise_mask, lower_mask)))
-                time = 200
-                if m:AND(msg.arg.anim_time, raise_mask) then
-                    msg.arg.raise = 1
+            if msg.arg then
+                local time = 200
+                if msg.arg.anim_time then
+                    local t = msg.arg.anim_time
+                    time = m:AND(t, time_mask)
+                    nores = m:AND(t, nores_mask)
                 end
-                if m:AND(msg.arg.anim_time, lower_mask) then
-                    msg.arg.raise = 0
+                if msg.arg.anim_name then
+                    a.hide = { msg.arg.anim_name, time }
+                    print('hide animation time: ' .. tostring(a.hide[2]))
                 end
-                a.hide = { msg.arg.anim_name, time }
-                print('hide animation time: ' .. tostring(a.hide[2]))
             end
-            print('##### HIDE')
-            print(tostring(msg.arg))
-            wmgr:window_request(msg.arg, a, 0)
+            if not nores then
+                local p = wmgr:application(msg.appid)
+                local s = p.privileges.screen
+                if s == "system" then
+                    nores = true
+                end
+            end
+            if verbose > 2 then
+                print('### ==> HIDE REQUEST')
+                print(tostring(msg.arg))
+            end
+            if nores then
+                wmgr:window_request(msg.arg, a, 0)
+            else
+                resmgr:window_raise(msg.appid, msg.arg.surface, -1)
+            end
         elseif msg.command == 0x10005 then   -- ico MOVE
-            print('##### MOVE')
-            print(tostring(msg.arg))
-            wmgr:window_request(msg.arg, a, 0)
-        elseif msg.command == 0x10006 then   -- ico ACTIVE
-            print('##### ACTIVE')
-            if not msg.arg.active then
-                msg.arg.active = 0
+            if verbose > 2 then
+                print('### ==> MOVE REQUEST')
+                print(tostring(msg.arg))
             end
-            print(tostring(msg.arg))
+            wmgr:window_request(msg.arg, a, 0)
+            -- TODO: handle if area changed
+        elseif msg.command == 0x10006 then   -- ico ACTIVE
+            if not msg.arg.active then
+                msg.arg.active = 3 -- pointer + keyboard
+            end
+            if verbose > 2 then
+                print('### ==> ACTIVE REQUEST')
+                print(tostring(msg.arg))
+            end
             wmgr:window_request(msg.arg, a, 0)
         elseif msg.command == 0x10007 then   -- ico CHANGE_LAYER
-            print('##### CHANGE_LAYER')
-            print(tostring(msg.arg))
+            if verbose > 2 then
+                print('### ==> CHANGE_LAYER REQUEST')
+                print(tostring(msg.arg))
+            end
             --[[
             if msg.arg.layer ~= 4 or msg.arg.layer ~= 5 then
                 print("do not change layer for other than cursor or touch")
@@ -822,30 +1108,65 @@ if sc then
             wmgr:window_request(msg.arg, a, 0)
         elseif msg.command == 0x10011 then   -- ico MAP_THUMB
             local framerate = msg.arg.framerate
-            print('##### MAP_THUMB')
-            msg.arg.map = 1
             if not framerate or framerate < 0 then
                 framerate = 0
             end
+            msg.arg.map = 1
+            if verbose > 2 then
+                print('### ==> MAP_THUMB REQUEST')
+                print(msg.arg)
+                print('framerate: '..framerate)
+            end
             wmgr:window_request(msg.arg, a, framerate)
         elseif msg.command == 0x10012 then   -- ico UNMAP_THUMB
-            print('##### UNMAP_THUMB')
             msg.arg.map = 0
+            if verbose > 2 then
+                print('### ==> UNMAP_THUMB REQUEST')
+                print(msg.arg)
+            end
             wmgr:window_request(msg.arg, a, 0)
         elseif msg.command == 0x10020 then   -- ico SHOW_LAYER command
             msg.arg.visible = 1
-            print('##### SHOW_LAYER')
+            if verbose > 2 then
+                print('### ==> SHOW_LAYER REQUEST')
+                print(msg.arg)
+            end
+            wmgr:layer_request(msg.arg)
+        elseif msg.command == 0x10021 then   -- ico HIDE_LAYER command
+            msg.arg.visible = 0
+            if verbose > 2 then
+                print('### ==> HIDE_LAYER REQUEST')
+                print(msg.arg)
+            end
             wmgr:layer_request(msg.arg)
         end
     end
+
     sc.input_handler = function (self, cid, msg)
-        print('*** input handler: ' .. tostring(msg))
+        if verbose > 0 then
+            print('### ==> input handler: ' .. command_name(msg.comand))
+            if verbose > 1 then
+                print(msg)
+            end
+        end
     end
+
     sc.user_handler = function (self, cid, msg)
-        print('*** user handler: ' .. tostring(msg))
+        if verbose > 0 then
+            print('### ==> user handler: ' .. command_name(msg.command))
+            if verbose > 1 then
+                print(msg)
+            end
+        end
     end
+
     sc.resource_handler = function (self, cid, msg)
-        print('*** resource handler: ' .. tostring(msg))
+        if verbose > 0 then
+            print('### ==> resource handler: ' .. command_name(msg.command))
+            if verbose > 1 then
+                print(msg)
+            end
+        end
 
         createResourceSet = function (ctl, client, msg)
             cb = function(rset, data)
@@ -1003,7 +1324,13 @@ if sc then
             print("command REVERT")
         end
     end
+
     sc.inputdev_handler = function (self, cid, msg)
-        print('*** inputdev handler: ' .. tostring(msg))
+        if verbose > 0 then
+            print('*** inputdev handler: ' .. command_name(msg.command))
+            if verbose > 1 then
+                print(msg)
+            end
+        end
     end
 end
