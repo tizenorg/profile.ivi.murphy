@@ -32,7 +32,13 @@
 
 #include <sys/types.h>
 
-#include "wayland/wayland.h"
+#include "wayland/window.h"
+
+enum mrp_wayland_window_manager_operation_e {
+    MRP_WAYLAND_WINDOW_MANAGER_OPERATION_NONE = 0,
+    MRP_WAYLAND_WINDOW_MANAGER_CREATE,       /* 1 */
+    MRP_WAYLAND_WINDOW_MANAGER_DESTROY,      /* 2 */
+};
 
 #define MRP_WAYLAND_WINDOW_MANAGER_COMMON                               \
     MRP_WAYLAND_OBJECT_COMMON;                                          \
@@ -41,7 +47,12 @@
     void (*window_request)(mrp_wayland_window_t *,                      \
                            mrp_wayland_window_update_t *,               \
                            mrp_wayland_animation_t *,                   \
-                           uint32_t)
+                           uint32_t);                                   \
+    struct {                                                            \
+        mrp_wayland_window_update_mask_t request;                       \
+        mrp_wayland_window_update_mask_t update;                        \
+    } passthrough
+
 
 struct mrp_wayland_window_manager_s {
     MRP_WAYLAND_WINDOW_MANAGER_COMMON;

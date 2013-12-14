@@ -39,6 +39,7 @@
 #include "wayland.h"
 #include "output.h"
 #include "layer.h"
+#include "window-manager.h"
 
 
 static uint32_t oid_hash(const void *);
@@ -250,6 +251,12 @@ void mrp_wayland_register_window_manager(mrp_wayland_t *wl,
     wl->wm = wm;
 
     mrp_htbl_foreach(wl->layers, update_layers, wm);
+
+    if (wl->window_manager_update_callback) {
+        wl->window_manager_update_callback(wl,
+                                           MRP_WAYLAND_WINDOW_MANAGER_CREATE,
+                                           wm);
+    }
 }
 
 
@@ -291,6 +298,16 @@ bool mrp_wayland_register_interface(mrp_wayland_t *wl,
     mrp_log_info("registered wayland interface '%s'", wif->name);
 
     return true;
+}
+
+void mrp_wayland_register_window_manager_update_callback(mrp_wayland_t *wl,
+                         mrp_wayland_window_manager_update_callback_t callback)
+{
+    MRP_ASSERT(wl, "invalid aruments");
+
+    mrp_debug("registering window_manager_update_callback");
+
+    wl->window_manager_update_callback = callback;
 }
 
 void mrp_wayland_register_output_update_callback(mrp_wayland_t *wl,

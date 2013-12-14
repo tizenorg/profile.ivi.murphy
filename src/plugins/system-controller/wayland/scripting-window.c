@@ -74,6 +74,7 @@ static int  window_mask_create_from_lua(lua_State *);
 static int  window_mask_getfield(lua_State *);
 static int  window_mask_setfield(lua_State *);
 static int  window_mask_stringify(lua_State *);
+static int  window_mask_tointeger(lua_State *);
 static void window_mask_destroy(void *);
 
 static scripting_window_mask_t *window_mask_check(lua_State *, int);
@@ -102,6 +103,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     window_mask_destroy,        /* userdata destructor */
     MRP_LUA_METHOD_LIST (       /* methods */
        MRP_LUA_METHOD_CONSTRUCTOR (window_mask_create_from_lua)
+       MRP_LUA_METHOD(tointeger,   window_mask_tointeger)
     ),
     MRP_LUA_METHOD_LIST (       /* overrides */
        MRP_LUA_OVERRIDE_CALL      (window_mask_create_from_lua)
@@ -363,7 +365,7 @@ static int window_mask_create_from_lua(lua_State *L)
         if (fld == MASK)
             mask = lua_tointeger(L, -1);
         else if ((m = get_window_mask(fld)))
-            mask |= m;
+            mask |= lua_toboolean(L, -1) ? m : 0;
         else
             luaL_error(L, "bad field '%s'", fldnam);
     }
@@ -459,6 +461,18 @@ static int window_mask_stringify(lua_State *L)
     }
 
     lua_pushstring(L, (p > buf) ? buf : "<empty>");
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int window_mask_tointeger(lua_State *L)
+{
+    scripting_window_mask_t *um;
+
+    MRP_LUA_ENTER;
+
+    um = window_mask_check(L, 1);
+    lua_pushinteger(L, um->mask);
 
     MRP_LUA_LEAVE(1);
 }
