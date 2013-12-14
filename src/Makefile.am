@@ -1513,6 +1513,11 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/plugin-system-controller.c                    \
 	$(SYSTEMCTL_DIR)/resource-manager/resource-manager.c           \
 	$(SYSTEMCTL_DIR)/resource-manager/scripting-resource-manager.c \
+	$(SYSTEMCTL_DIR)/resource-manager/screen.c                     \
+	$(SYSTEMCTL_DIR)/resource-manager/notifier.c                   \
+	$(SYSTEMCTL_DIR)/resource-manager/scripting-notifier.c         \
+	$(SYSTEMCTL_DIR)/resource-client/resource-client.c             \
+	$(SYSTEMCTL_DIR)/resource-client/scripting-resource-client.c   \
 	$(SYSTEMCTL_DIR)/application/application.c                     \
 	$(SYSTEMCTL_DIR)/application/scripting-application.c           \
 	$(SYSTEMCTL_DIR)/wayland/wayland.c                             \
