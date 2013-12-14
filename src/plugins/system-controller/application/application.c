@@ -47,7 +47,7 @@ mrp_htbl_t *applications;
 mrp_application_t *mrp_application_create(mrp_application_update_t *u,
                                           void *scripting_data)
 {
-#define IF_PRESENT(u,n) (u->mask & MRP_WAYLAND_APP_ ## n ## _MASK)
+#define IF_PRESENT(u,n) if ((u->mask & MRP_APPLICATION_ ## n ## _MASK))
 
     mrp_application_update_mask_t mask;
     mrp_application_t *app;
@@ -56,15 +56,25 @@ mrp_application_t *mrp_application_create(mrp_application_update_t *u,
     char buf[4096];
     void *it;
 
-    MRP_ASSERT(u && (u->mask & MRP_APPLICATION_APPID_MASK) && u->appid &&
-               (u->mask & MRP_APPLICATION_AREA_NAME_MASK) && u->area_name,
-               "invalid argument");
+    MRP_ASSERT(u, "invalid argument");
 
     mask = u->mask;
 
+    if (!(mask & MRP_APPLICATION_APPID_MASK) || !u->appid) {
+        mrp_log_error("system-controller: failed to create application: "
+                      "no appid");
+        return NULL;
+    }
+
+    if (!(mask & MRP_APPLICATION_AREA_NAME_MASK) || !u->area_name) {
+        mrp_log_error("system-controller: failed to create application '%s': "
+                      "no area name", u->appid);
+        return NULL;
+    }
+
     if (!(app = mrp_allocz(sizeof(mrp_application_t)))) {
-        mrp_log_error("failed to create application '%s': out of memory",
-                      u->appid);
+        mrp_log_error("system-controller: failed to create application '%s': "
+                      "out of memory", u->appid);
         return NULL;
     }
 
@@ -90,10 +100,14 @@ mrp_application_t *mrp_application_create(mrp_application_update_t *u,
         app->area = area;
     }
 
-    if ((mask & MRP_APPLICATION_SCREEN_PRIVILEGE_MASK))
+    IF_PRESENT(u, SCREEN_PRIVILEGE)
         app->privileges.screen = u->privileges.screen;
-    if ((mask & MRP_APPLICATION_AUDIO_PRIVILEGE_MASK))
+    IF_PRESENT(u, AUDIO_PRIVILEGE)
         app->privileges.audio = u->privileges.audio;
+    IF_PRESENT(u, RESOURCE_CLASS)
+        app->resource_class = mrp_strdup(u->resource_class);
+    IF_PRESENT(u, SCREEN_PRIORITY)
+        app->screen_priority = u->screen_priority;
 
     if (!scripting_data)
         scripting_data = mrp_application_scripting_app_create_from_c(app);
@@ -183,6 +197,13 @@ size_t mrp_application_print(mrp_application_t *app,
               mrp_application_privilege_str(app->privileges.screen),
               mrp_application_privilege_str(app->privileges.audio));
     }
+    if ((mask & MRP_APPLICATION_RESOURCE_CLASS_MASK)) {
+        PRINT("resource_class: '%s'",app->resource_class ? app->resource_class:
+                                                           "<unknown>"       );
+    }
+    if ((mask & MRP_APPLICATION_SCREEN_PRIORITY_MASK)) {
+        PRINT("screen_priority: %d", app->screen_priority);
+    }
 
     return p - buf;
 
@@ -238,9 +259,11 @@ static mrp_wayland_area_t *area_find(const char *fullname)
     mrp_wayland_area_t *area;
     void *it;
 
-    mrp_wayland_foreach(wl, it) {
-        if ((area = mrp_wayland_area_find(wl, fullname)))
-            return area;
+    if (fullname) {
+        mrp_wayland_foreach(wl, it) {
+            if ((area = mrp_wayland_area_find(wl, fullname)))
+                return area;
+        }
     }
 
     return NULL;
