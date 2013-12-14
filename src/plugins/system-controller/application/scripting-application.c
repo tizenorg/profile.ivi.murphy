@@ -71,6 +71,7 @@ static int  app_stringify(lua_State *);
 static void app_destroy_from_lua(void *);
 
 static scripting_app_t *app_check(lua_State *, int);
+static int  app_lookup(lua_State *L);
 
 static mrp_application_privileges_t *priv_check(lua_State *, int);
 static void priv_free(mrp_application_privileges_t *);
@@ -99,6 +100,9 @@ MRP_LUA_CLASS_DEF_SIMPLE (
 void mrp_application_scripting_init(lua_State *L)
 {
     mrp_lua_create_object_class(L, APPLICATION_CLASS);
+
+    lua_pushcfunction(L, app_lookup);
+    lua_setglobal(L, "application_lookup");
 }
 
 mrp_application_t *mrp_application_scripting_app_check(lua_State *L, int idx)
@@ -192,6 +196,8 @@ static int app_create_from_lua(lua_State *L)
     const char *fldnam;
     const char *appid = NULL;
     const char *arnam = "default";
+    const char *class = NULL;
+    int32_t spri = 0;
     mrp_application_privileges_t *privs = NULL;
     char *id;
     char buf[4096];
@@ -204,16 +210,21 @@ static int app_create_from_lua(lua_State *L)
     MRP_LUA_FOREACH_FIELD(L, 2, fldnam, fldnamlen) {
         switch (field_name_to_type(fldnam, fldnamlen)) {
 
-        case APPID:       appid = luaL_checkstring(L, -1);           break;
-        case AREA:        arnam = luaL_checkstring(L, -1);           break;
-        case PRIVILEGES:  privs = priv_check(L, -1);                 break;
-        default:          luaL_error(L, "bad field '%s'", fldnam);   break;
+        case APPID:           appid = luaL_checkstring(L, -1);           break;
+        case AREA:            arnam = luaL_checkstring(L, -1);           break;
+        case PRIVILEGES:      privs = priv_check(L, -1);                 break;
+        case RESOURCE_CLASS:  class = luaL_checkstring(L, -1);           break;
+        case SCREEN_PRIORITY: spri  = luaL_checkinteger(L, -1);          break;
+        default:              luaL_error(L, "bad field '%s'", fldnam);   break;
         }
     }
 
     if (!appid)
         luaL_error(L, "'appid' field is missing"); 
-
+    if (!class)
+        luaL_error(L, "'resource_class' field is missing");
+    if (spri < 0 || spri > 255)
+        luaL_error(L, "'screen_priority' is out of range (0 - 255)");
 
     id = mrp_wayland_scripting_canonical_name(appid, buf, sizeof(buf));
     a = (scripting_app_t*)mrp_lua_create_object(L, APPLICATION_CLASS, id, 0);
@@ -221,9 +232,14 @@ static int app_create_from_lua(lua_State *L)
     if (!(a))
         luaL_error(L, "can't create scripting application '%s'", appid);
 
-    u.mask = MRP_APPLICATION_APPID_MASK | MRP_APPLICATION_AREA_NAME_MASK ;
+    u.mask = MRP_APPLICATION_APPID_MASK           |
+             MRP_APPLICATION_AREA_NAME_MASK       |
+             MRP_APPLICATION_RESOURCE_CLASS_MASK  |
+             MRP_APPLICATION_SCREEN_PRIORITY_MASK ;
     u.appid = appid;
     u.area_name = arnam;
+    u.resource_class = class;
+    u.screen_priority = spri;
 
     if (privs) {
         u.mask |= MRP_APPLICATION_PRIVILEGES_MASK;
@@ -265,10 +281,24 @@ static int app_getfield(lua_State *L)
         area = app->area;
 
         switch (fld) {
-        case APPID:      lua_pushstring(L, app->appid ? app->appid:"");  break;
-        case AREA:       lua_pushstring(L, area ? area->fullname:"");    break;
-        case PRIVILEGES: priv_push(L, &app->privileges);                 break;
-        default:         lua_pushnil(L);                                 break;
+        case APPID:
+            lua_pushstring(L, app->appid ? app->appid : "");
+            break;
+        case AREA:
+            lua_pushstring(L, area ? area->fullname : "");
+            break;
+        case PRIVILEGES:
+            priv_push(L, &app->privileges);
+            break;
+        case RESOURCE_CLASS:
+            lua_pushstring(L, app->resource_class ? app->resource_class : "");
+            break;
+        case SCREEN_PRIORITY:
+            lua_pushinteger(L, app->screen_priority);
+            break;
+        default:
+            lua_pushnil(L);
+            break;
         }
     }
 
@@ -335,6 +365,28 @@ static void app_destroy_from_lua(void *data)
 static scripting_app_t *app_check(lua_State *L, int idx)
 {
     return (scripting_app_t *)mrp_lua_check_object(L, APPLICATION_CLASS, idx);
+}
+
+static int app_lookup(lua_State *L)
+{
+    mrp_application_t *app;
+    const char *appid;
+    void *sa;
+
+    MRP_LUA_ENTER;
+
+    if (!lua_isstring(L, 1))
+        lua_pushnil(L);
+    else {
+        appid = lua_tostring(L, 1);
+
+        if ((app = mrp_application_find(appid)) && (sa = app->scripting_data))
+            mrp_lua_push_object(L, sa);
+        else
+            lua_pushnil(L);
+    }
+
+    MRP_LUA_LEAVE(1);
 }
 
 
@@ -484,6 +536,16 @@ static field_t field_name_to_type(const char *name, ssize_t len)
     case 10:
         if (!strcmp(name, "privileges"))
             return PRIVILEGES;
+        break;
+
+    case 14:
+        if (!strcmp(name, "resource_class"))
+            return RESOURCE_CLASS;
+        break;
+
+    case 15:
+        if (!strcmp(name, "screen_priority"))
+            return SCREEN_PRIORITY;
         break;
 
     default:
