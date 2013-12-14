@@ -80,7 +80,7 @@ static void object_create_exttbl(userdata_t *u, lua_State *L);
 static void object_delete_exttbl(userdata_t *u, lua_State *L);
 static int  override_setfield(lua_State *L);
 static int  override_getfield(lua_State *L);
-static int override_tostring(lua_State *L);
+static int  override_tostring(lua_State *L);
 static int  object_setup_bridges(userdata_t *u, lua_State *L);
 
 static void invalid_destructor(void *data);

@@ -274,8 +274,6 @@ int mrp_wayland_json_align_copy(mrp_wayland_t *wl, void *uval,
     return mask;
 }
 
-
-
 mrp_wayland_scripting_field_t
 mrp_wayland_scripting_field_check(lua_State *L,int idx,const char **ret_fldnam)
 {
@@ -560,6 +558,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
 
     case 14:
         switch (name[0]) {
+        case 'm':
+            if (!strcmp(name, "manager_update"))
+                return MANAGER_UPDATE;
+            break;
         case 'o':
             if (!strcmp(name, "output_request"))
                 return OUTPUT_REQUEST;
@@ -573,6 +575,21 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
         default:
             break;
         }
+        break;
+
+    case 15:
+        if (!strcmp(name, "manager_request"))
+            return MANAGER_REQUEST;
+        break;
+
+    case 18:
+        if (!strcmp(name, "passthrough_update"))
+            return PASSTHROUGH_UPDATE;
+        break;
+
+    case 19:
+        if (!strcmp(name, "passthrough_request"))
+            return PASSTHROUGH_REQUEST;
         break;
 
     default:
