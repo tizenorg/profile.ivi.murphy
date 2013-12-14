@@ -50,6 +50,7 @@
 #include "layer.h"
 #include "output.h"
 #include "area.h"
+#include "window-manager.h"
 #include "ico-window-manager.h"
 
 #define WINDOW_MANAGER_CLASS   MRP_LUA_CLASS_SIMPLE(window_manager)
@@ -63,6 +64,7 @@ struct scripting_winmgr_s {
     mrp_wayland_t *wl;
     const char *name;
     const char *display;
+    mrp_funcbridge_t *manager_update;
     mrp_funcbridge_t *output_update;
     mrp_funcbridge_t *layer_update;
     mrp_funcbridge_t *window_update;
@@ -103,6 +105,13 @@ static scripting_winmgr_t *window_manager_check(lua_State *, int);
 static layer_def_t *layer_def_check(lua_State *, int);
 static void layer_def_free(layer_def_t *);
 
+
+static bool manager_request_bridge(lua_State *, void *,
+                                   const char *, mrp_funcbridge_value_t *,
+                                   char *, mrp_funcbridge_value_t *);
+static void manager_update_callback(mrp_wayland_t *,
+                                    mrp_wayland_window_manager_operation_t,
+                                    mrp_wayland_window_manager_t *);
 
 static bool window_request_bridge(lua_State *, void *,
                                   const char *, mrp_funcbridge_value_t *,
@@ -153,6 +162,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
+static mrp_funcbridge_t *manager_request;
 static mrp_funcbridge_t *output_request;
 static mrp_funcbridge_t *area_create;
 static mrp_funcbridge_t *layer_request;
@@ -202,6 +212,7 @@ static int window_manager_create(lua_State *L)
     char *name;
     const char *display = NULL;
     layer_def_t *layers = NULL;
+    mrp_funcbridge_t *manager_update = NULL;
     mrp_funcbridge_t *output_update = NULL;
     mrp_funcbridge_t *layer_update = NULL;
     mrp_funcbridge_t *window_update = NULL;
@@ -235,6 +246,10 @@ static int window_manager_create(lua_State *L)
             layers = layer_def_check(L, -1);
             break;
 
+        case MANAGER_UPDATE:
+            manager_update = mrp_funcbridge_create_luafunc(L, -1);
+            break;
+
         case OUTPUT_UPDATE:
             output_update = mrp_funcbridge_create_luafunc(L, -1);
             break;
@@ -245,7 +260,7 @@ static int window_manager_create(lua_State *L)
 
         case WINDOW_UPDATE:
             window_update = mrp_funcbridge_create_luafunc(L, -1);
-            break;            
+            break;
 
         default:
             lua_pushvalue(L, -2);
@@ -271,6 +286,7 @@ static int window_manager_create(lua_State *L)
     winmgr->wl = wl;
     winmgr->name = mrp_strdup(name);
     winmgr->display = mrp_strdup(display);
+    winmgr->manager_update = manager_update;
     winmgr->output_update = output_update;
     winmgr->layer_update = layer_update;
     winmgr->window_update = window_update;
@@ -278,6 +294,8 @@ static int window_manager_create(lua_State *L)
     mrp_wayland_output_register(wl);
     mrp_ico_window_manager_register(wl);
 
+    mrp_wayland_register_window_manager_update_callback(wl,
+                                                   manager_update_callback);
     mrp_wayland_register_output_update_callback(wl, output_update_callback);
     mrp_wayland_register_layer_update_callback(wl, layer_update_callback);
     mrp_wayland_register_window_update_callback(wl, window_update_callback);
@@ -350,8 +368,10 @@ static int  window_manager_canonical_name(lua_State *L)
 static int window_manager_getfield(lua_State *L)
 {
     scripting_winmgr_t *wmgr;
+    mrp_wayland_t *wl;
     const char *fldnam;
     mrp_wayland_scripting_field_t fld;
+    uint32_t mask;
 
     MRP_LUA_ENTER;
 
@@ -360,13 +380,21 @@ static int window_manager_getfield(lua_State *L)
 
     wmgr = window_manager_check(L, 1);
 
-    if (!wmgr)
+    if (!wmgr || !(wl = wmgr->wl))
         lua_pushnil(L);
     else {
         switch (fld) {
 
         case DISPLAY:
             lua_pushstring(L, wmgr->display);
+            break;
+
+        case MANAGER_REQUEST:
+            mrp_funcbridge_push(L, manager_request);
+            break;
+
+        case MANAGER_UPDATE:
+            mrp_funcbridge_push(L, wmgr->manager_update);
             break;
 
         case OUTPUT_REQUEST:
@@ -395,6 +423,19 @@ static int window_manager_getfield(lua_State *L)
 
         case WINDOW_UPDATE:
             mrp_funcbridge_push(L, wmgr->window_update);
+            break;
+
+        case PASSTHROUGH_REQUEST:
+            mask = (wl->wm ? wl->wm->passthrough.request : 0);
+            goto push_mask;
+
+        case PASSTHROUGH_UPDATE:
+            mask = (wl->wm ? wl->wm->passthrough.update : 0);
+            goto push_mask;
+
+        push_mask:
+            if (!mrp_wayland_scripting_window_mask_create_from_c(L, mask))
+                lua_pushnil(L);
             break;
 
         default:
@@ -507,6 +548,121 @@ static void layer_def_free(layer_def_t *layers)
     }
 }
 
+static bool manager_request_bridge(lua_State *L,
+                                   void *data,
+                                   const char *signature,
+                                   mrp_funcbridge_value_t *args,
+                                   char *ret_type,
+                                   mrp_funcbridge_value_t *ret_val)
+{
+    mrp_wayland_t *wl;
+    mrp_wayland_window_manager_t *wm;
+    mrp_json_t *json;
+    const char *key;
+    mrp_json_t *val;
+    mrp_json_iter_t it;
+    int32_t mask;
+
+    MRP_UNUSED(L);
+    MRP_UNUSED(data);
+    MRP_UNUSED(ret_val);
+    MRP_ASSERT(signature && args && ret_type, "invalid argument");
+
+    *ret_type = MRP_FUNCBRIDGE_NO_DATA;
+
+    if (strcmp(signature, "oo")) {
+        mrp_log_error("system-controller: bad signature: "
+                      "expected 'oo' got '%s'", signature);
+        return false;
+    }
+
+    if (!(wl = mrp_wayland_scripting_window_manager_unwrap(args[0].pointer))) {
+        mrp_log_error("system-controller: argument 1 is not a "
+                      "'window_manager' class object");
+        return false;
+    }
+
+    if (!(wm = wl->wm)) {
+        mrp_log_error("system-controller: 'window_manager' is not initilized");
+        return false;
+    }
+
+    if (!(json = mrp_json_lua_unwrap(args[1].pointer))) {
+        mrp_log_error("system-controller: argument 2 is not a "
+                      "'JSON' class object");
+        return false;
+    }
+
+    mrp_json_foreach_member(json, key,val, it) {
+        switch (mrp_wayland_scripting_field_name_to_type(key, -1)) {
+
+        case PASSTHROUGH_REQUEST:
+            if (!mrp_wayland_json_integer_copy(wl, &mask, val, 1))
+                mrp_debug("'%s' field has invalid value", key);
+            else {
+                mrp_debug("set passthrough.request to 0x%x", mask);
+                wm->passthrough.request = mask;
+            }
+            break;
+
+        case PASSTHROUGH_UPDATE:
+            if (!mrp_wayland_json_integer_copy(wl, &mask, val, 1))
+                mrp_debug("'%s' field has invalid value", key);
+            else {
+                mrp_debug("set passthrough.update to 0x%x", mask);
+                wm->passthrough.update = mask;
+            }
+            break;
+
+        default:
+            mrp_debug("ignoring JSON field '%s'", key);
+            break;
+        }
+    }
+
+    return true;
+}
+
+static void manager_update_callback(mrp_wayland_t *wl,
+                                   mrp_wayland_window_manager_operation_t oper,
+                                   mrp_wayland_window_manager_t *wm)
+{
+    lua_State *L;
+    scripting_winmgr_t *winmgr;
+    mrp_funcbridge_value_t args[4], ret;
+    char t;
+    bool success;
+
+    MRP_ASSERT(wl && wm, "invalid argument");
+
+    if (!(L = mrp_lua_get_lua_state())) {
+        mrp_log_error("sysem-controller: can't update manager: "
+                      "LUA is not initialesed");
+        return;
+    }
+
+    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_data)) {
+        mrp_log_error("system-controller: window manager "
+                      "scripting is not initialized");
+        return;
+    }
+
+    MRP_ASSERT(wl == winmgr->wl, "confused with data structures");
+
+    args[0].pointer = winmgr;
+    args[1].integer = oper;
+
+    memset(&ret, 0, sizeof(ret));
+
+    success = mrp_funcbridge_call_from_c(L, winmgr->manager_update, "od",
+                                         args, &t, &ret);
+    if (!success) {
+        mrp_log_error("failed to call window_manager.%s.manager_update method "
+                      "(%s)", winmgr->name, ret.string ? ret.string : "NULL");
+        mrp_free((void *)ret.string);
+    }
+}
+
 static bool window_request_bridge(lua_State *L,
                                   void *data,
                                   const char *signature,
@@ -551,28 +707,32 @@ static bool window_request_bridge(lua_State *L,
     *ret_type = MRP_FUNCBRIDGE_NO_DATA;
 
     if (strcmp(signature, "oood")) {
-        mrp_log_error("bad signature: expected 'oood' got '%s'",signature);
+        mrp_log_error("system-controller: bad signature: "
+                      "expected 'oood' got '%s'",signature);
         return false;
     }
 
     if (!(wl = mrp_wayland_scripting_window_manager_unwrap(args[0].pointer))) {
-        mrp_log_error("argument 1 is not a 'window_manager' class object");
+        mrp_log_error("system-controller: argument 1 is not a "
+                      "'window_manager' class object");
         return false;
     }
 
     if (!(json = mrp_json_lua_unwrap(args[1].pointer))) {
-        mrp_log_error("argument 2 is not a 'JSON' class object");
+        mrp_log_error("system-controller: argument 2 is not a "
+                      "'JSON' class object");
         return false;
     }
 
     if (!(anims = mrp_wayland_scripting_animation_unwrap(args[2].pointer))) {
-        mrp_log_error("argument 3 is not an 'animation' class object");
+        mrp_log_error("system-controller: argument 3 is not an "
+                      "'animation' class object");
         return false;
     }
 
     if ((framerate = args[3].integer) > MRP_WAYLAND_FRAMERATE_MAX) {
-        mrp_log_error("argument 3 is not valid framerate (out of range 0-%d)",
-                      MRP_WAYLAND_FRAMERATE_MAX);
+        mrp_log_error("system-controller: argument 3 is not valid framerate "
+                      "(out of range 0-%d)", MRP_WAYLAND_FRAMERATE_MAX);
         return false;
     }
 
@@ -600,20 +760,22 @@ static void window_update_callback(mrp_wayland_t *wl,
     MRP_ASSERT(wl && win, "invalid argument");
 
     if (!(L = mrp_lua_get_lua_state())) {
-        mrp_log_error("can't update window %u: LUA is not initialesed",
-                      win->surfaceid);
+        mrp_log_error("system-controller: can't update window %u: "
+                      "LUA is not initialesed", win->surfaceid);
         return;
     }
 
     if (!(winmgr = (scripting_winmgr_t *)wl->scripting_data)) {
-        mrp_log_error("window manager scripting is not initialized");
+        mrp_log_error("system-controller: window manager scripting is "
+                      "not initialized");
         return;
     }
 
     MRP_ASSERT(wl == winmgr->wl, "confused with data structures");
 
     if (!win->scripting_data) {
-        mrp_log_error("no scripting data for window %d", win->surfaceid);
+        mrp_log_error("system-controller: no scripting data for "
+                      "window %d", win->surfaceid);
         return;
     }
 
@@ -851,6 +1013,8 @@ static bool layer_request_bridge(lua_State *L,
     memset(&u, 0, sizeof(u));
     u.mask = copy_json_fields(wl, json, fields, &u);
 
+    mrp_wayland_layer_request(wl, &u);
+
     return true;
 }
 
@@ -912,12 +1076,14 @@ static uint32_t copy_json_fields(mrp_wayland_t *wl,
     mrp_json_iter_t it;
     request_def_t *f;
     uint32_t m, mask;
+    bool found;
 
     mask = 0;
 
     mrp_json_foreach_member(json, key,val, it) {
-        for (f = fields;   f->name;   f++) {
+        for (f = fields, found = false;   f->name;   f++) {
             if (!strcmp(key, f->name)) {
+                found = true;
                 if ((m = f->copy(wl, copy + f->offset, val, f->mask)))
                     mask |= m;
                 else
@@ -925,6 +1091,8 @@ static uint32_t copy_json_fields(mrp_wayland_t *wl,
                 break;
             }
         }
+        if (!found)
+            mrp_debug("ignoring JSON field '%s'", key);
     }
 
     return mask;
@@ -937,10 +1105,11 @@ static bool register_methods(lua_State *L)
 #define FUNCBRIDGE_END    { NULL, NULL, NULL, NULL, NULL }
 
     static funcbridge_def_t funcbridge_defs[] = {
-        FUNCBRIDGE(output_request, "oo"  , NULL),
-        FUNCBRIDGE(area_create   , "oo"  , NULL),
-        FUNCBRIDGE(layer_request , "oo"  , NULL),
-        FUNCBRIDGE(window_request, "oood", NULL),
+        FUNCBRIDGE(manager_request, "oo"  , NULL),
+        FUNCBRIDGE(output_request , "oo"  , NULL),
+        FUNCBRIDGE(area_create    , "oo"  , NULL),
+        FUNCBRIDGE(layer_request  , "oo"  , NULL),
+        FUNCBRIDGE(window_request , "oood", NULL),
         FUNCBRIDGE_END
     };
 
