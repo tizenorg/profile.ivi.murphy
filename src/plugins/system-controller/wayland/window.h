@@ -128,27 +128,6 @@ void mrp_wayland_window_destroy(mrp_wayland_window_t *win);
 mrp_wayland_window_t *mrp_wayland_window_find(mrp_wayland_t *wl,
                                               int32_t surfaceid);
 
-#if 0
-void mrp_wayland_window_visibility_request(mrp_wayland_window_t *win,
-                                           int32_t visible, int32_t raise,
-                                           const char *animation_name,
-                                           int32_t animation_time);
-void mrp_wayland_window_active_request(mrp_wayland_window_t *win,
-                                       mrp_wayland_active_t active);
-void mrp_wayland_window_map_request(mrp_wayland_window_t *win,
-                                    bool map, uint32_t framerate);
-void mrp_wayland_window_geometry_request(mrp_wayland_window_t *win,
-                                         int32_t nodeid,
-                                         int32_t x, int32_t y,
-                                         int32_t width, int32_t height,
-                                         const char *move_animation,
-                                         int32_t move_time,
-                                         const char *resize_animation,
-                                         int32_t resize_time);
-void mrp_wayland_window_layer_request(mrp_wayland_window_t *win,
-                                      int32_t layerid);
-#endif
-
 void mrp_wayland_window_request(mrp_wayland_t *wl,
                                 mrp_wayland_window_update_t *u,
                                 mrp_wayland_animation_t *anims,

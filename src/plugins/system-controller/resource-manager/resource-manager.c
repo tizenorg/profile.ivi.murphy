@@ -45,6 +45,8 @@
 #include <murphy/resource/protocol.h>
 
 #include "resource-manager.h"
+#include "screen.h"
+#include "notifier.h"
 
 static int hash_compare(const void *, const void *);
 static uint32_t hash_function(const void *);
@@ -67,6 +69,8 @@ mrp_resmgr_t *mrp_resmgr_create(void)
     cfg.nbucket = MRP_RESMGR_RESOURCE_BUCKETS;
 
     resmgr->resources = mrp_htbl_create(&cfg);
+    resmgr->screen = mrp_resmgr_screen_create(resmgr);
+    resmgr->notifier = mrp_resmgr_notifier_create(resmgr);
 
     return resmgr;
 }

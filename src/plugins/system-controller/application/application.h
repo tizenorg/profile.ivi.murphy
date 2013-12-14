@@ -76,6 +76,8 @@ struct mrp_application_s {
 
     mrp_wayland_area_t *area;
     mrp_application_privileges_t privileges;
+    const char *resource_class;
+    int32_t screen_priority;
 
     void *scripting_data;
 };
@@ -86,16 +88,20 @@ enum mrp_application_update_mask_e {
     MRP_APPLICATION_AREA_MASK       = 0x04,
     MRP_APPLICATION_SCREEN_PRIVILEGE_MASK = 0x08,
     MRP_APPLICATION_AUDIO_PRIVILEGE_MASK  = 0x10,
-    MRP_APPLICATION_PRIVILEGES_MASK = 0x18,
+    MRP_APPLICATION_PRIVILEGES_MASK       = 0x18,
+    MRP_APPLICATION_RESOURCE_CLASS_MASK   = 0x20,
+    MRP_APPLICATION_SCREEN_PRIORITY_MASK  = 0x40,
 
-    MRP_APPLICATION_END_MASK        = 0x20
+    MRP_APPLICATION_END_MASK        = 0x80
 };
 
 struct mrp_application_update_s {
     mrp_application_update_mask_t mask;    
     const char *appid;
     const char *area_name;
+    const char *resource_class;
     mrp_application_privileges_t privileges;
+    int32_t screen_priority;
 };
 
 mrp_application_t *mrp_application_create(mrp_application_update_t *u,
