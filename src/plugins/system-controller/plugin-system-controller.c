@@ -43,6 +43,7 @@
 #include "system-controller.h"
 
 #include "resource-manager/scripting-resource-manager.h"
+#include "resource-client/scripting-resource-client.h"
 #include "application/scripting-application.h"
 #include "wayland/scripting-wayland.h"
 
@@ -662,6 +663,7 @@ static int register_lua_bindings(sysctl_t *sc)
         return FALSE;
 
     mrp_resmgr_scripting_init(sc->L);
+    mrp_resclnt_scripting_init(sc->L);
     mrp_application_scripting_init(sc->L);
     mrp_wayland_scripting_init(sc->L);
 
