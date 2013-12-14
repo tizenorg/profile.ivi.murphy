@@ -125,28 +125,6 @@ mrp_wayland_layer_t *mrp_wayland_layer_find(mrp_wayland_t *wl, int32_t layerid)
     return (mrp_wayland_layer_t*)mrp_htbl_lookup(wl->layers,&layerid);
 }
 
-void mrp_wayland_layer_visibility_request(mrp_wayland_layer_t *layer,
-                                          int32_t visible)
-{
-    mrp_wayland_window_manager_t *wm;
-    mrp_wayland_layer_update_t u;
-
-    MRP_ASSERT(layer && layer->wl, "invalid arguent");
-
-    if (!(wm = layer->wm))
-        mrp_debug("ignoring layer visibility request: no window-manager");
-    else {
-        memset(&u, 0, sizeof(u));
-
-        if (visible >= 0) {
-            u.mask |= MRP_WAYLAND_LAYER_VISIBLE_MASK;
-            u.visible = visible ? true : false;
-        }
-        
-        wm->layer_request(layer, &u);
-    }
-}
-
 void mrp_wayland_layer_request(mrp_wayland_t *wl,mrp_wayland_layer_update_t *u)
 {
     mrp_wayland_layer_t *layer;

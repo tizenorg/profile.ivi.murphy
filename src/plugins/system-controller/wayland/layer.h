@@ -48,9 +48,9 @@ enum mrp_wayland_layer_type_e {
 
 enum mrp_wayland_layer_operation_e {
     MRP_WAYLAND_LAYER_OPERATION_NONE = 0,
-    MRP_WAYLAND_LAYER_CREATE,
-    MRP_WAYLAND_LAYER_DESTROY,
-    MRP_WAYLAND_LAYER_VISIBLE
+    MRP_WAYLAND_LAYER_CREATE,       /* 1 */
+    MRP_WAYLAND_LAYER_DESTROY,      /* 2 */
+    MRP_WAYLAND_LAYER_VISIBLE       /* 3 */
 };
 
 struct mrp_wayland_layer_s {
@@ -91,8 +91,6 @@ void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer);
 mrp_wayland_layer_t *mrp_wayland_layer_find(mrp_wayland_t *wl,
                                             int32_t layerid);
 
-void mrp_wayland_layer_visibility_request(mrp_wayland_layer_t *layer,
-                                          int32_t visible);
 
 void mrp_wayland_layer_request(mrp_wayland_t *wl,
                                mrp_wayland_layer_update_t *u);
