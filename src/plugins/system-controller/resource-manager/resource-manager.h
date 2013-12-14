@@ -38,15 +38,28 @@
 
 #include "data-types.h"
 
+#define MRP_RESMGR_RESOURCE_MAX            256
+#define MRP_RESMGR_ACTIVE_SCREEN_MAX       128
+
+#define MRP_RESMGR_RESOURCE_BUCKETS        (MRP_RESMGR_RESOURCE_MAX / 4)
+
 typedef enum mrp_sysctl_scripting_field_e  mrp_resmgr_scripting_field_t;
+typedef enum mrp_resmgr_event_type_e       mrp_resmgr_event_type_t;
+typedef enum mrp_resmgr_eventid_e          mrp_resmgr_eventid_t;
 
 typedef struct mrp_resmgr_s                mrp_resmgr_t;
 typedef struct mrp_resmgr_screen_s         mrp_resmgr_screen_t;
 typedef struct mrp_resmgr_audio_s          mrp_resmgr_audio_t;
 typedef struct mrp_resmgr_input_s          mrp_resmgr_input_t;
+typedef struct mrp_resmgr_class_s          mrp_resmgr_class_t;
+typedef struct mrp_resmgr_window_s         mrp_resmgr_window_t;
+typedef struct mrp_resmgr_screen_area_s    mrp_resmgr_screen_area_t;
+typedef struct mrp_resmgr_notifier_s       mrp_resmgr_notifier_t;
+typedef struct mrp_resmgr_notifier_zone_s  mrp_resmgr_notifier_zone_t;
+typedef struct mrp_resmgr_event_s          mrp_resmgr_event_t;
 
-#define MRP_RESMGR_RESOURCE_MAX            256
-#define MRP_RESMGR_RESOURCE_BUCKETS        (MRP_RESMGR_RESOURCE_MAX / 4)
+typedef void (*mrp_resmgr_notifier_event_callback_t)(mrp_resmgr_t *,
+                                                     mrp_resmgr_event_t *);
 
 struct mrp_resmgr_s {
     mrp_htbl_t *resources;
@@ -55,6 +68,8 @@ struct mrp_resmgr_s {
     mrp_resmgr_screen_t *screen;
     mrp_resmgr_audio_t *audio;
     mrp_resmgr_input_t *input;
+
+    mrp_resmgr_notifier_t *notifier;
 
     void *scripting_data;
 };
