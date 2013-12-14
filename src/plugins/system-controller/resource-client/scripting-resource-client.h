@@ -27,30 +27,25 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __MURPHY_SYSTEM_CONTROLLER_RESOURCE_MANAGER_SCRIPTING_H__
-#define __MURPHY_SYSTEM_CONTROLLER_RESOURCE_MANAGER_SCRIPTING_H__
+#ifndef __MURPHY_SYSTEM_CONTROLLER_RESOURCE_CLIENT_SCRIPTING_H__
+#define __MURPHY_SYSTEM_CONTROLLER_RESOURCE_CLIENT_SCRIPTING_H__
 
 #include <lua.h>
 
-#include "resource-manager/resource-manager.h"
+#include "resource-client/resource-client.h"
 
-void mrp_resmgr_scripting_init(lua_State *L);
+void mrp_resclnt_scripting_init(lua_State *L);
 
-mrp_resmgr_t *mrp_resmgr_scripting_check(lua_State *L, int idx);
-mrp_resmgr_t *mrp_resmgr_scripting_unwrap(void *void_rm);
-
-/* scripting-notifier.c */
-void  mrp_resmgr_scripting_notifier_init(lua_State *L);
-void *mrp_resmgr_scripting_screen_event_create_from_c(lua_State *L,
-                                                    mrp_resmgr_event_t *event);
+mrp_resclnt_t *mrp_resclnt_scripting_check(lua_State *L, int idx);
+mrp_resclnt_t *mrp_resclnt_scripting_unwrap(void *void_rm);
 
 
 /* internal for scripting-xxx.c */
-mrp_resmgr_scripting_field_t
-mrp_resmgr_scripting_field_check(lua_State *, int, const char **);
+mrp_resclnt_scripting_field_t
+mrp_resclnt_scripting_field_check(lua_State *, int, const char **);
 
-mrp_resmgr_scripting_field_t
-mrp_resmgr_scripting_field_name_to_type(const char *, ssize_t);
+mrp_resclnt_scripting_field_t
+mrp_resclnt_scripting_field_name_to_type(const char *, ssize_t);
 
 
-#endif /* __MURPHY_SYSTEM_CONTROLLER_RESOURCE_MANAGER_SCRIPTING_H__ */
+#endif /* __MURPHY_SYSTEM_CONTROLLER_RESOURCE_CLIENT_SCRIPTING_H__ */
