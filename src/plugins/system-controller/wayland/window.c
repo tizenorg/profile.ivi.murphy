@@ -45,8 +45,10 @@
 
 typedef struct {
     mrp_wayland_window_t *win;
+    mrp_wayland_window_operation_t oper;
     int32_t state;
-} update_active_t;
+    bool raise;
+} update_others_t;
 
 static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *,
                                                mrp_wayland_window_update_t *);
@@ -159,182 +161,6 @@ mrp_wayland_window_t *mrp_wayland_window_find(mrp_wayland_t *wl,
 }
 
 
-#if 0
-void mrp_wayland_window_visibility_request(mrp_wayland_window_t *win,
-                                           int32_t visible,
-                                           int32_t raise,
-                                           const char *animation,
-                                           int32_t time)
-{
-    mrp_wayland_window_manager_t *wm;
-    mrp_wayland_window_update_t u;
-    mrp_wayland_animation_t *anims;
-    mrp_wayland_animation_type_t at;
-
-    MRP_ASSERT(win && win->wm, "invalid argument");
-
-    wm = win->wm;
-
-    memset(&u, 0, sizeof(u));
-
-    if (visible >= 0) {
-        u.mask |= MRP_WAYLAND_WINDOW_VISIBLE_MASK;
-        u.visible = visible ? true : false;
-    }
-
-    if (raise >= 0) {
-        u.mask |= MRP_WAYLAND_WINDOW_RAISE_MASK;
-        u.raise = raise ? true : false;
-    }
-
-    if ((anims = mrp_wayland_animation_create())) {
-        at = visible ? MRP_WAYLAND_ANIMATION_SHOW : MRP_WAYLAND_ANIMATION_HIDE;
-        mrp_wayland_animation_set(anims, at, animation, time);
-    }
-
-    wm->window_request(win, &u, anims, 0);
-
-    mrp_wayland_animation_destroy(anims);
-}
-
-void mrp_wayland_window_active_request(mrp_wayland_window_t *win,
-                                       mrp_wayland_active_t active)
-{
-    mrp_wayland_window_manager_t *wm;
-    mrp_wayland_window_update_t u;
-
-    MRP_ASSERT(win && win->wm, "invalid argument");
-
-    wm = win->wm;
-
-    memset(&u, 0, sizeof(u));
-    u.mask = MRP_WAYLAND_WINDOW_ACTIVE_MASK;
-    u.active = active;
-
-    wm->window_request(win, &u, NULL, 0);
-}
-
-void mrp_wayland_window_map_request(mrp_wayland_window_t *win,
-                                    bool map,
-                                    uint32_t framerate)
-{
-    mrp_wayland_window_manager_t *wm;
-    mrp_wayland_window_update_t u;
-
-    MRP_ASSERT(win && win->wm && framerate <= MRP_WAYLAND_FRAMERATE_MAX,
-               "invalid argument");
-
-    wm = win->wm;
-
-    memset(&u, 0, sizeof(u));
-    u.mask = MRP_WAYLAND_WINDOW_MAPPED_MASK;
-    u.mapped = map;
-
-    wm->window_request(win, &u, NULL, framerate);
-}
-
-void mrp_wayland_window_geometry_request(mrp_wayland_window_t *win,
-                                         int32_t nodeid,
-                                         int32_t x,
-                                         int32_t y,
-                                         int32_t width,
-                                         int32_t height,
-                                         const char *move_animation,
-                                         int32_t move_time,
-                                         const char *resize_animation,
-                                         int32_t resize_time)
-{
-    mrp_wayland_window_manager_t *wm;
-    mrp_wayland_window_update_t u;
-    mrp_wayland_animation_t *anims;
-    bool have_move_animation;
-    bool have_resize_animation;
-
-    MRP_ASSERT(win && win->wm, "invalid argument");
-
-    wm = win->wm;
-
-    memset(&u, 0, sizeof(u));
-
-    if (nodeid >= 0) {
-        u.mask |= MRP_WAYLAND_WINDOW_NODEID_MASK;
-        u.nodeid = nodeid;
-    }
-    else if (win->nodeid >= 0) {
-        u.mask |= MRP_WAYLAND_WINDOW_NODEID_MASK;
-        u.nodeid = win->nodeid;
-    }
-
-    if (x != MRP_WAYLAND_NO_UPDATE) {
-        u.mask |= MRP_WAYLAND_WINDOW_X_MASK;
-        u.x = x;
-    }
-    if (y != MRP_WAYLAND_NO_UPDATE) {
-        u.mask |= MRP_WAYLAND_WINDOW_Y_MASK;
-        u.y = y;
-    }
-
-    if (width > 0) {
-        u.mask |= MRP_WAYLAND_WINDOW_WIDTH_MASK;
-        u.width = width;
-    }
-    if (height > 0) {
-        u.mask |= MRP_WAYLAND_WINDOW_HEIGHT_MASK;
-        u.height = height;
-    }
-
-    have_move_animation = (move_animation && move_animation[0] &&
-                           move_time > 0);
-    have_resize_animation = (resize_animation && resize_animation[0] &&
-                             resize_time > 0);
-
-    if (!have_move_animation && !have_resize_animation)
-        anims = NULL;
-    else {
-        if ((anims = mrp_wayland_animation_create())) {
-            if (have_move_animation) {
-                mrp_wayland_animation_set(anims, MRP_WAYLAND_ANIMATION_MOVE,
-                                          move_animation, move_time);
-            }
-            if (have_resize_animation) {
-                mrp_wayland_animation_set(anims, MRP_WAYLAND_ANIMATION_RESIZE,
-                                          resize_animation, resize_time);
-            }
-        }
-    }
-
-    wm->window_request(win, &u, NULL, 0);
-
-    mrp_wayland_animation_destroy(anims);
-}
-
-
-void mrp_wayland_window_layer_request(mrp_wayland_window_t *win,
-                                      int32_t layerid)
-{
-    mrp_wayland_window_manager_t *wm;
-    mrp_wayland_t *wl;
-    mrp_wayland_layer_t *layer;
-    mrp_wayland_window_update_t u;
-
-    MRP_ASSERT(win && win->wm && win->wm->interface && win->wm->interface->wl,
-               "invalid argument");
-
-    wm = win->wm;
-    wl = wm->interface->wl;
-
-    if (!(layer = mrp_wayland_layer_find(wl, layerid))) {
-        mrp_log_error("can't find layer %d", layerid);
-        return;
-    }
-
-    memset(&u, 0, sizeof(u));
-    u.mask = MRP_WAYLAND_WINDOW_LAYER_MASK;
-    u.layer = layer;
-
-    wm->window_request(win, &u, NULL, 0);
-}
-#endif
 
 void mrp_wayland_window_request(mrp_wayland_t *wl,
                                 mrp_wayland_window_update_t *u,
@@ -343,6 +169,7 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
 {
     mrp_wayland_window_t *win;
     mrp_wayland_window_manager_t *wm;
+    char buf[4096];
 
     MRP_ASSERT(wl && u, "invalid arguments");
 
@@ -355,26 +182,45 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
 
     MRP_ASSERT(win->wm, "confused with data structures");
 
+    mrp_wayland_window_request_print(u, buf,sizeof(buf));
+    mrp_debug("window %d%s", u->surfaceid, buf);
+
     wm = win->wm;
 
     wm->window_request(win, u, anims, framerate);
 }
 
-static int update_active(void *key, void *object, void *ud)
+static int update_others(void *key, void *object, void *ud)
 {
     mrp_wayland_window_t *win = (mrp_wayland_window_t *)object;
-    update_active_t *active = (update_active_t *)ud;
+    update_others_t *uo = (update_others_t *)ud;
 
     MRP_UNUSED(key);
 
-    if (win != active->win) {
-        if (active->state == 0)
-            win->active = 0;
-        else
-            win->active &= ~active->state;
+    if (win != uo->win) {        
+        switch (uo->oper) {
 
-        mrp_debug("setting window %d 'active' to 0x%x",
-                  win->surfaceid, win->active); 
+        case MRP_WAYLAND_WINDOW_ACTIVE:
+            if (uo->state == 0)
+                win->active = 0;
+            else
+                win->active &= ~uo->state;
+
+            mrp_debug("setting window %d 'active' to 0x%x",
+                      win->surfaceid, win->active);
+            break;
+
+        case MRP_WAYLAND_WINDOW_VISIBLE:
+            if (uo->raise)
+                win->raise = false;
+
+            mrp_debug("setting window %d 'raise' to %s",
+                      win->surfaceid, win->raise ? "true" : "false");
+            break;
+
+        default:
+            break;
+        }
     }
 
     return MRP_HTBL_ITER_MORE;
@@ -390,7 +236,7 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
     int32_t surfaceid;
     mrp_wayland_window_update_mask_t mask;
     char buf[2048];
-    update_active_t active;
+    update_others_t uo;
 
     MRP_ASSERT(win && win->wm && win->wm->interface &&
                win->wm->interface->wl && u, "invalid argument");
@@ -411,20 +257,42 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
 
      mask = update(win, u);
 
-    if (!mask)
+     if (!mask) {
         mrp_debug("window %d update requested but nothing changed", surfaceid);
-    else {
-        mrp_wayland_window_print(win, mask, buf,sizeof(buf));
-        mrp_debug("window %d updated%s", surfaceid, buf);
-    }
+        return;
+     }
+
+     mrp_wayland_window_print(win, mask, buf,sizeof(buf));
+     mrp_debug("window %d updated%s", surfaceid, buf);
 
     if (win->scripting_data && wl->window_update_callback)
         wl->window_update_callback(wl, oper, mask, win);
 
-    if (oper == MRP_WAYLAND_WINDOW_ACTIVE) {
-        active.win = win;
-        active.state = win->active;
-        mrp_htbl_foreach(wl->windows, update_active, &active);
+
+    memset(&uo, 0, sizeof(uo));
+    uo.win = win;
+    uo.oper = oper;
+
+    switch (oper) {
+
+    case MRP_WAYLAND_WINDOW_ACTIVE:
+        uo.state = win->active;
+        goto update_loop;
+
+    case MRP_WAYLAND_WINDOW_VISIBLE:
+        if ((mask & MRP_WAYLAND_WINDOW_RAISE_MASK) && win->raise) {
+            uo.raise = true;
+            goto update_loop;
+        }
+        break;
+
+
+    default:
+        break;
+
+    update_loop:
+        mrp_htbl_foreach(wl->windows, update_others, &uo);
+        break;
     }
 }
 
@@ -575,9 +443,12 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
                                                mrp_wayland_window_update_t *u)
 {
     mrp_wayland_window_update_mask_t mask = 0;
+    mrp_wayland_window_update_mask_t passthrough = win->wm->passthrough.update;
 
     if ((u->mask & MRP_WAYLAND_WINDOW_NAME_MASK)) {
-        if (!win->name || strcmp(u->name, win->name)) {
+        if (!win->name || strcmp(u->name, win->name) ||
+            (passthrough & MRP_WAYLAND_WINDOW_NAME_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_NAME_MASK;
             mrp_free(win->name);
             win->name = mrp_strdup(u->name);
@@ -585,7 +456,8 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_APPID_MASK)) {
-        if (!win->appid || strcmp(u->appid, win->appid)) {
+        if (!win->appid || strcmp(u->appid, win->appid) ||
+            (passthrough & MRP_WAYLAND_WINDOW_APPID_MASK)) {
             mask |= MRP_WAYLAND_WINDOW_APPID_MASK;
             mrp_free(win->appid);
             win->appid = mrp_strdup(u->appid);
@@ -593,56 +465,72 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_PID_MASK)) {
-        if (u->pid != win->pid) {
+        if (u->pid != win->pid ||
+            (passthrough & MRP_WAYLAND_WINDOW_PID_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_PID_MASK;
             win->pid = u->pid;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_NODEID_MASK)) {
-        if (u->nodeid != win->nodeid) {
+        if (u->nodeid != win->nodeid ||
+            (passthrough & MRP_WAYLAND_WINDOW_NODEID_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_NODEID_MASK;
             win->nodeid = u->nodeid;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_LAYER_MASK)) {
-        if (u->layer != win->layer) {
+        if (u->layer != win->layer ||
+            (passthrough & MRP_WAYLAND_WINDOW_LAYER_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
             win->layer = u->layer;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_X_MASK)) {
-        if (u->x != win->x) {
+        if (u->x != win->x ||
+            (passthrough & MRP_WAYLAND_WINDOW_X_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_POSITION_MASK;
             win->x = u->x;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_Y_MASK)) {
-        if (u->y != win->y) {
+        if (u->y != win->y ||
+            (passthrough & MRP_WAYLAND_WINDOW_Y_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_POSITION_MASK;
             win->y = u->y;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_WIDTH_MASK)) {
-        if (u->width != win->width) {
+        if (u->width != win->width ||
+            (passthrough & MRP_WAYLAND_WINDOW_WIDTH_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_SIZE_MASK;
             win->width = u->width;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK)) {
-        if (u->height != win->height) {
+        if (u->height != win->height ||
+            (passthrough & MRP_WAYLAND_WINDOW_HEIGHT_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_SIZE_MASK;
             win->height = u->height;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_VISIBLE_MASK)) {
-        if ((u->visible && !win->visible) || (!u->visible && win->visible)) {
+        if ((u->visible && !win->visible) || (!u->visible && win->visible) ||
+            (passthrough & MRP_WAYLAND_WINDOW_VISIBLE_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_VISIBLE_MASK |
                     MRP_WAYLAND_WINDOW_RAISE_MASK   ;
             win->visible = u->visible;
@@ -650,7 +538,9 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_RAISE_MASK)) {
-        if ((u->raise && !win->raise) || (!u->raise && win->raise)) {
+        if ((u->raise && !win->raise) || (!u->raise && win->raise) ||
+            (passthrough & MRP_WAYLAND_WINDOW_RAISE_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_RAISE_MASK   |
                     MRP_WAYLAND_WINDOW_VISIBLE_MASK ;
             win->raise = u->raise;
@@ -658,21 +548,27 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_MAPPED_MASK)) {
-        if ((u->mapped && !win->mapped) || (!u->mapped && win->mapped)) {
+        if ((u->mapped && !win->mapped) || (!u->mapped && win->mapped) ||
+            (passthrough & MRP_WAYLAND_WINDOW_MAPPED_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_MAPPED_MASK;
             win->mapped = u->mapped;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_ACTIVE_MASK)) {
-        if ((u->active && !win->active) || (!u->active && win->active)) {
+        if (u->active != win->active ||
+            (passthrough & MRP_WAYLAND_WINDOW_ACTIVE_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_ACTIVE_MASK;
             win->active = u->active;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK)) {
-        if ((u->layertype != win->layertype)) {
+        if (u->layertype != win->layertype ||
+            (passthrough & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK))
+        {
             mask |= MRP_WAYLAND_WINDOW_LAYERTYPE_MASK;
             win->layertype = u->layertype;
         }
@@ -721,6 +617,21 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
 
     mrp_debug("found area '%s'", u2.area->name);
 
+#if 0
+    if (u->layertype == MRP_WAYLAND_LAYER_TYPE_UNKNOWN ||
+        u->layertype == MRP_WAYLAND_LAYER_INPUT        ||
+        u->layertype == MRP_WAYLAND_LAYER_TOUCH        ||
+        u->layertype == MRP_WAYLAND_LAYER_CURSOR        )
+    {
+        win->area = u2.area;
+        win->x = u2.area->x;
+        win->y = u2.area->y;
+        win->width = u2.area->width;
+        win->height = u2.area->height;
+        return mask;
+    }
+#endif
+
     u2.mask |= MRP_WAYLAND_WINDOW_AREA_MASK;
 
     if (!(mask & MRP_WAYLAND_WINDOW_POSITION_MASK)) {
@@ -751,7 +662,7 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
 
     return mask;
 }
-                                   
+
 
 static char *active_str(mrp_wayland_active_t active, char *buf, size_t len)
 {
