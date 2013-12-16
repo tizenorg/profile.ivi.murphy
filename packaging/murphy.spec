@@ -32,6 +32,7 @@ License: BSD-3-Clause
 Group: System/Service
 URL: http://01.org/murphy/
 Source0: %{name}-%{version}.tar.gz
+Source1: murphy.manifest
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
@@ -393,6 +394,22 @@ mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
 cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
 
+# copy the manifest file
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy.manifest
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-tests.manifest
+%if %{?_with_qt:1}%{!?_with_qt:0}
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-qt.manifest
+%endif
+%if %{?_with_glib:1}%{!?_with_glib:0}
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-glib.manifest
+%endif
+%if %{?_with_pulse:1}%{!?_with_pulse:0}
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-pulse.manifest
+%endif
+%if %{?_with_ecore:1}%{!?_with_ecore:0}
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ecore.manifest
+%endif
+
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -452,6 +469,7 @@ ldconfig
 %files
 %endif
 %defattr(-,root,root,-)
+%manifest %{_datadir}/murphy.manifest
 %{_bindir}/murphyd
 %config %{_sysconfdir}/murphy
 %{systemddir}/system/murphyd.service
@@ -552,6 +570,7 @@ ldconfig
 %files pulse
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-pulse.so.*
+%manifest %{_datadir}/murphy-pulse.manifest
 
 %files pulse-devel
 %defattr(-,root,root,-)
@@ -564,6 +583,7 @@ ldconfig
 %files ecore
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-ecore.so.*
+%manifest %{_datadir}/murphy-ecore.manifest
 
 %files ecore-devel
 %defattr(-,root,root,-)
@@ -576,6 +596,7 @@ ldconfig
 %files glib
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-glib.so.*
+%manifest %{_datadir}/murphy-glib.manifest
 
 %files glib-devel
 %defattr(-,root,root,-)
@@ -588,6 +609,7 @@ ldconfig
 %files qt
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-qt.so.*
+%manifest %{_datadir}/murphy-qt.manifest
 
 %files qt-devel
 %defattr(-,root,root,-)
@@ -603,6 +625,7 @@ ldconfig
 %{_bindir}/resource-api-fuzz
 %{_bindir}/test-domain-controller
 %{_bindir}/murphy-console
+%manifest %{_datadir}/murphy-tests.manifest
 
 %changelog
 * Tue Nov 27 2012 Krisztian Litkey <krisztian.litkey@intel.com> -
