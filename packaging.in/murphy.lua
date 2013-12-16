@@ -713,6 +713,9 @@ wmgr = window_manager({
 
 sc = m:get_system_controller()
 
+-- resource sets
+sets = {}
+
 connected = false
 
 -- these shoud be before wmgr:connect() is called
@@ -842,12 +845,160 @@ if sc then
     sc.resource_handler = function (self, cid, msg)
         print('*** resource handler: ' .. tostring(msg))
 
-        reply = m.JSON({ command = 'reply to client #' .. tostring(cid) })
+        createResourceSet = function (ctl, client, msg)
+            cb = function(rset, data)
+                print("> resource callback")
 
-        if sc:send_message(self, cid, reply) then
-            print('*** reply OK')
-        else
-            print('*** reply FAILED')
+                -- type is either basic (0) or interrupt (1)
+                requestType = 0
+                if msg.res.type then
+                    requestType = msg.res.type
+                end
+
+                if rset.acquired then
+                    cmd = 0x00040001 -- acquire
+                else
+                    cmd = 0x00040002 -- release
+                end
+
+                reply = m.JSON({
+                        appid = data.client,
+                        command = cmd,
+                        res = {
+                            type = requestType
+                        }
+                    })
+
+                if rset.resources.audio_playback then
+                    reply.res.sound = {
+                        zone = "driver",
+                        name = msg.appid,
+                        adjust = 0,
+                        -- id = "0"
+                    }
+                end
+
+                if rset.resources.display then
+                    reply.res.window = {
+                        zone = "driver",
+                        name = msg.appid,
+                        -- id = "0"
+                    }
+                end
+
+                if rset.resources.input then
+                    reply.res.input = {
+                        name = msg.appid,
+                        event = 0
+                    }
+                end
+                print("sending message to client: " .. data.client)
+
+                if sc:send_message(data.client, reply) then
+                    print('*** reply OK')
+                else
+                    print('*** reply FAILED')
+                end
+            end
+
+            rset = m:ResourceSet({
+                    application_class = "player",
+                    zone = "driver", -- msg.zone ("full")
+                    callback = cb
+                })
+
+            rset.data = {
+                cid = cid,
+                ctl = ctl
+            }
+
+            if msg.res.sound then
+                rset:addResource({
+                        resource_name = "audio_playback"
+                    })
+                rset.resources.audio_playback.attributes.pid = tostring(msg.pid)
+                rset.resources.audio_playback.attributes.appid = msg.appid
+                print("sound name: " .. msg.res.sound.name)
+                print("sound zone:" .. msg.res.sound.zone)
+                print("sound adjust: " .. tostring(msg.res.sound.adjust))
+                if msg.res.sound.id then
+                    print("sound id: " .. msg.res.sound.id)
+                end
+            end
+
+            if msg.res.input then
+                rset:addResource({
+                        resource_name = "input"
+                    })
+                rset.resources.input.attributes.pid = tostring(msg.pid)
+                rset.resources.input.attributes.appid = msg.appid
+                print("input name: " .. msg.res.sound.name)
+                print("input event:" .. tostring(msg.res.input.event))
+            end
+
+            if msg.res.window then
+                rset:addResource({
+                        resource_name = "display"
+                    })
+                rset.resources.display.attributes.pid = tostring(msg.pid)
+                rset.resources.display.attributes.appid = msg.appid
+                print("display name: " .. msg.res.display.name)
+                print("display zone:" .. msg.res.display.zone)
+                if msg.res.display.id then
+                    print("display id: " .. msg.res.display.id)
+                end
+            end
+
+            return rset
+        end
+
+        -- parse the message
+
+        -- fields common to all messages:
+        --      msg.command
+        --      msg.appid
+        --      msg.pid
+
+        if msg.command == 0x00040011 then -- MSG_CMD_CREATE_RES
+            print("command CREATE")
+
+            if not sets.cid then
+                sets.cid = createResourceSet(self, cid, msg)
+            end
+
+        elseif msg.command == 0x00040012 then -- MSG_CMD_DESTORY_RES
+            print("command DESTROY")
+
+            if sets.cid then
+                sets.cid:release()
+            end
+
+            sets.cid = nil -- garbage collecting
+
+        elseif msg.command == 0x00040001 then -- MSG_CMD_ACQUIRE_RES
+            print("command ACQUIRE")
+
+            if not sets.cid then
+                sets.cid = createResourceSet(self, cid, msg)
+            end
+
+            sets.cid:acquire()
+
+        elseif msg.command == 0x00040002 then -- MSG_CMD_RELEASE_RES
+            print("command RELEASE")
+
+            if sets.cid then
+                sets.cid:release()
+            end
+
+        elseif msg.command == 0x00040003 then -- MSG_CMD_DEPRIVE_RES
+            print("command DEPRIVE")
+
+        elseif msg.command == 0x00040004 then -- MSG_CMD_WAITING_RES
+            print("command WAITING")
+
+        elseif msg.command == 0x00040005 then -- MSG_CMD_REVERT_RES
+            print("command REVERT")
         end
     end
     sc.inputdev_handler = function (self, cid, msg)
