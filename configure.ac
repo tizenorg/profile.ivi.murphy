@@ -489,24 +489,16 @@ AC_SUBST(TELEPHONY_LIBS)
 # Check if system-controller (plugin) support should be enabled.
 AC_ARG_ENABLE(system-controller,
               [  --enable-system-controller enable system-controller support],
-	      [enable_systemctl=$enableval], [enable_systemctl=auto])
-
-if test "$enable_systemctl" != "no"; then
-    if test "$enable_systemctl" = "auto"; then
-        enable_systemctl="$enable_websockets"
-    else
-        if test "$enable_websockets" != "yes"; then
-            AC_MSG_ERROR([System controller requires websocket support.])
-        fi
-    fi
-else
-    AC_MSG_NOTICE([System controller support is disabled.])
-fi
+	      [enable_systemctl=$enableval], [enable_systemctl=no])
 
 if test "$enable_systemctl" = "yes"; then
+    if test "$enable_websockets" != "yes"; then
+        AC_MSG_ERROR([System controller requires websocket support.])
+    fi
     AC_MSG_NOTICE([System-controller support is enabled.])
     AC_DEFINE([SYSTEMCTL_ENABLED], 1, [Enable system-controller support ?])
     PKG_CHECK_MODULES(WAYLAND_CLIENT, wayland-client)
+    AC_CHECK_HEADER([ico-uxf-weston-plugin/ico_input_mgr-client-protocol.h])
 else
     AC_MSG_NOTICE([System-controller support is disabled.])
 fi
