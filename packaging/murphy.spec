@@ -510,7 +510,9 @@ ldconfig
 %defattr(-,root,root,-)
 %endif
 %{_libdir}/murphy/plugins
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
 %{_libdir}/libmurphy-plugin-system-controller.so*
+%endif
 
 %files devel -f filelist.devel-includes
 %defattr(-,root,root,-)
