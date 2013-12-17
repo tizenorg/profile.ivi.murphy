@@ -205,6 +205,16 @@ Requires: %{name}-core = %{version}
 Requires: %{name} = %{version}
 %endif
 
+%package ivi-resource-manager
+Summary: Murphy IVI resource manager plugin
+Group: System/Service
+
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%package system-controller
+Summary: Murphy IVI resource manager plugin
+Group: System/Service
+%endif
+
 %description
 This package contains the basic daemon.
 
@@ -261,6 +271,14 @@ files.
 %description tests
 This package contains various test binaries for Murphy.
 
+%description ivi-resource-manager
+This package contains the Murphy IVI resource manager plugin.
+
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%description system-controller
+This package contains the Murphy IVI resource manager plugin.
+%endif
+
 %prep
 %setup -q
 
@@ -271,7 +289,7 @@ V="V=1"
 %endif
 
 CONFIG_OPTIONS=""
-DYNAMIC_PLUGINS="domain-control"
+DYNAMIC_PLUGINS="domain-control,system-controller,ivi-resource-manager"
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-pulse"
@@ -397,6 +415,7 @@ cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/or
 # copy the manifest file
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy.manifest
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-tests.manifest
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ivi-resource-manager.manifest
 %if %{?_with_qt:1}%{!?_with_qt:0}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-qt.manifest
 %endif
@@ -408,6 +427,9 @@ cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-pulse.manifest
 %endif
 %if %{?_with_ecore:1}%{!?_with_ecore:0}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ecore.manifest
+%endif
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-system-controller.manifest
 %endif
 
 %clean
@@ -509,10 +531,9 @@ ldconfig
 %files plugins-base -f filelist.plugins-base
 %defattr(-,root,root,-)
 %endif
-%{_libdir}/murphy/plugins
-%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-%{_libdir}/libmurphy-plugin-system-controller.so*
-%endif
+%{_libdir}/murphy/plugins/plugin-domain-control.so
+%{_libdir}/murphy/plugins/plugin-resource-asm.so
+%{_libdir}/murphy/plugins/plugin-resource-native.so
 
 %files devel -f filelist.devel-includes
 %defattr(-,root,root,-)
@@ -628,6 +649,18 @@ ldconfig
 %{_bindir}/test-domain-controller
 %{_bindir}/murphy-console
 %manifest %{_datadir}/murphy-tests.manifest
+
+%files ivi-resource-manager
+%defattr(-,root,root,-)
+%{_libdir}/murphy/plugins/plugin-ivi-resource-manager.so
+%manifest %{_datadir}/murphy-ivi-resource-manager.manifest
+
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%files system-controller
+%defattr(-,root,root,-)
+%{_libdir}/murphy/plugins/plugin-system-controller.so
+%manifest %{_datadir}/murphy-system-controller.manifest
+%endif
 
 %changelog
 * Tue Nov 27 2012 Krisztian Litkey <krisztian.litkey@intel.com> -
