@@ -1,4 +1,4 @@
-with_system_controller = false
+with_system_controller = true
 
 m = murphy.get()
 
@@ -60,8 +60,9 @@ else
     m:info("No audio session manager plugin found...")
 end
 
-if m:plugin_exists('ivi-resource-manager') and not with_system_controller then
+if m:plugin_exists('ivi-resource-manager') then
     m:load_plugin('ivi-resource-manager')
+    with_system_controller = false
 end
 
 -- define application classes
@@ -167,9 +168,7 @@ zone {
 
 
 -- define resource classes
-if not m:plugin_exists('ivi-resource-manager') and
-   not with_system_controller
-then
+if not m:plugin_exists('ivi-resource-manager') then
    resource.class {
         name = "audio_playback",
         shareable = true,
@@ -453,9 +452,12 @@ m:try_load_plugin('telephony')
 
 -- system controller test setup
 
-if not with_system_controller then
+if not with_system_controller or
+   not m:plugin_exists('system-controller') then
    return
 end
+
+m:load_plugin('system-controller')
 
 window_operation_names = {
     [1] = "create",
