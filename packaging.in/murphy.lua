@@ -1,4 +1,5 @@
 with_system_controller = true
+with_amb = false
 verbose = 0
 
 m = murphy.get()
@@ -45,7 +46,13 @@ end
 
 -- load the AMB plugin
 if m:plugin_exists('amb') then
-    m:load_plugin('amb')
+    m:try_load_plugin('amb')
+
+    if builtin.method.amb_initiate and
+       builtin.method.amb_update
+    then
+        with_amb = true
+    end
 else
     m:info("No amb plugin found...")
 end
@@ -321,14 +328,16 @@ mdb.select {
     condition = "id = 0"
 }
 
-sink.lua {
-    name = "night_mode",
-    inputs = { owner = mdb.select.select_night_mode },
-    property = "NightMode",
-    type = "b",
-    initiate = builtin.method.amb_initiate,
-    update = builtin.method.amb_update
-}
+if with_amb then
+    sink.lua {
+        name = "night_mode",
+        inputs = { owner = mdb.select.select_night_mode },
+        property = "NightMode",
+        type = "b",
+        initiate = builtin.method.amb_initiate,
+        update = builtin.method.amb_update
+    }
+end
 
 
 -- Driving mode processing chain
@@ -378,14 +387,16 @@ mdb.select {
     condition = "id = 0"
 }
 
-sink.lua {
-    name = "driving_mode",
-    inputs = { owner = mdb.select.select_driving_mode },
-    property = "DrivingMode",
-    type = "u",
-    initiate = builtin.method.amb_initiate,
-    update = builtin.method.amb_update
-}
+if with_amb then
+    sink.lua {
+        name = "driving_mode",
+        inputs = { owner = mdb.select.select_driving_mode },
+        property = "DrivingMode",
+        type = "u",
+        initiate = builtin.method.amb_initiate,
+        update = builtin.method.amb_update
+    }
+end
 
 -- turn signals (left, right)
 
