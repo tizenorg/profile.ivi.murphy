@@ -59,7 +59,7 @@ end
 
 -- load the ASM resource plugin
 if m:plugin_exists('resource-asm') then
-    m:load_plugin('resource-asm', {
+    m:try_load_plugin('resource-asm', {
         zone = "driver",
         share_mmplayer = "player:AVP,mandatory,exclusive,strict",
         ignored_argv0 = "WebProcess"
