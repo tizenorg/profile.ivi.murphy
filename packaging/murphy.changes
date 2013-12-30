@@ -1,3 +1,10 @@
+* Mon Dec 30 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.41
+- packaging: prevent system controller from launching.
+- packaging: set correct XDG_RUNTIME_DIR environment variable.
+- config: do not die if resource-asm plugin failed to start
+- config: work properly if the AMB plugin were not loaded or failed to initialize
+- system-controller: add screen resource support
+
 * Fri Dec 13 2013 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.40
 - enabled latest system controller snapshot (not used by default)
 - support for blacklisting/whitelisting plugins
