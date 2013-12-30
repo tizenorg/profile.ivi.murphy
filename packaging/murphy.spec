@@ -211,7 +211,7 @@ Group: System/Service
 
 %if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
 %package system-controller
-Summary: Murphy IVI resource manager plugin
+Summary: Murphy IVI System Controller plugin
 Group: System/Service
 %endif
 
@@ -403,9 +403,14 @@ $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb/config.lua
 mkdir -p $RPM_BUILD_ROOT%{_tmpfilesdir}
 cp packaging.in/murphyd.conf $RPM_BUILD_ROOT%{_tmpfilesdir}
 
-# Copy the systemd service file in place.
+# Copy the systemd files in place.
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
+mkdir -p $RPM_BUILD_ROOT%{systemddir}/user
 cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+cp packaging.in/ico-homescreen.service $RPM_BUILD_ROOT%{systemddir}/user
+cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir}/user
+%endif
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
@@ -483,6 +488,19 @@ lfconfig
 
 %postun qt
 ldconfig
+%endif
+
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%post system-controller
+# prevent system controller from starting
+rm -f %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+# instead launch just ico-homescreen
+ln -s %{systemddir}/user/murphy-wait-for-launchpad-ready.path %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
+
+
+%postun system-controller
+rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
+ln -s %{systemddir}/user/ico-uxf-wait-launchpad-ready.path %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
 %endif
 
 %if %{?_with_squashpkg:1}%{!?_with_squashpkg:0}
@@ -659,6 +677,8 @@ ldconfig
 %files system-controller
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-system-controller.so
+%{systemddir}/user/ico-homescreen.service
+%{systemddir}/user/murphy-wait-for-launchpad-ready.path
 %manifest %{_datadir}/murphy-system-controller.manifest
 %endif
 
