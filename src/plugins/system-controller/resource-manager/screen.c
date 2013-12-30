@@ -904,14 +904,20 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
 {
     uint32_t zoneid;
     uint32_t grantid;
+    const char *zonename;
     mrp_list_hook_t *areas, *aentry, *an;
     mrp_list_hook_t *resources, *rentry , *rn;
     mrp_resmgr_screen_area_t *area;
     screen_resource_t *sr;
+    const char *appid;
 
     zoneid  = mrp_zone_get_id(zone);
     areas   = screen->zones + zoneid;
     grantid = ++(screen->grantids[zoneid]);
+
+    if (!(zonename = mrp_zone_get_name(zone)))
+        zonename = "<unknown>";
+
     
     mrp_list_foreach(areas, aentry, an) {
         area = mrp_list_entry(aentry, mrp_resmgr_screen_area_t, link);
@@ -920,8 +926,17 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
         mrp_list_foreach_back(resources, rentry, rn) {
             sr = mrp_list_entry(rentry, screen_resource_t, link);
 
+            MRP_ASSERT(sr->res, "confused with data structures");
+
             if (sr->acquire) {
+                if (!(appid = get_appid_for_resource(sr->res)))
+                    appid = "<unknown>";
+
+                mrp_debug("preallocate screen resource in '%s' area for '%s' "
+                          "in zone '%s'", area->name, appid, zonename);
+
                 sr->grantid = grantid;
+
                 break;
             }
         }
@@ -1070,9 +1085,12 @@ static void screen_notify(mrp_resource_event_t event,
 static void screen_init(mrp_zone_t *zone, void *userdata)
 {
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
-    const char *zonename = mrp_zone_get_name(zone);
+    const char *zonename;
 
-    MRP_ASSERT(screen, "invalid argument");
+    MRP_ASSERT(zone && screen, "invalid argument");
+
+    if (!(zonename = mrp_zone_get_name(zone)))
+        zonename = "<unknown>";
 
     mrp_debug("screen init in zone '%s'", zonename);
 
@@ -1085,18 +1103,33 @@ static bool screen_allocate(mrp_zone_t *zone,
 {
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
     uint32_t zoneid;
+    const char *zonename;
+    const char *appid = get_appid_for_resource(res);
     screen_resource_t *sr;
     uint32_t grantid;
+    bool allocated;
 
     MRP_ASSERT(zone && res && screen && screen->resmgr, "invalid argument");
 
     zoneid  = mrp_zone_get_id(zone);
     grantid = screen->grantids[zoneid];
 
-    if ((sr = screen_resource_lookup(screen, res)))
-        return (sr->grantid == grantid);
+    if (!(zonename = mrp_zone_get_name(zone)))
+        zonename = "<unknown>";
+    if (!(appid = get_appid_for_resource(res)))
+        appid = "<unknown>";
 
-    mrp_log_error("system-controller: attempt to allocate untracked resource");
+    if ((sr = screen_resource_lookup(screen, res))) {
+        allocated = (sr->grantid == grantid);
+
+        mrp_debug("screen allocation for '%s' in zone '%s' %s",
+                  zonename, appid, allocated ? "succeeded":"failed");
+
+        return allocated;
+    }
+
+    mrp_log_error("system-controller: attempt to allocate untracked "
+                  "resource '%s' in zone '%s'", appid, zonename);
 
     return FALSE;
 }
@@ -1104,12 +1137,18 @@ static bool screen_allocate(mrp_zone_t *zone,
 static void screen_free(mrp_zone_t *zone, mrp_resource_t *res, void *userdata)
 {
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
-    const char *zonename = mrp_zone_get_name(zone);
+    const char *zonename;
+    const char *appid;
     screen_resource_t *sr;
 
-    MRP_ASSERT(screen && res, "invalid argument");
+    MRP_ASSERT(zone && res && screen, "invalid argument");
 
-    mrp_debug("screen free in zone '%s'", zonename);
+    if (!(zonename = mrp_zone_get_name(zone)))
+        zonename = "<unknown>";
+    if (!(appid = get_appid_for_resource(res)))
+        appid = "<unknown>";
+
+    mrp_debug("free screen of '%s' in zone '%s'", appid, zonename);
 
     if ((sr = screen_resource_lookup(screen, res)))
         sr->grantid = 0;
@@ -1118,13 +1157,17 @@ static void screen_free(mrp_zone_t *zone, mrp_resource_t *res, void *userdata)
 static bool screen_advice(mrp_zone_t *zone,mrp_resource_t *res,void *userdata)
 {
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
-    const char *zonename = mrp_zone_get_name(zone);
+    const char *zonename;
+    const char *appid;
 
-    MRP_UNUSED(res);
+    MRP_ASSERT(zone && res && screen, "invalid argument");
 
-    MRP_ASSERT(screen, "invalid argument");
+    if (!(zonename = mrp_zone_get_name(zone)))
+        zonename = "<unknown>";
+    if (!(appid = get_appid_for_resource(res)))
+        appid = "<unknown>";
 
-    mrp_debug("screen advice in zone '%s'", zonename);
+    mrp_debug("screen advice for '%s' in zone '%s'", appid, zonename);
 
     return TRUE;
 }
@@ -1137,8 +1180,10 @@ static void screen_commit(mrp_zone_t *zone, void *userdata)
 
     MRP_ASSERT(zone && screen && screen->resmgr, "invalid argument");
 
-    zonename = mrp_zone_get_name(zone);
     zoneid  = mrp_zone_get_id(zone);
+
+    if (!(zonename = mrp_zone_get_name(zone)))
+        zonename = "<unknown>";
 
     mrp_debug("screen commit in zone '%s'", zonename);
 
