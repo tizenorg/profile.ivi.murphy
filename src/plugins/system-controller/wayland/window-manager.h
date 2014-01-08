@@ -38,6 +38,7 @@ enum mrp_wayland_window_manager_operation_e {
     MRP_WAYLAND_WINDOW_MANAGER_OPERATION_NONE = 0,
     MRP_WAYLAND_WINDOW_MANAGER_CREATE,       /* 1 */
     MRP_WAYLAND_WINDOW_MANAGER_DESTROY,      /* 2 */
+    MRP_WAYLAND_WINDOW_MANAGER_READY,        /* 3 */
 };
 
 #define MRP_WAYLAND_WINDOW_MANAGER_COMMON                               \
