@@ -39,14 +39,18 @@
 #include "wayland.h"
 #include "output.h"
 #include "layer.h"
+#include "input.h"
 #include "window-manager.h"
+#include "input-manager.h"
 
 
 static uint32_t oid_hash(const void *);
 static uint32_t wid_hash(const void *);
 static uint32_t lid_hash(const void *);
+static uint32_t did_hash(const void *);
 static int id_compare(const void *, const void *);
 
+static bool same_display_name(const char *name1, const char *name2);
 static const char *get_display_name(mrp_wayland_t *w);
 static void display_io_watch(mrp_io_watch_t *, int, mrp_io_event_t, void *);
 static void object_create(mrp_wayland_interface_t *, uint32_t, uint32_t);
@@ -61,9 +65,17 @@ static size_t ninstance;
 mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
 {
     mrp_wayland_t *wl;
-    mrp_htbl_config_t icfg, ocfg, wcfg, lcfg, acfg;
+    mrp_htbl_config_t icfg, ocfg, wcfg, lcfg, acfg, dncfg, dicfg;
+    size_t i;
 
     MRP_ASSERT(ml, "invalid argument");
+
+    for (i = 0;  i < ninstance;  i++) {
+        wl = instances[i];
+
+        if (same_display_name(display_name, wl->display_name))
+            return wl;
+    }
 
     if (!(wl = mrp_allocz(sizeof(mrp_wayland_t))))
         mrp_log_error("can't allocate memory for wayland");
@@ -98,6 +110,18 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
         acfg.hash = mrp_string_hash;
         acfg.nbucket = MRP_WAYLAND_AREA_BUCKETS;
 
+        memset(&dncfg, 0, sizeof(dncfg));
+        dncfg.nentry = MRP_WAYLAND_DEVICE_MAX;
+        dncfg.comp = mrp_string_comp;
+        dncfg.hash = mrp_string_hash;
+        dncfg.nbucket = MRP_WAYLAND_DEVICE_BUCKETS;
+
+        memset(&dicfg, 0, sizeof(dicfg));
+        dicfg.nentry = MRP_WAYLAND_DEVICE_MAX;
+        dicfg.comp = id_compare;
+        dicfg.hash = did_hash;
+        dicfg.nbucket = MRP_WAYLAND_DEVICE_BUCKETS;
+
         wl->display_name = display_name ? mrp_strdup(display_name) : NULL;
         wl->ml = ml;
 
@@ -109,6 +133,9 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
         wl->windows = mrp_htbl_create(&wcfg);
         wl->layers = mrp_htbl_create(&lcfg);
         wl->areas = mrp_htbl_create(&acfg);
+
+        wl->devices.by_name = mrp_htbl_create(&dncfg);
+        wl->devices.by_id = mrp_htbl_create(&dicfg);
 
         instances = mrp_reallocz(instances, ninstance, ninstance + 2);
         instances[ninstance++] = wl;
@@ -260,6 +287,35 @@ void mrp_wayland_register_window_manager(mrp_wayland_t *wl,
 }
 
 
+static int update_devices(void *key, void *object, void *ud)
+{
+    mrp_wayland_input_manager_t *im = (mrp_wayland_input_manager_t *)ud;
+    mrp_wayland_input_device_t *device = (mrp_wayland_input_device_t *)object;
+
+    MRP_UNUSED(key);
+
+    mrp_debug("register input manager to device '%s'", device->name);
+
+    device->im = im;
+
+    return MRP_HTBL_ITER_MORE;
+}
+
+
+void mrp_wayland_register_input_manager(mrp_wayland_t *wl,
+                                        mrp_wayland_input_manager_t *im)
+{
+    wl->im = im;
+
+    mrp_htbl_foreach(wl->devices.by_name, update_devices, im);
+
+    if (wl->input_manager_update_callback) {
+        wl->input_manager_update_callback(wl, MRP_WAYLAND_INPUT_MANAGER_CREATE,
+                                          im);
+    }
+}
+
+
 bool mrp_wayland_register_interface(mrp_wayland_t *wl,
                                     mrp_wayland_factory_t *factory)
 {
@@ -350,13 +406,52 @@ void mrp_wayland_register_area_update_callback(mrp_wayland_t *wl,
     wl->area_update_callback = callback;
 }
 
-void mrp_wayland_set_scripting_data(mrp_wayland_t *wl, void *data)
+void mrp_wayland_set_scripting_window_data(mrp_wayland_t *wl, void *data)
 {
     MRP_ASSERT(wl, "invalid argument");
 
     mrp_debug("%sset scripting data", data ? "" : "re");
 
-    wl->scripting_data = data;
+    wl->scripting_window_data = data;
+}
+
+void mrp_wayland_register_input_manager_update_callback(mrp_wayland_t *wl,
+                          mrp_wayland_input_manager_update_callback_t callback)
+{
+    MRP_ASSERT(wl, "invalid aruments");
+
+    mrp_debug("registering input_manager_update_callback");
+
+    wl->input_manager_update_callback = callback;
+}
+
+void mrp_wayland_register_input_update_callback(mrp_wayland_t *wl,
+                                  mrp_wayland_input_update_callback_t callback)
+{
+    MRP_ASSERT(wl, "invalid aruments");
+
+    mrp_debug("registering input_update_callback");
+
+    wl->input_update_callback = callback;
+}
+
+void mrp_wayland_register_code_update_callback(mrp_wayland_t *wl,
+                                   mrp_wayland_code_update_callback_t callback)
+{
+    MRP_ASSERT(wl, "invalid aruments");
+
+    mrp_debug("registering code_update_callback");
+
+    wl->code_update_callback = callback;
+}
+
+void mrp_wayland_set_scripting_input_data(mrp_wayland_t *wl, void *data)
+{
+    MRP_ASSERT(wl, "invalid argument");
+
+    mrp_debug("%sset scripting data", data ? "" : "re");
+
+    wl->scripting_input_data = data;
 }
 
 void mrp_wayland_create_scripting_windows(mrp_wayland_t *wl, bool create)
@@ -399,6 +494,15 @@ void mrp_wayland_create_scripting_layers(mrp_wayland_t *wl, bool create)
 }
 
 
+void mrp_wayland_create_scripting_inputs(mrp_wayland_t *wl, bool create)
+{
+    MRP_ASSERT(wl, "invalid argument");
+
+    mrp_debug("%screate scripting inputs", create ? "" : "do not ");
+
+    wl->create_scripting_inputs = create;
+}
+
 static uint32_t oid_hash(const void *pkey)
 {
     uint32_t key = *(uint32_t *)pkey;
@@ -420,12 +524,31 @@ static uint32_t lid_hash(const void *pkey)
     return key % MRP_WAYLAND_LAYER_BUCKETS;
 }
 
+static uint32_t did_hash(const void *pkey)
+{
+    uint32_t key = *(uint32_t *)pkey;
+
+    return key % MRP_WAYLAND_DEVICE_BUCKETS;
+}
+
 static int id_compare(const void *pkey1, const void *pkey2)
 {
     int32_t key1 = *(int32_t *)pkey1;
     int32_t key2 = *(int32_t *)pkey2;
 
     return (key1 == key2) ? 0 : ((key1 < key2) ? -1 : 1);
+}
+
+
+static bool same_display_name(const char *name1, const char *name2)
+{
+    if (!name1 && !name2)
+        return true;            /* if none is specified */
+
+    if (name1 && name2 && !strcmp(name1, name2))
+        return true;            /* if both are specified and match */
+
+    return false;
 }
 
 static const char *get_display_name(mrp_wayland_t *wl)

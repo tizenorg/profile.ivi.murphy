@@ -34,8 +34,19 @@
 
 #include "wayland/wayland.h"
 
+enum mrp_wayland_input_manager_operation_e {
+    MRP_WAYLAND_INPUT_MANAGER_OPERATION_NONE = 0,
+    MRP_WAYLAND_INPUT_MANAGER_CREATE,       /* 1 */
+    MRP_WAYLAND_INPUT_MANAGER_DESTROY,      /* 2 */
+    MRP_WAYLAND_INPUT_MANAGER_READY,        /* 3 */
+};
+
 #define MRP_WAYLAND_INPUT_MANAGER_COMMON                                \
-    MRP_WAYLAND_OBJECT_COMMON
+    MRP_WAYLAND_OBJECT_COMMON;                                          \
+    void (*input_request)(mrp_wayland_input_t *,                        \
+                          mrp_wayland_input_update_t *);                \
+    void (*send_input)(mrp_wayland_code_t *, int32_t, uint32_t, int32_t)
+
 
 struct mrp_wayland_input_manager_s {
     MRP_WAYLAND_INPUT_MANAGER_COMMON;
