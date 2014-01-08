@@ -70,14 +70,14 @@ mrp_wayland_window_create(mrp_wayland_t *wl, mrp_wayland_window_update_t *u)
                "invalid argument");
 
     if (!wl->wm) {
-        mrp_log_error("failed to create window %d: no window manager",
-                      u->surfaceid);
+        mrp_log_error("system-controller: failed to create window %d: "
+                      "no window manager", u->surfaceid);
         return NULL;
     }
 
     if (!(win = mrp_allocz(sizeof(mrp_wayland_window_t)))) {
-        mrp_log_error("failed to create window %d: out of memory",
-                      u->surfaceid);
+        mrp_log_error("system-controller: failed to create window %d: "
+                      "out of memory", u->surfaceid);
         return NULL;
     }
 
@@ -90,7 +90,8 @@ mrp_wayland_window_create(mrp_wayland_t *wl, mrp_wayland_window_update_t *u)
     win->width = win->height = -1;
 
     if (!mrp_htbl_insert(wl->windows, &win->surfaceid, win)) {
-        mrp_log_error("failed to create window: already exists");
+        mrp_log_error("system-controller: failed to create window: "
+                      "already exists");
         mrp_free(win->name);
         mrp_free(win->appid);
         mrp_free(win);
@@ -144,8 +145,8 @@ void mrp_wayland_window_destroy(mrp_wayland_window_t *win)
     mrp_free(win->appid);
 
     if ((void *)win != mrp_htbl_remove(wl->windows, &win->surfaceid, false)) {
-        mrp_log_error("failed to destroy window %d: confused with "
-                      "data structures", win->surfaceid);
+        mrp_log_error("system-controller: failed to destroy window %d: "
+                      "confused with data structures", win->surfaceid);
         return;
     }
 
@@ -181,11 +182,10 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
     }
 
     MRP_ASSERT(win->wm, "confused with data structures");
+    wm = win->wm;
 
     mrp_wayland_window_request_print(u, buf,sizeof(buf));
     mrp_debug("window %d%s", u->surfaceid, buf);
-
-    wm = win->wm;
 
     wm->window_request(win, u, anims, framerate);
 }
@@ -249,8 +249,9 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
 
     if ((u->mask & MRP_WAYLAND_WINDOW_SURFACEID_MASK)) {
         if (u->surfaceid != surfaceid) {
-            mrp_log_error("attempt to change surfaceid to %d of "
-                          "existing window %d", u->surfaceid, surfaceid);
+            mrp_log_error("system-controller: attempt to change surfaceid "
+                          "to %d of existing window %d",
+                          u->surfaceid, surfaceid);
             return;
         }
     }
@@ -298,8 +299,7 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
 
 size_t mrp_wayland_window_print(mrp_wayland_window_t *win,
                                 mrp_wayland_window_update_mask_t mask,
-                                char *buf,
-                                size_t len)
+                                char *buf, size_t len)
 {
 #define PRINT(fmt, args...) \
     if (p < e) { p += snprintf(p, e-p, "\n      " fmt , ## args); }
