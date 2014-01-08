@@ -183,7 +183,7 @@ mrp_wayland_t *mrp_wayland_scripting_window_manager_check(lua_State *L,int idx)
     mrp_wayland_t *wl;
 
     if ((wmgr = window_manager_check(L, idx)) && (wl = wmgr->wl)) {
-        MRP_ASSERT(wl->scripting_data == (void *)wmgr,
+        MRP_ASSERT(wl->scripting_window_data == (void *)wmgr,
                    "confused with data structures");
         return wl;
     }
@@ -300,7 +300,7 @@ static int window_manager_create(lua_State *L)
     mrp_wayland_register_layer_update_callback(wl, layer_update_callback);
     mrp_wayland_register_window_update_callback(wl, window_update_callback);
 
-    mrp_wayland_set_scripting_data(wl, winmgr);
+    mrp_wayland_set_scripting_window_data(wl, winmgr);
 
     mrp_wayland_create_scripting_windows(wl, true);
     mrp_wayland_create_scripting_outputs(wl, true);
@@ -641,7 +641,7 @@ static void manager_update_callback(mrp_wayland_t *wl,
         return;
     }
 
-    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_data)) {
+    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_window_data)) {
         mrp_log_error("system-controller: window manager "
                       "scripting is not initialized");
         return;
@@ -765,7 +765,7 @@ static void window_update_callback(mrp_wayland_t *wl,
         return;
     }
 
-    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_data)) {
+    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_window_data)) {
         mrp_log_error("system-controller: window manager scripting is "
                       "not initialized");
         return;
@@ -871,7 +871,7 @@ static void output_update_callback(mrp_wayland_t *wl,
         return;
     }
 
-    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_data)) {
+    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_window_data)) {
         mrp_log_error("window manager scripting is not initialized");
         return;
     }
@@ -1037,7 +1037,7 @@ static void layer_update_callback(mrp_wayland_t *wl,
         return;
     }
 
-    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_data)) {
+    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_window_data)) {
         mrp_log_error("window manager scripting is not initialized");
         return;
     }
