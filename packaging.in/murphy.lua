@@ -536,6 +536,42 @@ function layer_operation_name(oper)
     return "<unknown " .. tostring(oper) .. ">"
 end
 
+input_manager_operation_names = {
+    [1] = "create",
+    [2] = "destroy",
+    [3] = "ready"
+}
+
+function input_manager_operation_name(oper)
+    local name = input_manager_operation_names[oper]
+    if name then return name end
+    return "<unknown " .. tostring(oper) .. ">"
+end
+
+input_operation_names = {
+    [1] = "create",
+    [2] = "destroy",
+    [3] = "update"
+}
+
+function input_operation_name(oper)
+    local name = input_operation_names[oper]
+    if name then return name end
+    return "<unknown " .. tostring(oper) .. ">"
+end
+
+code_operation_names = {
+    [1] = "create",
+    [2] = "destroy",
+    [3] = "state_change"
+}
+
+function code_operation_name(oper)
+    local name = code_operation_names[oper]
+    if name then return name end
+    return "<unknown " .. tostring(oper) .. ">"
+end
+
 command_names = {
     [0x00001] = "send_appid",
     [0x10001] = "create",
@@ -819,7 +855,7 @@ wmgr = window_manager {
                               print(msg)
                           end
                       end
-                      sc:send_message(sysctlid, msg)
+                      sc:send_message(homescreen, msg)
 
                       if oper == 1 then -- create
                           local i = input_layer[win.layertype]
@@ -886,7 +922,7 @@ wmgr = window_manager {
                                 print(msg)
                             end
                          end
-                         sc:send_message(sysctlid, msg)
+                         sc:send_message(homescreen, msg)
                       else
                            if verbose > 0 then
                                print("### nothing to do")
@@ -931,6 +967,61 @@ wmgr = window_manager {
 }
 
 
+imgr = input_manager {
+  inputs = {{ name = "G27 Racing Wheel",
+              id = 0,
+              switch = { [2] = {appid="org.tizen.ico.app-soundsample"      },
+                         [3] = {appid="org.tizen.ico.homescreen", keycode=1},
+                         [4] = {appid="org.tizen.ico.app-soundsample"      },
+                         [5] = {appid="org.tizen.ico.homescreen", keycode=2}
+             }}
+  },
+
+  manager_update = function(self, oper)
+                       if verbose > 0 or true then
+                           print("### <== INPUT MANAGER UPDATE:" ..
+                                 input_manager_operation_name(oper))
+                       end
+                   end,
+
+  input_update = function(self, oper, inp, mask)
+                     if verbose > 0 or true then
+                         print("### INPUT UPDATE:" .. 
+                                input_operation_name(oper) ..
+                                " mask: " .. tostring(mask))
+                          if verbose > 1 or true then
+                              print(inp)
+                          end
+                      end
+                 end,
+  code_update  = function(self, oper, code, mask)
+                     if verbose > 0 or true then
+                         print("### CODE UPDATE: mask: " .. tostring(mask))
+                         if verbose > 1 or true then
+                             print(code)
+                         end
+                     end
+                     local msg = m:JSON({ command = 1,
+                                          appid = "org.tizen.ico.homescreen",
+                                          arg = m:JSON({ device = code.device,
+                                                         time = code.time,
+                                                         input = code.input,
+                                                         code = code.id,
+                                                         state = code.state
+                                           })
+                     })
+                     if verbose > 0 or true then
+                         print("### <== sending " ..
+                               command_name(msg.command) ..
+                               " input message")
+                         if verbose > 1 or true then
+                             print(msg)
+                         end
+                     end
+                     sc:send_message(homescreen, msg)
+                 end
+}
+
 sc = m:get_system_controller()
 
 -- resource sets
@@ -940,7 +1031,7 @@ sets = {}
 um = m:UserManager()
 
 connected = false
-sysctlid = ""
+homescreen = ""
 
 -- these shoud be before wmgr:connect() is called
 if verbose > 0 then
@@ -997,8 +1088,8 @@ if sc then
             end
         end
         if not connected then
-            print('Setting sysctlid='..msg.appid)
-            sysctlid = msg.appid
+            print('Setting homescreen='..msg.appid)
+            homescreen = msg.appid
             print('Trying to connect to wayland...')
             connected = wmgr:connect()
         end
@@ -1021,7 +1112,7 @@ if sc then
                          print(reply)
                      end
                  end
-                 sc:send_message(sysctlid, reply)
+                 sc:send_message(homescreen, reply)
 
                  reply = m:JSON({ command = 0x60001,
                                   arg     = m:JSON({ stateid = 2,
@@ -1034,7 +1125,7 @@ if sc then
                          print(reply)
                      end
                  end
-                 sc:send_message(sysctlid, reply)
+                 sc:send_message(homescreen, reply)
             end
         end
     end
@@ -1200,10 +1291,26 @@ if sc then
 
     sc.input_handler = function (self, cid, msg)
         if verbose > 0 then
-            print('### ==> input handler: ' .. command_name(msg.comand))
+            print('### ==> input handler: ' .. command_name(msg.command))
             if verbose > 1 then
                 print(msg)
             end
+        end
+        if msg.command == 0x20001 then -- add_input
+            msg.arg.appid = msg.appid
+            if verbose > 2 then
+                print('### ==> ADD_INPUT REQUEST')
+                print(tostring(msg.arg))
+            end
+            imgr:input_request(msg.arg)
+        elseif msg.command == 0x20002 then -- del_input
+            msg.arg.appid = ''
+            if verbose > 2 then
+                print('### ==> DEL_INPUT REQUEST')
+                print(tostring(msg.arg))
+            end
+            imgr:input_request(msg.arg)
+        elseif msg.command == 0x20003 then -- send_input
         end
     end
 
