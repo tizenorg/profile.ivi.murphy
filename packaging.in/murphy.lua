@@ -212,19 +212,9 @@ if not m:plugin_exists('ivi-resource-manager') and
    not with_system_controller
 then
     resource.method.veto = {
-        function(zone, rset, grant, owners)
-	    rset_priority = application_class[rset.application_class].priority
-
-	    owner_id = owners.audio_playback.resource_set
-	    rset_id = rset.id
-
-            if (rset_priority >= 50 and owner_id ~= rset_id) then
-                print("*** resource-set "..rset_id.." - veto")
-                return false
-            end
-
+        function(zone, rset, grant, owners, req_set)
             return true
-        end
+         end
     }
 end
 
