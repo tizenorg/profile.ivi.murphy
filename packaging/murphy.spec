@@ -316,9 +316,9 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-qt"
 %endif
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
-CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-dbus"
+CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-libdbus"
 %else
-CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-dbus"
+CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-libdbus"
 %endif
 
 %if %{?_with_telephony:1}%{!?_with_telephony:0}
@@ -542,7 +542,8 @@ ln -s %{systemddir}/user/ico-uxf-wait-launchpad-ready.path %{systemddir}/user/we
 %{_libdir}/murphy/*.so.*
 %{_libdir}/libbreedline*.so.*
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
-%{_libdir}/libmurphy-dbus.so.*
+%{_libdir}/libmurphy-libdbus.so.*
+%{_libdir}/libmurphy-dbus-libdbus.so.*
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
@@ -593,8 +594,10 @@ ln -s %{systemddir}/user/ico-uxf-wait-launchpad-ready.path %{systemddir}/user/we
 %{_libdir}/pkgconfig/breedline*.pc
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 #%{_includedir}/murphy/dbus
-%{_libdir}/libmurphy-dbus.so
-%{_libdir}/pkgconfig/murphy-dbus.pc
+%{_libdir}/libmurphy-libdbus.so
+%{_libdir}/libmurphy-dbus-libdbus.so
+%{_libdir}/pkgconfig/murphy-libdbus.pc
+%{_libdir}/pkgconfig/murphy-dbus-libdbus.pc
 %endif
 
 %files doc
