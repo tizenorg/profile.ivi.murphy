@@ -61,6 +61,10 @@ void mrp_wayland_scripting_init(lua_State *L)
     mrp_wayland_scripting_output_init(L);
     mrp_wayland_scripting_area_init(L);
     mrp_wayland_scripting_layer_init(L);
+
+    mrp_wayland_scripting_input_manager_init(L);
+    mrp_wayland_scripting_input_init(L);
+    mrp_wayland_scripting_code_init(L);
 }
 
 
@@ -358,6 +362,12 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "size"))
                 return SIZE;
             break;
+        case 't':
+            if (!strcmp(name, "time"))
+                return TIME;
+            if (!strcmp(name, "type"))
+                return TYPE;
+            break;
         default:
             break;
         }
@@ -371,9 +381,15 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "appid"))
                 return APPID;
             break;
+        case 'c':
+            if (!strcmp(name, "codes"))
+                return CODES;
+            break;
         case 'i':
             if (!strcmp(name, "index"))
                 return INDEX;
+            if (!strcmp(name, "input"))
+                return INPUT;
             break;
         case 'l':
             if (!strcmp(name, "layer"))
@@ -394,6 +410,14 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
                 return RAISE;
             if (!strcmp(name, "right"))
                 return RIGHT;
+            break;
+        case 's':
+            if (!strcmp(name, "state"))
+                return STATE;
+            break;
+        case 't':
+            if (!strcmp(name, "touch"))
+                return TOUCH;
             break;
         case 'w':
             if (!strcmp(name, "width"))
@@ -417,7 +441,13 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
         case 'h':
             if (!strcmp(name, "height"))
                 return HEIGHT;
+            if (!strcmp(name, "haptic"))
+                return HAPTIC;
             break;
+        case 'i':
+            if (!strcmp(name, "inputs"))
+                return INPUTS;
+            break; 
         case 'l':
             if (!strcmp(name, "layers"))
                 return LAYERS;
@@ -438,6 +468,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "rotate"))
                 return ROTATE;
             break;
+        case 's':
+            if (!strcmp(name, "switch"))
+                return SWITCH;
+            break;
         default:
             break;
         }
@@ -449,11 +483,16 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "display"))
                 return DISPLAY;
             break;
+        case 'k':
+            if (!strcmp(name, "keycode"))
+                return KEYCODE;
         case 'p':
             if (!strcmp(name, "pixel_x"))
                 return PIXEL_X;
             if (!strcmp(name, "pixel_y"))
                 return PIXEL_Y;
+            if (!strcmp(name, "pointer"))
+                return POINTER;
             break;
         case 's':
             if (!strcmp(name, "surface"))
@@ -470,6 +509,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
 
     case 8:
         switch (name[0]) {
+        case 'k':
+            if (!strcmp(name, "keyboard"))
+                return KEYBOARD;
+            break;
         case 'p':
             if (!strcmp(name, "position"))
                 return POSITION;
@@ -488,8 +531,26 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
         break;
 
     case 9:
-        if (!strcmp(name, "layertype"))
-            return LAYERTYPE;
+        switch (name[0]) {
+        case 'c':
+            if (!strcmp(name, "connected"))
+                return CONNECTED;
+            break;
+        case 'd':
+            if (!strcmp(name, "device_id"))
+                return DEVICE_ID;
+            break;
+        case 'l':
+            if (!strcmp(name, "layertype"))
+                return LAYERTYPE;
+            break;
+        case 'p':
+            if (!strcmp(name, "permanent"))
+                return PERMANENT;
+            break;
+        default:
+            break;
+        }
         break;
 
     case 10:
@@ -502,6 +563,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "keep_ratio"))
                 return KEEPRATIO;
             break;
+        case 's':
+            if (!strcmp(name, "send_input"))
+                return SEND_INPUT;
+            break;
         default:
             break;
         }
@@ -512,6 +577,14 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
         case 'a':
             if (!strcmp(name, "area_create"))
                 return AREA_CREATE;
+            break;
+        case 'c':
+            if (!strcmp(name, "code_update"))
+                return CODE_UPDATE;
+            break;
+        case 'd':
+            if (!strcmp(name, "device_name"))
+                return DEVICE_NAME;
             break;
         case 'p':
             if (!strcmp(name, "pixel_width"))
@@ -528,6 +601,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "layer_update"))
                 return LAYER_UPDATE;
             break;
+        case 'i':
+            if (!strcmp(name, "input_update"))
+                return INPUT_UPDATE;
+            break;
         case 'p':
             if (!strcmp(name, "pixel_height"))
                 return PIXEL_HEIGHT;
@@ -539,6 +616,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
 
     case 13:
         switch (name[0]) {
+        case 'i':
+            if (!strcmp(name, "input_request"))
+                return INPUT_REQUEST;
+            break;
         case 'l':
             if (!strcmp(name, "layer_request"))
                 return LAYER_REQUEST;
