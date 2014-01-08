@@ -55,8 +55,8 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
                "invalid argument");
 
     if (!(layer = mrp_allocz(sizeof(mrp_wayland_layer_t)))) {
-        mrp_log_error("failed to create layer %d: out of memory",
-                      u->layerid);
+        mrp_log_error("system-controller: failed to create layer %d: "
+                      "out of memory", u->layerid);
         return NULL;
     }
 
@@ -65,7 +65,8 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
     layer->layerid =  u->layerid;
 
     if (!mrp_htbl_insert(wl->layers, &layer->layerid, layer)) {
-        mrp_log_error("failed to create layer: already exists");
+        mrp_log_error("system-controller: failed to create layer: "
+                      "already exists");
         mrp_free(layer);
         return NULL;
     }
@@ -110,8 +111,8 @@ void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer)
     mrp_free(layer->name);
 
     if ((void *)layer != mrp_htbl_remove(wl->layers, &layer->layerid, false)) {
-        mrp_log_error("failed to destroy layer %d: confused with "
-                      "data structures", layer->layerid);
+        mrp_log_error("system-controller: failed to destroy layer %d: "
+                      "confused with data structures", layer->layerid);
         return;
     }
 
@@ -162,8 +163,8 @@ void mrp_wayland_layer_update(mrp_wayland_layer_t *layer,
 
     if ((u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK)) {
         if (u->layerid != layerid) {
-            mrp_log_error("attempt to change layerid to %d of "
-                          "existing layer %d", u->layerid, layerid);
+            mrp_log_error("system-controller: attempt to change layerid "
+                          "to %d of existing layer %d", u->layerid, layerid);
             return;
         }
     }
