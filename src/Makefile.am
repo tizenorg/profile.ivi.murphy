@@ -1537,20 +1537,23 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/wayland/area.c                                \
 	$(SYSTEMCTL_DIR)/wayland/window.c                              \
 	$(SYSTEMCTL_DIR)/wayland/animation.c                           \
+	$(SYSTEMCTL_DIR)/wayland/input.c                               \
+	$(SYSTEMCTL_DIR)/wayland/code.c                                \
 	$(SYSTEMCTL_DIR)/wayland/ico-window-manager.c                  \
-	$(SYSTEMCTL_DIR)/wayland/ico-input-manager.c                   \
 	$(SYSTEMCTL_DIR)/wayland/scripting-wayland.c                   \
 	$(SYSTEMCTL_DIR)/wayland/scripting-window-manager.c            \
 	$(SYSTEMCTL_DIR)/wayland/scripting-animation.c                 \
 	$(SYSTEMCTL_DIR)/wayland/scripting-window.c                    \
 	$(SYSTEMCTL_DIR)/wayland/scripting-output.c                    \
 	$(SYSTEMCTL_DIR)/wayland/scripting-area.c                      \
-	$(SYSTEMCTL_DIR)/wayland/scripting-layer.c		       \
+	$(SYSTEMCTL_DIR)/wayland/scripting-layer.c                     \
+	$(SYSTEMCTL_DIR)/wayland/ico-input-manager.c                   \
+	$(SYSTEMCTL_DIR)/wayland/scripting-input-manager.c             \
+	$(SYSTEMCTL_DIR)/wayland/scripting-input.c                     \
+	$(SYSTEMCTL_DIR)/wayland/scripting-code.c		       \
 	$(SYSTEMCTL_DIR)/system-monitor/system-monitor.c	       \
 	$(SYSTEMCTL_DIR)/system-monitor/cpu.c			       \
 	$(SYSTEMCTL_DIR)/system-monitor/memory.c
-
-
 
 SYSTEMCTL_PLUGIN_CFLAGS  = \
 			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
