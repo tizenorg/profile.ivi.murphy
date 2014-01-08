@@ -1,3 +1,11 @@
+* Wed Jan 08 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.42
+- resource: expose resource set id in the resource owner table
+- resource: pass requesting resource set to the veto function
+- resource: enforce temporarily dont_wait and auto_release flags from Lua
+- resource: changed Lua resource veto to be pass-through
+- common: merged non-libdbus-specific D-Bus abstraction
+- common: new encoding/decoding/transport for 'native-type's
+
 * Mon Dec 30 2013 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.41
 - packaging: prevent system controller from launching.
 - packaging: set correct XDG_RUNTIME_DIR environment variable.
