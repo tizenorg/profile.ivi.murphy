@@ -112,6 +112,40 @@ void mrp_wayland_scripting_layer_destroy_from_c(lua_State *L,
 void *mrp_wayland_scripting_layer_mask_create_from_c(lua_State *L,
                                                      uint32_t mask);
 
+/* scripting-input-manager.c */
+void mrp_wayland_scripting_input_manager_init(lua_State *L);
+
+mrp_wayland_t *mrp_wayland_scripting_input_manager_check(lua_State *L,
+                                                         int idx);
+mrp_wayland_t *mrp_wayland_scripting_input_manager_unwrap(void *imgr);
+
+/* scripting-input.c */
+void mrp_wayland_scripting_input_init(lua_State *L);
+
+mrp_wayland_input_t *mrp_wayland_scripting_input_check(lua_State *L, int idx);
+mrp_wayland_input_t *mrp_wayland_scripting_input_unwrap(void *void_si);
+void *mrp_wayland_scripting_input_create_from_c(lua_State *L,
+                                                mrp_wayland_input_t *inp);
+void mrp_wayland_scripting_input_destroy_from_c(lua_State *L,
+                                                mrp_wayland_input_t *inp);
+
+void *mrp_wayland_scripting_input_mask_create_from_c(lua_State *L,
+                                                     uint32_t mask);
+
+/* scripting-code.c */
+void mrp_wayland_scripting_code_init(lua_State *L);
+
+mrp_wayland_code_t *mrp_wayland_scripting_code_check(lua_State *L, int idx);
+mrp_wayland_code_t *mrp_wayland_scripting_code_unwrap(void *void_sc);
+void *mrp_wayland_scripting_code_create_from_c(lua_State *L,
+                                               mrp_wayland_code_t *code);
+void mrp_wayland_scripting_code_destroy_from_c(lua_State *L,
+                                               mrp_wayland_code_t *code);
+
+void *mrp_wayland_scripting_code_mask_create_from_c(lua_State *L,
+                                                    uint32_t mask);
+
+
 /* internal for scripting-window-manager.c files  */
 int mrp_wayland_json_integer_copy(mrp_wayland_t *wl, void *uval,
                                   mrp_json_t *jval, int mask);
