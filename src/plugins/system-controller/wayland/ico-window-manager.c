@@ -202,7 +202,7 @@ static void window_created_callback(void *data,
     u.pid = pid;
     u.layertype = get_layer_type(layertype);
 
-    mrp_debug("surfaceid=%d, winname='%s' pid=%d appid='%s' layertype='%d'",
+    mrp_debug("surfaceid=%d, winname='%s' pid=%d appid='%s' layertype=%d",
               u.surfaceid, u.name, u.pid, u.appid, layertype);
 
     mrp_wayland_window_create(wl, &u);
@@ -988,7 +988,7 @@ static void window_request(mrp_wayland_window_t *win,
     char abuf[1024];
 
     MRP_ASSERT(win && win->wm && win->wm->proxy && win->wm->interface &&
-               win->wm->interface->wl, "invalid argument");
+               win->wm->interface->wl && u, "invalid argument");
 
     wm = win->wm;
     wl = wm->interface->wl;
