@@ -36,22 +36,28 @@
 
 #include "data-types.h"
 
-#define MRP_WAYLAND_INTERFACE_MAX   64
-#define MRP_WAYLAND_OUTPUT_MAX      16
-#define MRP_WAYLAND_WINDOW_MAX      256
-#define MRP_WAYLAND_LAYER_MAX       32
-#define MRP_WAYLAND_LAYER_BUILTIN   8
-#define MRP_WAYLAND_AREA_MAX        32
-#define MRP_WAYLAND_FRAMERATE_MAX   100
+#define MRP_WAYLAND_INTERFACE_MAX        64
+#define MRP_WAYLAND_OUTPUT_MAX           16
+#define MRP_WAYLAND_WINDOW_MAX           256
+#define MRP_WAYLAND_LAYER_MAX            32
+#define MRP_WAYLAND_LAYER_BUILTIN        8
+#define MRP_WAYLAND_AREA_MAX             32
+#define MRP_WAYLAND_DEVICE_MAX           64
+#define MRP_WAYLAND_INPUT_MAX            128
+#define MRP_WAYLAND_CODE_MAX             512
+#define MRP_WAYLAND_FRAMERATE_MAX        100
 
-#define MRP_WAYLAND_INTERFACE_BUCKETS   (MRP_WAYLAND_INTERFACE_MAX / 2)
-#define MRP_WAYLAND_OUTPUT_BUCKETS      (MRP_WAYLAND_OUTPUT_MAX / 4)
-#define MRP_WAYLAND_WINDOW_BUCKETS      (MRP_WAYLAND_WINDOW_MAX / 2)
-#define MRP_WAYLAND_LAYER_BUCKETS       ((MRP_WAYLAND_LAYER_MAX + \
-                                          MRP_WAYLAND_LAYER_BUILTIN)/ 4)
-#define MRP_WAYLAND_AREA_BUCKETS        (MRP_WAYLAND_AREA_MAX / 4)
+#define MRP_WAYLAND_INTERFACE_BUCKETS    (MRP_WAYLAND_INTERFACE_MAX / 2)
+#define MRP_WAYLAND_OUTPUT_BUCKETS       (MRP_WAYLAND_OUTPUT_MAX / 4)
+#define MRP_WAYLAND_WINDOW_BUCKETS       (MRP_WAYLAND_WINDOW_MAX / 2)
+#define MRP_WAYLAND_LAYER_BUCKETS        ((MRP_WAYLAND_LAYER_MAX + \
+                                           MRP_WAYLAND_LAYER_BUILTIN)/ 4)
+#define MRP_WAYLAND_AREA_BUCKETS         (MRP_WAYLAND_AREA_MAX / 4)
+#define MRP_WAYLAND_DEVICE_BUCKETS       (MRP_WAYLAND_DEVICE_MAX / 4)
+#define MRP_WAYLAND_INPUT_BUCKETS        (MRP_WAYLAND_INPUT_MAX / 8)
+#define MRP_WAYLAND_CODE_BUCKETS         (MRP_WAYLAND_INPUT_MAX / 16)
 
-#define MRP_WAYLAND_NO_UPDATE INT32_MIN
+#define MRP_WAYLAND_NO_UPDATE            INT32_MIN
 
 #define MRP_WAYLAND_OBJECT_COMMON               \
     mrp_list_hook_t interface_link;             \
@@ -75,7 +81,14 @@ typedef enum mrp_wayland_area_operation_e     mrp_wayland_area_operation_t;
 typedef enum mrp_wayland_area_align_e         mrp_wayland_area_align_t;
 typedef enum mrp_wayland_area_update_mask_e   mrp_wayland_area_update_mask_t;
 typedef enum mrp_wayland_window_manager_operation_e
-                                              mrp_wayland_window_manager_operation_t;
+                                        mrp_wayland_window_manager_operation_t;
+typedef enum mrp_wayland_input_operation_e    mrp_wayland_input_operation_t;
+typedef enum mrp_wayland_input_type_e         mrp_wayland_input_type_t;
+typedef enum mrp_wayland_input_update_mask_e  mrp_wayland_input_update_mask_t;
+typedef enum mrp_wayland_code_operation_e     mrp_wayland_code_operation_t;
+typedef enum mrp_wayland_code_update_mask_e   mrp_wayland_code_update_mask_t;
+typedef enum mrp_wayland_input_manager_operation_e
+                                        mrp_wayland_input_manager_operation_t;
 
 typedef struct mrp_wayland_s                  mrp_wayland_t;
 typedef struct mrp_wayland_factory_s          mrp_wayland_factory_t;
@@ -92,6 +105,12 @@ typedef struct mrp_wayland_area_s             mrp_wayland_area_t;
 typedef struct mrp_wayland_area_update_s      mrp_wayland_area_update_t;
 typedef struct mrp_wayland_window_manager_s   mrp_wayland_window_manager_t;
 typedef struct mrp_wayland_input_manager_s    mrp_wayland_input_manager_t;
+typedef struct mrp_wayland_input_device_s     mrp_wayland_input_device_t;
+typedef struct mrp_wayland_code_s             mrp_wayland_code_t;
+typedef struct mrp_wayland_code_update_s      mrp_wayland_code_update_t;
+typedef struct mrp_wayland_input_s            mrp_wayland_input_t;
+typedef struct mrp_wayland_input_update_s     mrp_wayland_input_update_t;
+typedef struct mrp_wayland_input_event_s      mrp_wayland_input_event_t;
 
 #include "application/application.h"
 
@@ -123,6 +142,18 @@ typedef void (*mrp_wayland_app_update_callback_t)(mrp_wayland_t *,
                                         mrp_application_update_mask_t,
                                         mrp_application_t *);
 
+typedef void (*mrp_wayland_input_manager_update_callback_t)(mrp_wayland_t *,
+                                        mrp_wayland_input_manager_operation_t,
+                                        mrp_wayland_input_manager_t *);
+typedef void (*mrp_wayland_input_update_callback_t)(mrp_wayland_t *,
+                                        mrp_wayland_input_operation_t,
+                                        mrp_wayland_input_update_mask_t,
+                                        mrp_wayland_input_t *);
+typedef void (*mrp_wayland_code_update_callback_t)(mrp_wayland_t *,
+                                        mrp_wayland_code_operation_t,
+                                        mrp_wayland_code_update_mask_t,
+                                        mrp_wayland_code_t *);
+
 
 struct mrp_wayland_s {
     const char *display_name;
@@ -141,21 +172,34 @@ struct mrp_wayland_s {
     mrp_htbl_t *layers;
     mrp_htbl_t *areas;
 
+    struct {
+        mrp_htbl_t *by_id;
+        mrp_htbl_t *by_name;
+    } devices; /* input devices more precisely */
+
     mrp_wayland_window_manager_t *wm;
     mrp_wayland_input_manager_t *im;
 
     mrp_wayland_window_manager_update_callback_t window_manager_update_callback;
+    mrp_wayland_input_manager_update_callback_t input_manager_update_callback;
+
     mrp_wayland_output_update_callback_t output_update_callback;
     mrp_wayland_window_update_callback_t window_update_callback;
     mrp_wayland_layer_update_callback_t layer_update_callback;
     mrp_wayland_area_update_callback_t area_update_callback;
     mrp_wayland_app_update_callback_t application_update_callback;
-    void *scripting_data;
+    void *scripting_window_data;
+
+    mrp_wayland_input_update_callback_t input_update_callback;
+    mrp_wayland_code_update_callback_t code_update_callback;
+    void *scripting_input_data;
 
     bool create_scripting_windows;
     bool create_scripting_outputs;
     bool create_scripting_areas;
     bool create_scripting_layers;
+
+    bool create_scripting_inputs;
 };
 
 struct mrp_wayland_factory_s {
@@ -187,6 +231,9 @@ void mrp_wayland_flush(mrp_wayland_t *wl);
 
 void mrp_wayland_register_window_manager(mrp_wayland_t *wl,
                                          mrp_wayland_window_manager_t *wm);
+void mrp_wayland_register_input_manager(mrp_wayland_t *wl,
+                                        mrp_wayland_input_manager_t *im);
+
 bool mrp_wayland_register_interface(mrp_wayland_t *wl,
                                     mrp_wayland_factory_t *factory);
 
@@ -200,12 +247,21 @@ void mrp_wayland_register_layer_update_callback(mrp_wayland_t *wl,
                         mrp_wayland_layer_update_callback_t callback);
 void mrp_wayland_register_area_update_callback(mrp_wayland_t *wl,
                         mrp_wayland_area_update_callback_t callback);
-void mrp_wayland_set_scripting_data(mrp_wayland_t *, void *);
+void mrp_wayland_set_scripting_window_data(mrp_wayland_t *, void *);
+
+void mrp_wayland_register_input_manager_update_callback(mrp_wayland_t *wl,
+                        mrp_wayland_input_manager_update_callback_t callback);
+void mrp_wayland_register_input_update_callback(mrp_wayland_t *wl,
+                        mrp_wayland_input_update_callback_t callback);
+void mrp_wayland_register_code_update_callback(mrp_wayland_t *wl,
+                        mrp_wayland_code_update_callback_t callback);
+void mrp_wayland_set_scripting_input_data(mrp_wayland_t *, void *);
 
 void mrp_wayland_create_scripting_windows(mrp_wayland_t *wl, bool create);
 void mrp_wayland_create_scripting_outputs(mrp_wayland_t *wl, bool create);
 void mrp_wayland_create_scripting_areas(mrp_wayland_t *wl, bool create);
 void mrp_wayland_create_scripting_layers(mrp_wayland_t *wl, bool create);
+void mrp_wayland_create_scripting_inputs(mrp_wayland_t *wl, bool create);
 
 #define mrp_wayland_foreach(_wl, _i) \
     for ((_i) = NULL;  (_wl = mrp_wayland_iterate(&(_i)));)
