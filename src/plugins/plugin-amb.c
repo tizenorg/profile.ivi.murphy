@@ -796,16 +796,13 @@ static void basic_property_handler(mrp_dbus_msg_t *msg, dbus_property_watch_t *w
         goto error;
     }
 
-#if 0
-    /* FIXME: check the type later */
+    /* check that D-Bus type matches the expected type */
 
-    if (dbus_message_iter_get_arg_type(&variant_iter)
-                        != w->prop.type) {
-        mrp_log_error("amb: argument type %c did not match expected type %c",
-                dbus_message_iter_get_arg_type(&variant_iter), w->prop.type);
+    if (mrp_dbus_msg_arg_type(msg, NULL) != w->prop.type)  {
+        mrp_log_error("AMB: argument type %c did not match expected type %c",
+                mrp_dbus_msg_arg_type(msg, NULL), w->prop.type);
         goto error;
     }
-#endif
 
     switch (w->prop.type) {
         case MRP_DBUS_TYPE_INT32:
