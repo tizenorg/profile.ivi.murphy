@@ -74,7 +74,6 @@ enum amb_type {
 #define AMB_OBJECT              "obj"
 #define AMB_INTERFACE           "interface"
 #define AMB_MEMBER              "property"
-#define AMB_SIGMEMBER           "notification"
 #define AMB_OBJECTNAME          "objectname"
 #define AMB_SIGNATURE           "signature"
 #define AMB_BASIC_TABLE_NAME    "basic_table_name"
@@ -144,18 +143,15 @@ typedef void (*property_updated_cb_t)(dbus_basic_property_t *property,
 
 typedef struct {
     struct {
-        const char *obj;
-        const char *iface;
-        const char *name;            /* property name ("GearPosition") */
-#if 0
-        const char *signame;         /* signal name ("GearPositionChanged") */
-#endif
-        const char *objectname;      /* amb object to query ("Transmission") */
-        const char *signature;
+        char *obj;
+        char *iface;
+        char *name;            /* property name ("GearPosition") */
+        char *objectname;      /* amb object to query ("Transmission") */
+        char *signature;
         bool undefined_object_path;
     } dbus_data;
-    const char *name;
-    const char *basic_table_name;
+    char *name;
+    char *basic_table_name;
     int handler_ref;
     int outputs_ref;
 } lua_amb_property_t;
@@ -225,15 +221,14 @@ static data_t *global_ctx = NULL;
 
 static basic_table_data_t *create_basic_property_table(const char *table_name,
         const char *member, int type);
-
+static void delete_basic_table_data(basic_table_data_t *tdata);
 static int find_property_object(data_t *ctx, dbus_property_watch_t *w,
         const char *prop);
-
 static int subscribe_property(data_t *ctx, dbus_property_watch_t *w);
-
 static void basic_property_updated(dbus_basic_property_t *prop, void *userdata);
-
 static int create_transport(mrp_mainloop_t *ml, data_t *ctx);
+static int property_signal_handler(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg,
+        void *data);
 
 /* Lua config */
 
@@ -281,12 +276,63 @@ static void lua_amb_destroy(void *data)
 }
 
 
+static int count_keys_cb(void *key, void *object, void *user_data)
+{
+    int *count = user_data;
+
+    MRP_UNUSED(key);
+    MRP_UNUSED(object);
+
+    *count = *count + 1;
+
+    return MRP_HTBL_ITER_MORE;
+}
+
+
 static void destroy_prop(data_t *ctx, dbus_property_watch_t *w)
 {
-    /* TODO */
+    dbus_property_object_t *o = w->o;
+    int len = 0;
 
-    MRP_UNUSED(ctx);
-    MRP_UNUSED(w);
+    /* remove property from the object */
+
+    mrp_htbl_remove(o->dbus_properties, w->key, FALSE);
+
+    /* check if no-one is interested in the signals o receives */
+
+    mrp_htbl_foreach(o->dbus_properties, count_keys_cb, &len);
+
+    if (len == 0) {
+        mrp_dbus_unsubscribe_signal(ctx->dbus, property_signal_handler, o,
+                NULL, o->path,
+                "org.freedesktop.DBus.Properties",
+                "PropertiesChanged", NULL);
+        mrp_htbl_remove(ctx->dbus_property_objects, o->path, TRUE);
+    }
+
+    mrp_free(w->key);
+
+    /* delete the table data */
+
+    if (w->tdata)
+        delete_basic_table_data(w->tdata);
+
+    if (w->lua_prop) {
+        /* TODO */
+        char *name = w->lua_prop->name;
+        mrp_free(w->lua_prop->basic_table_name);
+        mrp_free(w->lua_prop->dbus_data.iface);
+        mrp_free(w->lua_prop->dbus_data.name);
+        mrp_free(w->lua_prop->dbus_data.obj);
+        mrp_free(w->lua_prop->dbus_data.objectname);
+        mrp_free(w->lua_prop->dbus_data.signature);
+
+        mrp_lua_destroy_object(ctx->L, name, 0, w->lua_prop);
+
+        mrp_free(name);
+    }
+
+    mrp_free(w);
 }
 
 
@@ -350,11 +396,6 @@ static int amb_constructor(lua_State *L)
                 else if (strcmp(key, AMB_MEMBER) == 0) {
                     prop->dbus_data.name = mrp_strdup(value);
                 }
-                #if 0
-                else if (strcmp(key, AMB_SIGMEMBER) == 0) {
-                    prop->dbus_data.signame = mrp_strdup(value);
-                }
-                #endif
                 else if (strcmp(key, AMB_OBJECTNAME) == 0) {
                     prop->dbus_data.objectname = mrp_strdup(value);
                 }
@@ -380,10 +421,7 @@ static int amb_constructor(lua_State *L)
 
                 lua_pop(L, 1);
             }
-#if 0
-            if (prop->dbus_data.signame == NULL)
-                prop->dbus_data.signame = mrp_strdup(prop->dbus_data.name);
-#endif
+
             if (prop->dbus_data.objectname == NULL)
                 prop->dbus_data.objectname = mrp_strdup(prop->dbus_data.name);
 
@@ -391,9 +429,6 @@ static int amb_constructor(lua_State *L)
             if (prop->dbus_data.signature == NULL ||
                 prop->dbus_data.iface == NULL ||
                 prop->dbus_data.name == NULL ||
-#if 0
-                prop->dbus_data.signame == NULL ||
-#endif
                 prop->dbus_data.objectname == NULL ||
                 (!prop->dbus_data.undefined_object_path &&
                  prop->dbus_data.obj == NULL)) {
@@ -531,11 +566,6 @@ static int amb_getfield(lua_State *L)
         lua_pushstring(L, AMB_MEMBER);
         lua_pushstring(L, prop->dbus_data.name);
         lua_settable(L, -3);
-#if 0
-        lua_pushstring(L, AMB_SIGMEMBER);
-        lua_pushstring(L, prop->dbus_data.signame);
-        lua_settable(L, -3);
-#endif
         lua_pushstring(L, AMB_OBJECTNAME);
         lua_pushstring(L, prop->dbus_data.objectname);
         lua_settable(L, -3);
@@ -966,7 +996,7 @@ static int property_signal_handler(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg,
 
             if (w) {
                 /* we are interested in this property of this object */
-                mrp_log_info("AMB: PropertiesChanged for %s; %s handling",
+                mrp_debug("AMB: PropertiesChanged for %s; %s handling",
                         property_name, w->tdata ? "basic" : "lua");
 
                 /* process the variant from the dict */
@@ -1070,9 +1100,6 @@ static int subscribe_property(data_t *ctx, dbus_property_watch_t *w)
     const char *obj = w->lua_prop->dbus_data.obj;
     const char *iface = w->lua_prop->dbus_data.iface;
     const char *name = w->lua_prop->dbus_data.name;
-#if 0
-    const char *signame = w->lua_prop->dbus_data.signame;
-#endif
     dbus_property_object_t *o;
     int interface_len = strlen(w->lua_prop->dbus_data.iface);
     int name_len = strlen(w->lua_prop->dbus_data.name);
@@ -1811,7 +1838,6 @@ static int amb_init(mrp_plugin_t *plugin)
     if (!ctx->dbus_property_objects)
         goto error;
 
-
     /* initialize lua support */
 
     global_ctx = ctx;
@@ -1903,10 +1929,9 @@ static void amb_exit(mrp_plugin_t *plugin)
     data_t *ctx = (data_t *) plugin->data;
     mrp_list_hook_t *p, *n;
 
-    mrp_process_set_state("murphy-amb", MRP_PROCESS_STATE_NOT_READY);
+    mrp_process_remove_watch(ctx->amb_id);
 
-    if (ctx->dbus_property_objects)
-        mrp_htbl_destroy(ctx->dbus_property_objects, TRUE);
+    mrp_process_set_state("murphy-amb", MRP_PROCESS_STATE_NOT_READY);
 
     /* for all subscribed properties, unsubscribe and free memory */
 
@@ -1915,6 +1940,10 @@ static void amb_exit(mrp_plugin_t *plugin)
                 mrp_list_entry(p, dbus_property_watch_t, hook);
 
         destroy_prop(ctx, w);
+    }
+
+    if (ctx->dbus_property_objects) {
+        mrp_htbl_destroy(ctx->dbus_property_objects, FALSE);
     }
 
     mrp_transport_destroy(ctx->t);
