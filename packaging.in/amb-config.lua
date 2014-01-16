@@ -12,7 +12,6 @@ amb.property {
         obj = "undefined",
         interface = "org.automotive.VehicleSpeed",
         property = "VehicleSpeed",
-        notification = "VehicleSpeedChanged",
         signature = "q",
     },
 }
@@ -30,7 +29,6 @@ amb.property {
         interface = "org.automotive.Transmission",
         objectname = "Transmission",
         property = "GearPosition",
-        notification = "GearPositionChanged",
         signature = "i",
     },
 }
@@ -47,7 +45,6 @@ amb.property {
         obj = "undefined",
         interface = "org.automotive.ExteriorBrightness",
         property = "ExteriorBrightness",
-        notification = "ExteriorBrightnessChanged",
         signature = "q",
     },
 }
@@ -63,7 +60,6 @@ amb.property {
         obj = "undefined",
         interface = "org.automotive.TurnSignal",
         property = "TurnSignal",
-        notification = "TurnSignalChanged",
         signature = "i",
     },
 }
