@@ -1518,6 +1518,7 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/resource-client/scripting-resource-client.c   \
 	$(SYSTEMCTL_DIR)/application/application.c                     \
 	$(SYSTEMCTL_DIR)/application/scripting-application.c           \
+	$(SYSTEMCTL_DIR)/user/user.c                                   \
 	$(SYSTEMCTL_DIR)/wayland/wayland.c                             \
 	$(SYSTEMCTL_DIR)/wayland/output.c                              \
 	$(SYSTEMCTL_DIR)/wayland/layer.c                               \
@@ -1535,11 +1536,12 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/wayland/scripting-layer.c
 
 SYSTEMCTL_PLUGIN_CFLAGS  = \
-			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) \
+			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
+			$(AUL_CFLAGS) \
 			-Iico-uxf-weston-plugin \
                         -I$(top_builddir)/src/$(SYSTEMCTL_DIR)
 SYSTEMCTL_PLUGIN_LIBS    = \
-			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) \
+			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) $(LIBXML2_LIBS) $(AUL_LIBS) \
 			-lico-uxf-weston-plugin
 
 SYSTEMCTL_PLUGIN_LOADER  = linkedin-system-controller-loader.c
