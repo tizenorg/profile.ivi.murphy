@@ -486,6 +486,17 @@ AC_SUBST(TELEPHONY_ENABLED)
 AC_SUBST(TELEPHONY_CFLAGS)
 AC_SUBST(TELEPHONY_LIBS)
 
+PKG_CHECK_MODULES(AUL, aul,
+           [have_aul=yes], [have_aul=no])
+enable_aul="$have_aul"
+if test "$enable_aul" = "yes"; then
+    AC_DEFINE([AUL_ENABLED], 1, [Enable Application Utility Library support ?])
+fi
+AM_CONDITIONAL(AUL_ENABLED, [test "$enable_aul" = "yes"])
+AC_SUBST(AUL_ENABLED)
+AC_SUBST(AUL_CFLAGS)
+AC_SUBST(AUL_LIBS)
+
 # Check if system-controller (plugin) support should be enabled.
 AC_ARG_ENABLE(system-controller,
               [  --enable-system-controller enable system-controller support],
@@ -495,9 +506,13 @@ if test "$enable_systemctl" = "yes"; then
     if test "$enable_websockets" != "yes"; then
         AC_MSG_ERROR([System controller requires websocket support.])
     fi
+    if test "$have_aul" != "yes"; then
+        AC_MSG_ERROR([System controller requires AUL support.])
+    fi
     AC_MSG_NOTICE([System-controller support is enabled.])
     AC_DEFINE([SYSTEMCTL_ENABLED], 1, [Enable system-controller support ?])
     PKG_CHECK_MODULES(WAYLAND_CLIENT, wayland-client)
+    PKG_CHECK_MODULES(LIBXML2, libxml-2.0)
     AC_CHECK_HEADER([ico-uxf-weston-plugin/ico_input_mgr-client-protocol.h])
 else
     AC_MSG_NOTICE([System-controller support is disabled.])
@@ -507,6 +522,8 @@ AM_CONDITIONAL(SYSTEMCTL_ENABLED, [test "$enable_systemctl" = "yes"])
 AC_SUBST(SYSTEMCTL_ENABLED)
 AC_SUBST(WAYLAND_CLIENT_CFLAGS)
 AC_SUBST(WAYLAND_CLIENT_LIBS)
+AC_SUBST(LIBXML2_CFLAGS)
+AC_SUBST(LIBXML2_LIBS)
 
 # Check if dlog support was enabled.
 AC_ARG_ENABLE(dlog,
@@ -532,17 +549,6 @@ AM_CONDITIONAL(DLOG_ENABLED, [test "$enable_dlog" = "yes"])
 AC_SUBST(DLOG_ENABLED)
 AC_SUBST(DLOG_CFLAGS)
 AC_SUBST(DLOG_LIBS)
-
-PKG_CHECK_MODULES(AUL, aul,
-           [have_aul=yes], [have_aul=no])
-enable_aul="$have_aul"
-if test "$enable_aul" = "yes"; then
-    AC_DEFINE([AUL_ENABLED], 1, [Enable Application Utility Library support ?])
-fi
-AM_CONDITIONAL(AUL_ENABLED, [test "$enable_aul" = "yes"])
-AC_SUBST(AUL_ENABLED)
-AC_SUBST(AUL_CFLAGS)
-AC_SUBST(AUL_LIBS)
 
 # Check if Audio Session Manager plugin was enabled.
 AC_ARG_ENABLE(resource-asm,
