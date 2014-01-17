@@ -237,13 +237,13 @@ element.lua {
    name    = "speed2volume",
    inputs  = { speed = mdb.select.vehicle_speed, param = 9 },
    outputs = {  mdb.table { name = "speedvol",
-			    index = {"zone", "device"},
-			    columns = {{"zone", mdb.string, 16},
-				       {"device", mdb.string, 16},
-				       {"value", mdb.floating}},
+                            index = {"zone", "device"},
+                            columns = {{"zone", mdb.string, 16},
+                                       {"device", mdb.string, 16},
+                                       {"value", mdb.floating}},
                             create = true
-			   }
-	     },
+                           }
+             },
    oldvolume = 0.0,
    update  = function(self)
                 speed = self.inputs.speed.single_value
@@ -256,9 +256,9 @@ element.lua {
                 if (diff*diff > self.inputs.param) then
                     print("*** element "..self.name.." update "..volume)
                     self.oldvolume = volume
-		    mdb.table.speedvol:replace({zone = "driver", device = "speakers", value = volume})
-		end
-	     end
+                    mdb.table.speedvol:replace({zone = "driver", device = "speakers", value = volume})
+                end
+             end
 }
 
 -- Night mode processing chain
@@ -331,9 +331,27 @@ if with_amb then
     }
 end
 
+-- Night mode general handlers
+
+sink.lua {
+    name = "nightmode_homescreen",
+    inputs = { owner = mdb.select.select_night_mode },
+    initiate = function(self)
+        data = mdb.select.select_night_mode.single_value
+        print("Night mode initiated: " .. tostring(data))
+        return true
+    end,
+    update = function(self)
+        data = mdb.select.select_night_mode.single_value
+        print("Night mode updated: " .. tostring(data))
+
+        -- tell homescreen that night mode was updated
+        sc:send_message(sysctlid, m:JSON({command=0x60001,arg=m:JSON({stateid=2,state=data})}))
+        return true
+    end
+}
 
 -- Driving mode processing chain
-
 
 element.lua {
     name    = "drivingmode",
@@ -400,6 +418,24 @@ mdb.select {
 }
 
 -- regulation (on), use "select_driving_mode"
+
+sink.lua {
+    name = "driving_regulation",
+    inputs = { owner = mdb.select.select_driving_mode },
+    initiate = function(self)
+        data = mdb.select.select_driving_mode.single_value
+        print("Driving mode initiated: " .. tostring(data))
+        return true
+    end,
+    update = function(self)
+        data = mdb.select.select_driving_mode.single_value
+        print("Driving mode updated: " .. tostring(data))
+
+        -- tell homescreen that driving mode was updated
+        sc:send_message(sysctlid, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
+        return true
+    end
+}
 
 -- shift position (parking, reverse, other)
 
@@ -748,7 +784,7 @@ wmgr = window_manager {
                            command     = 0x10002
                       elseif oper == 3 then  -- namechange
                            command     = 0x10009
-		      elseif oper == 4 or oper == 5 then --visible or configure
+                      elseif oper == 4 or oper == 5 then --visible or configure
                            command     = 0x10008
                            arg.zone    = win.area
                            arg.node    = win.node
@@ -827,7 +863,7 @@ wmgr = window_manager {
 
   layer_update = function(self, oper, layer, mask)
                       if verbose > 0 then
-                          print("### LAYER UPDATE:" .. 
+                          print("### LAYER UPDATE:" ..
                                 layer_operation_name(oper) ..
                                 " mask: " .. tostring(mask))
                           if verbose > 1 then
@@ -884,7 +920,7 @@ wmgr = window_manager {
                                   for fld,val in pairs(ad) do
                                       a[fld] = self:geometry(out.width,
                                                              out.height,
-                                                             val) 
+                                                             val)
                                    end
                                    self:area_create(a)
                                    resmgr:area_create(area[can], outdef.zone)
@@ -899,6 +935,9 @@ sc = m:get_system_controller()
 
 -- resource sets
 sets = {}
+
+-- user manager
+um = m:UserManager()
 
 connected = false
 sysctlid = ""
@@ -936,7 +975,15 @@ application {
     area            = "Center.Status",
     privileges      = { screen = "system", audio = "none" },
     resource_class  = "player",
-    screen_priority = 20 
+    screen_priority = 20
+}
+
+application {
+    appid           = "org.tizen.ico.login",
+    area            = "Center.Full",
+    privileges      = { screen = "system", audio = "system" },
+    resource_class  = "player",
+    screen_priority = 20
 }
 
 
@@ -957,9 +1004,15 @@ if sc then
         end
         if connected and command then
             if command == 1 then -- send_appid
+                local driving_mode = mdb.select.select_driving_mode.single_value
+                local night_mode = mdb.select.select_night_mode.single_value
+
+                if not driving_mode then driving_mode = 0 end
+                if not night_mode then night_mode = 0 end
+
                 local reply = m:JSON({ command = 0x60001,
                                        arg     = m:JSON({ stateid = 1,
-                                                          state   = 0})
+                                                          state   = driving_mode})
                                      })
                  if verbose > 0 then
                      print("### <== sending " ..
@@ -972,7 +1025,7 @@ if sc then
 
                  reply = m:JSON({ command = 0x60001,
                                   arg     = m:JSON({ stateid = 2,
-                                                     state   = 0})
+                                                     state   = night_mode})
                                 })
                  if verbose > 0 then
                      print("### <== sending " ..
@@ -1160,6 +1213,133 @@ if sc then
             if verbose > 1 then
                 print(msg)
             end
+        end
+
+        if not um then
+            print("User Manager not initialized")
+            return
+        end
+
+        if msg.command == 0x00030001 then -- MSG_CMD_CHANGE_USER
+            print("command CHANGE_USER")
+            if not msg.arg then
+                print("invalid message")
+                return
+            end
+
+            username = msg.arg.user
+            passwd = msg.arg.pass
+
+            if not username then
+                username = ""
+            end
+
+            if not passwd then
+                passwd = ""
+            end
+
+            success = um:changeUser(username, passwd)
+
+            if not success then
+                reply = m.JSON({
+                    appid = msg.appid,
+                    command = cmd
+                })
+                if sc:send_message(msg.appid, reply) then
+                    print('*** sent authentication failed message')
+                else
+                    print('*** failed to send authentication failed message')
+                end
+            end
+
+        elseif msg.command == 0x00030002 then -- MSG_CMD_GET_USERLIST
+            print("command GET_USERLIST")
+            if not msg.appid then
+                print("invalid message")
+                return
+            end
+
+            users, currentUser = um:getUserList()
+
+            if not users then
+                print("failed to get user list")
+                return
+            end
+
+            nUsers = 0
+
+            for i,v in pairs(users) do
+                nUsers = nUsers + 1
+            end
+
+            if not currentUser then
+                currentUser = ""
+            end
+
+            if verbose > 1 then
+                print("current user: " .. currentUser)
+                print("user list:")
+                for i,v in pairs(users) do
+                    print(v)
+                end
+            end
+
+            reply = m.JSON({
+                appid = msg.appid,
+                command = cmd,
+                arg = m.JSON({
+                    user_num = nUsers,
+                    user_list = users,
+                    user_login = currentUser
+                })
+            })
+
+            if verbose > 1 then
+                print("### <== GetUserList reply: " .. tostring(reply))
+            end
+
+            if sc:send_message(msg.appid, reply) then
+                print('*** reply OK')
+            else
+                print('*** reply FAILED')
+            end
+
+        elseif msg.command == 0x00030003 then -- MSG_CMD_GET_LASTINFO
+            print("command GET_LASTINFO")
+            if not msg.appid then
+                print("invalid message")
+                return
+            end
+
+            lastInfo = um:getLastInfo(msg.appid)
+
+            if not lastInfo then
+                print("failed to get last info for app" .. msg.appid)
+                return
+            end
+
+            reply = m.JSON({
+                appid = msg.appid,
+                command = cmd,
+                arg = m.JSON({
+                    lastinfo = lastinfo
+                })
+            })
+
+            if sc:send_message(msg.appid, reply) then
+                print('*** reply OK')
+            else
+                print('*** reply FAILED')
+            end
+
+        elseif msg.command == 0x00030004 then -- MSG_CMD_SET_LASTINFO
+            print("command SET_LASTINFO")
+            if not msg.arg or not msg.appid then
+                print("invalid message")
+                return
+            end
+
+            lastInfo = um:setLastInfo(msg.appid, msg.arg.lastinfo)
         end
     end
 
