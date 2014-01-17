@@ -46,10 +46,12 @@
 #include "resource-client/scripting-resource-client.h"
 #include "application/scripting-application.h"
 #include "wayland/scripting-wayland.h"
-
+#include "user/user.h"
 
 
 #define DEFAULT_ADDRESS "wsck:127.0.0.1:18081/ico_syc_protocol"
+#define DEFAULT_USER_CONFIG "/usr/apps/org.tizen.ico.system-controller/res/config/user.xml"
+#define DEFAULT_USER_DIR "/home/app/ico"
 
 /*
  * plugin argument ids/indices
@@ -57,6 +59,8 @@
 
 enum {
     ARG_ADDRESS,                         /* transport address to use */
+    ARG_USER_CONFIG,                     /* user configuration file */
+    ARG_USER_DIR,                        /* application stored data dir */
 };
 
 
@@ -70,6 +74,8 @@ typedef struct {
     mrp_context_t    *ctx;                /* murphy context */
     mrp_transport_t  *lt;                 /* transport we listen on */
     const char       *addr;               /* address we listen on */
+    const char       *user_config_file;   /* user manager configuration file */
+    const char       *user_dir;           /* application stored data dir */
     mrp_list_hook_t   clients;            /* connected clients */
     int               id;                 /* next client id */
     sysctl_lua_t     *scl;                /* singleton Lua object */
@@ -666,6 +672,7 @@ static int register_lua_bindings(sysctl_t *sc)
     mrp_resclnt_scripting_init(sc->L);
     mrp_application_scripting_init(sc->L);
     mrp_wayland_scripting_init(sc->L);
+    mrp_user_scripting_init(sc->L, sc->user_config_file, sc->user_dir, sc->ctx->ml);
 
     mrp_lua_create_object_class(sc->L, SYSCTL_LUA_CLASS);
 
@@ -687,6 +694,8 @@ static int plugin_init(mrp_plugin_t *plugin)
         sc->id      = 1;
         sc->ctx     = plugin->ctx;
         sc->addr    = plugin->args[ARG_ADDRESS].str;
+        sc->user_config_file = plugin->args[ARG_USER_CONFIG].str;
+        sc->user_dir = plugin->args[ARG_USER_DIR].str;
 
         if (!transport_create(sc))
             goto fail;
@@ -731,6 +740,8 @@ static void plugin_exit(mrp_plugin_t *plugin)
 
 static mrp_plugin_arg_t plugin_args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ADDRESS, STRING, "address", DEFAULT_ADDRESS),
+    MRP_PLUGIN_ARGIDX(ARG_USER_CONFIG, STRING, "user_config", DEFAULT_USER_CONFIG),
+    MRP_PLUGIN_ARGIDX(ARG_USER_DIR, STRING, "user_dir", DEFAULT_USER_DIR),
 };
 
 MURPHY_REGISTER_PLUGIN("system-controller",
