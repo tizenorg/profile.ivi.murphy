@@ -83,6 +83,7 @@ BuildRequires: pkgconfig(libsmack)
 %if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
 BuildRequires: ico-uxf-weston-plugin-devel
 BuildRequires: pkgconfig(ail)
+BuildRequires: libxml2-devel
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
