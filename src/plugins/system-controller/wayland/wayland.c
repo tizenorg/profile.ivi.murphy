@@ -458,11 +458,17 @@ static void display_io_watch(mrp_io_watch_t *iow,
     MRP_ASSERT(wl, "invalid user data");
     MRP_ASSERT(iow == wl->iow, "mismatching io watch");
 
+    if (!wl->display)
+        return;
+
     if ((events & MRP_IO_EVENT_HUP)) {
         mrp_log_info("display '%s' is gone", get_display_name(wl));
 
         wl_registry_destroy(wl->registry);
         wl_display_disconnect(wl->display);
+
+        wl->registry = NULL;
+        wl->display = NULL;
 
         return;
     }
