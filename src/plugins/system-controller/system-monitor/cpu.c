@@ -66,7 +66,7 @@ typedef struct {
 static cpu_load_t load = { .statfd = -1 };
 
 
-int read_ticks(int fd, cpu_ticks_t *t)
+static int read_ticks(int fd, cpu_ticks_t *t)
 {
     char buf[256], *p, *n;
     int  len;
@@ -155,11 +155,11 @@ int read_ticks(int fd, cpu_ticks_t *t)
 
 static void dump_ticks(char *msg, cpu_ticks_t *t)
 {
-    mrp_debug("%s: user=%lld, nice=%lld, system=%lld", msg,
+    mrp_debug("%s: user=%llu, nice=%llu, system=%llu", msg,
               t->user, t->nice, t->system);
-    mrp_debug("%s: idle=%lld, iowait=%lld, irq=%lld", msg,
+    mrp_debug("%s: idle=%llu, iowait=%llu, irq=%llu", msg,
               t->idle, t->iowait, t->irq);
-    mrp_debug("%s: softirq=%lld, (%lld, %lld, %lld)", msg,
+    mrp_debug("%s: softirq=%llu, (%llu, %llu, %llu)", msg,
               t->softirq, t->steal, t->guest, t->guest_nice);
 }
 
@@ -174,6 +174,8 @@ int cpu_get_load(int *loadp, int *idlep, int *iowaitp)
 
         if (load.statfd < 0)
             return -1;
+
+        fcntl(load.statfd, F_SETFD, FD_CLOEXEC);
 
         if (read_ticks(load.statfd, load.ticks) < 0)
             return -1;
