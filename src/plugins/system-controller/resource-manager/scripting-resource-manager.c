@@ -57,6 +57,7 @@ typedef struct funcbridge_def_s    funcbridge_def_t;
 struct scripting_resmgr_s {
     mrp_resmgr_t *resmgr;
     mrp_funcbridge_t *screen_event_handler;
+    mrp_funcbridge_t *audio_event_handler;
 };
 
 struct funcbridge_def_s {
@@ -74,7 +75,7 @@ static void resmgr_destroy(void *);
 
 static scripting_resmgr_t *resmgr_check(lua_State *, int);
 
-static void screen_event_handler_callback(mrp_resmgr_t *,mrp_resmgr_event_t *);
+static void event_handler_callback(mrp_resmgr_t *,mrp_resmgr_event_t *);
 
 static bool register_methods(lua_State *);
 
@@ -140,6 +141,7 @@ static int resmgr_create(lua_State *L)
     scripting_resmgr_t *rm;
     int table;
     mrp_funcbridge_t *screen_event_handler = NULL;
+    mrp_funcbridge_t *audio_event_handler = NULL;
 
     MRP_LUA_ENTER;
 
@@ -160,6 +162,10 @@ static int resmgr_create(lua_State *L)
             screen_event_handler = mrp_funcbridge_create_luafunc(L, -1);
             break;
 
+        case AUDIO_EVENT_HANDLER:
+            audio_event_handler = mrp_funcbridge_create_luafunc(L, -1);
+            break;
+
         default:
             lua_pushvalue(L, -2);
             lua_pushvalue(L, -2);
@@ -173,11 +179,11 @@ static int resmgr_create(lua_State *L)
 
     rm->resmgr = resmgr;
     rm->screen_event_handler = screen_event_handler;
+    rm->audio_event_handler = audio_event_handler;
 
     resmgr->scripting_data = rm;
 
-    mrp_resmgr_notifier_register_event_callback(resmgr,
-                                                screen_event_handler_callback);
+    mrp_resmgr_notifier_register_event_callback(resmgr,event_handler_callback);
     lua_settop(L, table);
 
     MRP_LUA_LEAVE(1);
@@ -211,6 +217,10 @@ static int resmgr_getfield(lua_State *L)
 
         case SCREEN_EVENT_HANDLER:
             mrp_funcbridge_push(L, rm->screen_event_handler);
+            break;
+
+        case AUDIO_EVENT_HANDLER:
+            mrp_funcbridge_push(L, rm->audio_event_handler);
             break;
 
         default:
@@ -253,15 +263,16 @@ static scripting_resmgr_t *resmgr_check(lua_State *L, int idx)
 }
 
 
-static void screen_event_handler_callback(mrp_resmgr_t *resmgr,
+static void event_handler_callback(mrp_resmgr_t *resmgr,
                                    mrp_resmgr_event_t *event)
 {
     lua_State *L;
     scripting_resmgr_t *rm;
+    const char *type_str;
     void *sev;
+    mrp_funcbridge_t *fb;
     mrp_funcbridge_value_t args[4], ret;
     char t;
-    bool success;
 
     MRP_ASSERT(resmgr && event, "invalid argument");
 
@@ -279,25 +290,30 @@ static void screen_event_handler_callback(mrp_resmgr_t *resmgr,
     switch (event->type) {
 
     case MRP_RESMGR_EVENT_SCREEN:
+        type_str = "screen";
         sev = mrp_resmgr_scripting_screen_event_create_from_c(L, event);
+        fb = rm->screen_event_handler;
         break;
 
     case MRP_RESMGR_EVENT_AUDIO:
-        sev = NULL;
-        break;
-
-    case MRP_RESMGR_EVENT_INPUT:
-        sev = NULL;
+        type_str = "audio";
+        sev = mrp_resmgr_scripting_audio_event_create_from_c(L, event);
+        fb = rm->audio_event_handler;
         break;
 
     default:
-        sev = NULL;
-        break;
+        mrp_debug("can't deliver resource events to LUA: invalid event type");
+        return;
     }
 
     if (!sev) {
-        mrp_debug("can't deliver resource events to LUA: "
-                  "failed to create scripting event");
+        mrp_debug("can't deliver %s resource events to LUA: "
+                  "failed to create scripting event", type_str);
+        return;
+    }
+    if (!fb) {
+        mrp_debug("can't deliver %s resource events to LUA: "
+                  "no funcbridge", type_str);
         return;
     }
 
@@ -306,11 +322,9 @@ static void screen_event_handler_callback(mrp_resmgr_t *resmgr,
 
     memset(&ret, 0, sizeof(ret));
 
-    success = mrp_funcbridge_call_from_c(L, rm->screen_event_handler, "oo",
-                                         args, &t, &ret);
-    if (!success) {
-        mrp_log_error("failed to call resource_manager.screen_event_handler method "
-                      "(%s)", ret.string ? ret.string : "NULL");
+    if (!mrp_funcbridge_call_from_c(L, fb, "oo", args, &t, &ret)) {
+        mrp_log_error("failed to call resource_manager.screen_event_handler "
+                      "method (%s)", ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
 }
@@ -476,6 +490,10 @@ mrp_resmgr_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "name"))
                 return NAME;
             break;
+        case 'z':
+            if (!strcmp(name, "zone"))
+                return ZONE;
+            break;
         default:
             break;
         }
@@ -484,7 +502,9 @@ mrp_resmgr_scripting_field_name_to_type(const char *name, ssize_t len)
     case 5:
         switch (name[0]) {
         case 'a':
-            if (!strcmp(name, "AUDIO"))
+            if (!strcmp(name, "appid"))
+                return APPID;
+            if (!strcmp(name, "audio"))
                 return AUDIO;
             break;
         case 'e':
@@ -515,6 +535,10 @@ mrp_resmgr_scripting_field_name_to_type(const char *name, ssize_t len)
 
     case 7:
         switch (name[0]) {
+        case 'a':
+            if (!strcmp(name, "audioid"))
+                return AUDIOID;
+            break;
         case 'c':
             if (!strcmp(name, "classes"))
                 return CLASSES;
@@ -546,6 +570,11 @@ mrp_resmgr_scripting_field_name_to_type(const char *name, ssize_t len)
     case 12:
         if (!strcmp(name, "window_raise"))
             return WINDOW_RAISE;
+        break;
+
+    case 19:
+        if (!strcmp(name, "audio_event_handler"))
+            return AUDIO_EVENT_HANDLER;
         break;
 
     case 20:
