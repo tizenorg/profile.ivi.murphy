@@ -27,31 +27,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __MURPHY_SYSTEM_CONTROLLER_RESOURCE_MANAGER_SCRIPTING_H__
-#define __MURPHY_SYSTEM_CONTROLLER_RESOURCE_MANAGER_SCRIPTING_H__
+#ifndef __MURPHY_SYSTEM_CONTROLLER_AUDIO_H__
+#define __MURPHY_SYSTEM_CONTROLLER_AUDIO_H__
 
-#include <lua.h>
+#include <sys/types.h>
 
-#include "resource-manager/resource-manager.h"
+#include <murphy/common/hashtbl.h>
 
-void mrp_resmgr_scripting_init(lua_State *L);
+#include "resource-manager.h"
 
-mrp_resmgr_t *mrp_resmgr_scripting_check(lua_State *L, int idx);
-mrp_resmgr_t *mrp_resmgr_scripting_unwrap(void *void_rm);
-
-/* scripting-notifier.c */
-void  mrp_resmgr_scripting_notifier_init(lua_State *L);
-void *mrp_resmgr_scripting_screen_event_create_from_c(lua_State *L,
-                                                    mrp_resmgr_event_t *event);
-void *mrp_resmgr_scripting_audio_event_create_from_c(lua_State *L,
-                                                    mrp_resmgr_event_t *event);
-
-/* internal for scripting-xxx.c */
-mrp_resmgr_scripting_field_t
-mrp_resmgr_scripting_field_check(lua_State *, int, const char **);
-
-mrp_resmgr_scripting_field_t
-mrp_resmgr_scripting_field_name_to_type(const char *, ssize_t);
+struct mrp_resmgr_audio_s {
+    mrp_resmgr_t *resmgr;
+    uint32_t resid;
+    mrp_htbl_t *resources;               /* to access resources by surfaceid */
+    mrp_list_hook_t zones[MRP_ZONE_MAX]; /* per zone resource list head */
+    uint32_t grantids[MRP_ZONE_MAX];
+};
 
 
-#endif /* __MURPHY_SYSTEM_CONTROLLER_RESOURCE_MANAGER_SCRIPTING_H__ */
+mrp_resmgr_audio_t *mrp_resmgr_audio_create(mrp_resmgr_t *resmgr);
+void mrp_resmgr_audio_destroy(mrp_resmgr_audio_t *audio);
+
+int mrp_resmgr_audio_print(mrp_resmgr_audio_t *audio, uint32_t zoneid,
+                            char *buf, int len);
+
+#endif /* __MURPHY_SYSTEM_CONTROLLER_AUDIO_H__ */
