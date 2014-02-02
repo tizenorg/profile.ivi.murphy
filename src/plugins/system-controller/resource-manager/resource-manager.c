@@ -46,6 +46,7 @@
 
 #include "resource-manager.h"
 #include "screen.h"
+#include "audio.h"
 #include "notifier.h"
 
 static int hash_compare(const void *, const void *);
@@ -70,6 +71,7 @@ mrp_resmgr_t *mrp_resmgr_create(void)
 
     resmgr->resources = mrp_htbl_create(&cfg);
     resmgr->screen = mrp_resmgr_screen_create(resmgr);
+    resmgr->audio = mrp_resmgr_audio_create(resmgr);
     resmgr->notifier = mrp_resmgr_notifier_create(resmgr);
 
     return resmgr;
