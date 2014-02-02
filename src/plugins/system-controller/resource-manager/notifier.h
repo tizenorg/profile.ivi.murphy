@@ -73,11 +73,18 @@ struct mrp_resmgr_event_s {
     mrp_resmgr_eventid_t eventid;
     char *appid;
 
-    /* screen specific fields */
-    struct {
-        int32_t surfaceid;
-        int32_t layerid;
-        char *area;
+    union {
+        /* screen specific fields */
+        struct {
+            int32_t surfaceid;
+            int32_t layerid;
+            char *area;
+        };
+        /* audio specific fields */
+        struct {
+            uint32_t audioid;
+            char *zone;
+        };
     };
 };
 
@@ -96,6 +103,12 @@ void mrp_resmgr_notifier_queue_screen_event(mrp_resmgr_t *resmgr,
                                             int32_t surfaceid,
                                             int32_t layerid,
                                             const char *area);
+void mrp_resmgr_notifier_queue_audio_event(mrp_resmgr_t *resmgr,
+                                           uint32_t zoneid,
+                                           mrp_resmgr_eventid_t eventid,
+                                           const char *appid,
+                                           uint32_t audioid,
+                                           const char *zonename);
 
 void mrp_notifier_remove_last_event(mrp_resmgr_t *resmgr,
                                     uint32_t zoneid,
