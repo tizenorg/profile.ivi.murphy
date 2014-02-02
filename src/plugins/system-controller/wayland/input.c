@@ -194,7 +194,6 @@ void mrp_wayland_send_input(mrp_wayland_t *wl, mrp_wayland_input_event_t *ev)
     mrp_wayland_input_manager_t *im;
     mrp_wayland_input_device_t *dev;
     mrp_wayland_code_t *code;
-    size_t i;
     char dbuf[256];
 
     MRP_ASSERT(wl && ev, "Invalid argument");
