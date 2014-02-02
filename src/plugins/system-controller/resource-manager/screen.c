@@ -242,7 +242,8 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
         grantid = 0;
     }
 
-    PRINT("      Resource 'screen' - grantid:%u\n", grantid);
+    PRINT("      Resource '%s' - grantid:%u\n",
+          MRP_SYSCTL_SCREEN_RESOURCE, grantid);
 
     if (!areas || mrp_list_empty(areas))
         PRINT("         No resources\n");
