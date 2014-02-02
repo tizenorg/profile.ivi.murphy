@@ -176,7 +176,9 @@ zone {
 
 
 -- define resource classes
-if not m:plugin_exists('ivi-resource-manager') then
+if not m:plugin_exists('ivi-resource-manager') and
+   not with_system_controller
+then
    resource.class {
         name = "audio_playback",
         shareable = true,
@@ -639,10 +641,35 @@ resmgr = resource_manager {
                                  wmgr:window_request(r,a,0)
                              else
                                  if verbose > 0 then
-                                    print("*** resource event: "..tostring(ev))
+                                    print("*** screen resource event: " ..
+                                          tostring(ev))
                                  end
                              end
-                         end
+                         end,
+  audio_event_handler = function(self, ev)
+                             local event = ev.event
+                             local appid = ev.appid
+                             local audioid = ev.audioid
+
+                             if event == "grant" then
+                                 if verbose > 0 or true then
+                                    print("*** grant audio to "..appid..
+                                          " ("..audioid..") in '" ..
+                                          ev.zone .. "' zone")
+                                 end
+                             elseif event == "revoke" then
+                                 if verbose > 0 or true then
+                                    print("*** revoke audio from "..appid..
+                                          " ("..audioid..") in '" ..
+                                          ev.zone .. "' zone")
+                                 end
+                             else
+                                 if verbose > 0 or true then
+                                    print("*** audio resource event: " ..
+                                          tostring(ev))
+                                 end
+                             end
+                        end
 }
 
 resclnt = resource_client {}
@@ -978,26 +1005,26 @@ imgr = input_manager {
   },
 
   manager_update = function(self, oper)
-                       if verbose > 0 or true then
+                       if verbose > 0 then
                            print("### <== INPUT MANAGER UPDATE:" ..
                                  input_manager_operation_name(oper))
                        end
                    end,
 
   input_update = function(self, oper, inp, mask)
-                     if verbose > 0 or true then
+                     if verbose > 0 then
                          print("### INPUT UPDATE:" .. 
                                 input_operation_name(oper) ..
                                 " mask: " .. tostring(mask))
-                          if verbose > 1 or true then
+                          if verbose > 1 then
                               print(inp)
                           end
                       end
                  end,
   code_update  = function(self, oper, code, mask)
-                     if verbose > 0 or true then
+                     if verbose > 0 then
                          print("### CODE UPDATE: mask: " .. tostring(mask))
-                         if verbose > 1 or true then
+                         if verbose > 1 then
                              print(code)
                          end
                      end
@@ -1010,11 +1037,11 @@ imgr = input_manager {
                                                          state = code.state
                                            })
                      })
-                     if verbose > 0 or true then
+                     if verbose > 0 then
                          print("### <== sending " ..
                                command_name(msg.command) ..
                                " input message")
-                         if verbose > 1 or true then
+                         if verbose > 1 then
                              print(msg)
                          end
                      end
