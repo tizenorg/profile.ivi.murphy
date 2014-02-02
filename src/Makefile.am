@@ -1524,6 +1524,7 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/resource-manager/resource-manager.c           \
 	$(SYSTEMCTL_DIR)/resource-manager/scripting-resource-manager.c \
 	$(SYSTEMCTL_DIR)/resource-manager/screen.c                     \
+	$(SYSTEMCTL_DIR)/resource-manager/audio.c                      \
 	$(SYSTEMCTL_DIR)/resource-manager/notifier.c                   \
 	$(SYSTEMCTL_DIR)/resource-manager/scripting-notifier.c         \
 	$(SYSTEMCTL_DIR)/resource-client/resource-client.c             \
