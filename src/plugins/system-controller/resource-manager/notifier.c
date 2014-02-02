@@ -126,11 +126,45 @@ void mrp_resmgr_notifier_queue_screen_event(mrp_resmgr_t *resmgr,
         mrp_list_append(&nz->events, &ev->link);
 
         mrp_debug("queued screen event in zone %u (eventid=%s appid='%s' "
-                  "surfaceid=%d layerid=%d, area='%s'",
+                  "surfaceid=%d layerid=%d, area='%s')",
                   zoneid, eventid_str(ev->eventid), ev->appid,
                   ev->surfaceid, ev->layerid, ev->area);
 
         nz->nevent.screen++;
+    }
+}
+
+void mrp_resmgr_notifier_queue_audio_event(mrp_resmgr_t *resmgr,
+                                           uint32_t zoneid,
+                                           mrp_resmgr_eventid_t eventid,
+                                           const char *appid,
+                                           uint32_t audioid,
+                                           const char *zonename)
+{
+    mrp_resmgr_notifier_t *notifier;
+    mrp_resmgr_notifier_zone_t *nz;
+    mrp_resmgr_event_t *ev;
+
+    MRP_ASSERT(resmgr && resmgr->notifier && zoneid < MRP_ZONE_MAX && appid,
+               "invalid argument");
+
+    notifier = resmgr->notifier;
+    nz = notifier->zones + zoneid;
+
+    if ((ev = mrp_allocz(sizeof(mrp_resmgr_event_t)))) {
+
+        ev->type = MRP_RESMGR_EVENT_AUDIO;
+        ev->eventid = eventid;
+        ev->appid = mrp_strdup(appid);
+        ev->audioid = audioid;
+        ev->zone = mrp_strdup(zonename ? zonename : "<unknown>");
+
+        mrp_list_append(&nz->events, &ev->link);
+
+        mrp_debug("queued audio event in zone %u (eventid=%s appid='%s')",
+                  zoneid, eventid_str(ev->eventid), ev->appid);
+
+        nz->nevent.audio++;
     }
 }
 
@@ -199,31 +233,37 @@ void mrp_resmgr_notifier_flush_events(mrp_resmgr_t *resmgr,
     mrp_list_hook_t *events, *entry, *n;
     mrp_resmgr_event_t *ev;
     size_t nevent, *nevent_ptr;
+    const char *str1, *str2;
 
     MRP_ASSERT(resmgr && resmgr->notifier && zoneid < MRP_ZONE_MAX,
                "invalid argument");
 
     notifier = resmgr->notifier;
     nz = notifier->zones + zoneid;
+    str1 = str2 = "";
 
     switch (type) {
 
     case MRP_RESMGR_EVENT_ALL:
+        str1 = "all ";
         nevent = nz->nevent.screen + nz->nevent.audio  + nz->nevent.input;
         nevent_ptr = NULL;
         break;
 
     case MRP_RESMGR_EVENT_SCREEN:
+        str2 = " screen";
         nevent = nz->nevent.screen;
         nevent_ptr = &nz->nevent.screen;
         break;
 
     case MRP_RESMGR_EVENT_AUDIO:
+        str2 = " audio";
         nevent = nz->nevent.audio;
         nevent_ptr = &nz->nevent.audio;
         break;
 
     case MRP_RESMGR_EVENT_INPUT:
+        str2 = " input";
         nevent = nz->nevent.input;
         nevent_ptr = &nz->nevent.input;
         break;
@@ -240,9 +280,9 @@ void mrp_resmgr_notifier_flush_events(mrp_resmgr_t *resmgr,
         return;
     }
 
-    mrp_debug("%s %d events in zone %u",
+    mrp_debug("%s %s%d%s events in zone %u",
               notifier->callback ? "forwarding" : "throwing away",
-              nevent, zoneid);
+              str1, nevent, str2, zoneid);
 
     events = &nz->events;
 
@@ -281,6 +321,7 @@ static void event_destroy(mrp_resmgr_event_t *ev)
             break;
 
         case MRP_RESMGR_EVENT_AUDIO:
+            mrp_free((void *)ev->zone);
             break;
 
         case MRP_RESMGR_EVENT_INPUT:
