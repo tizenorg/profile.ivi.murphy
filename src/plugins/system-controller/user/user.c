@@ -676,7 +676,11 @@ static char *create_home_dir(const char *dir_path, const char *name)
     return mrp_strdup(user_dir_path);
 }
 
-static void delete_conf(user_config_t *conf) {
+static void delete_conf(user_config_t *conf)
+{
+    if (!conf)
+        return;
+
     mrp_free(conf->homescreen);
     mrp_free(conf->name);
     mrp_free(conf->passwd);
