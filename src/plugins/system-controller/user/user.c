@@ -594,6 +594,8 @@ static bool get_lastinfo(lua_State *L, const char *appid)
         lua_pushstring(L, result);
     }
 
+    close(fd);
+
     return TRUE;
 }
 
