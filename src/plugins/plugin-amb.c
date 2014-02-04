@@ -517,7 +517,8 @@ static int amb_constructor(lua_State *L)
     MRP_LUA_LEAVE(1);
 
 error:
-    destroy_prop(global_ctx, w);
+    if (w)
+        destroy_prop(global_ctx, w);
 
     mrp_log_error("AMB: amb_constructor error: %s", error);
     MRP_LUA_LEAVE(0);
@@ -949,6 +950,7 @@ static int property_signal_handler(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg,
 
     if (!msg) {
         mrp_log_error("AMB: message is NULL");
+        return TRUE;
     }
 
     if (mrp_dbus_msg_arg_type(msg, NULL) != MRP_DBUS_TYPE_STRING)  {
