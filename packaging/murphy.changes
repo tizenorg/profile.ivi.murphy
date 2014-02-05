@@ -1,3 +1,11 @@
+* Wed Feb  5 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.44
+- system-controller: initial CPU-load and memory pressure monitoring
+- system-controller: added input management
+- system-controller: added audio management
+- system-controller: added user management
+- config: driving regulations
+- fixes to a number of bugs discovered by static analysis
+
 * Wed Jan 15 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.43
 - transport: support for socket-based activation
 - AMB: use fdo property interface for signals.
