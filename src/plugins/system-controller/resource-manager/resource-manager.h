@@ -46,6 +46,7 @@
 typedef enum mrp_sysctl_scripting_field_e  mrp_resmgr_scripting_field_t;
 typedef enum mrp_resmgr_event_type_e       mrp_resmgr_event_type_t;
 typedef enum mrp_resmgr_eventid_e          mrp_resmgr_eventid_t;
+typedef enum mrp_resmgr_disable_e          mrp_resmgr_disable_t;
 
 typedef struct mrp_resmgr_s                mrp_resmgr_t;
 typedef struct mrp_resmgr_screen_s         mrp_resmgr_screen_t;
@@ -60,6 +61,16 @@ typedef struct mrp_resmgr_event_s          mrp_resmgr_event_t;
 
 typedef void (*mrp_resmgr_notifier_event_callback_t)(mrp_resmgr_t *,
                                                      mrp_resmgr_event_t *);
+
+
+enum mrp_resmgr_disable_e {
+    MRP_RESMGR_DISABLE_NONE = 0,
+
+    MRP_RESMGR_DISABLE_REQUISITE,
+    MRP_RESMGR_DISABLE_APPID,
+
+    MRP_RESMGR_DISABLE_MAX
+};
 
 struct mrp_resmgr_s {
     mrp_htbl_t *resources;
@@ -83,6 +94,8 @@ void  mrp_resmgr_insert_resource(mrp_resmgr_t *resmgr, mrp_zone_t *zone,
 void *mrp_resmgr_remove_resource(mrp_resmgr_t *resmgr, mrp_zone_t *zone,
                                  mrp_resource_t *key);
 void *mrp_resmgr_lookup_resource(mrp_resmgr_t *resmgr, mrp_resource_t *key);
+
+int mrp_resmgr_disable_print(mrp_resmgr_disable_t disable, char *buf, int len);
 
 
 #endif /* __MURPHY_SYSTEM_CONTROLLER_RESOURCE_MANAGER_H__ */
