@@ -462,6 +462,16 @@ mrp_application_scripting_req_create_from_c(mrp_application_requisite_t rq)
     return r;
 }
 
+mrp_application_requisite_t *mrp_application_scripting_req_unwrap(void *void_r)
+{
+    scripting_req_t *r = (scripting_req_t *)void_r;
+
+    if (r && mrp_lua_get_object_classdef(r) == REQUISITE_CLASS)
+        return &r->rq;
+
+    return NULL;
+}
+
 static scripting_req_t *req_create_from_c(lua_State *L,
                                           mrp_application_requisite_t rq)
 {
