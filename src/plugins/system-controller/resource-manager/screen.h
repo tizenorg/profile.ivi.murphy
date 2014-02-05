@@ -63,6 +63,13 @@ struct mrp_resmgr_screen_s {
 mrp_resmgr_screen_t *mrp_resmgr_screen_create(mrp_resmgr_t *resmgr);
 void mrp_resmgr_screen_destroy(mrp_resmgr_screen_t *screen);
 
+int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
+                              const char *output_name,
+                              const char *area_name,
+                              bool disable,
+                              mrp_resmgr_disable_t type,
+                              void *data);
+
 int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen, uint32_t areaid,
                             char *buf, int len);
 
