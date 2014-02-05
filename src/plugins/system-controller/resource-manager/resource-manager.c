@@ -112,6 +112,52 @@ void *mrp_resmgr_lookup_resource(mrp_resmgr_t *resmgr, mrp_resource_t *key)
     return mrp_htbl_lookup(resmgr->resources, key);
 }
 
+int mrp_resmgr_disable_print(mrp_resmgr_disable_t disable, char *buf, int len)
+{
+#define PRINT(...) \
+    do { p += snprintf(p, e-p, __VA_ARGS__); if (p>=e) return p-buf; } while(0)
+
+    typedef struct {
+        const char *name;
+        mrp_resmgr_disable_t mask;
+    } bit_t;
+
+    static bit_t bits[] = {
+        { "requisite", MRP_RESMGR_DISABLE_REQUISITE },
+        { "appid"    , MRP_RESMGR_DISABLE_APPID     },
+        {  NULL      , 0                            }
+    };
+
+    char *p, *e;
+    char *sep;
+    bit_t *bit;
+
+    MRP_ASSERT(buf && len > 0, "invalid argument");
+
+    e = (p = buf) + len;
+
+    PRINT("0x%02x-", disable);
+
+    if (!disable)
+        PRINT("none");
+    else {
+        for (bit = bits, sep = "";   bit->name && disable;   bit++) {
+            if ((disable & bit->mask)) {
+                PRINT("%s%s", sep, bit->name);
+                sep = "|";
+                disable &= ~bit->mask;
+            }
+        }
+
+        if (disable)
+            PRINT("%s<unknown 0x%02x>", sep, disable);
+    }
+
+    return p - buf;
+
+#undef PRINT
+}
+
 static int hash_compare(const void *key1, const void *key2)
 {
     if (key1 < key2)
