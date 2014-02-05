@@ -42,7 +42,6 @@
 
 #include "zone.h"
 
-
 #define ATTRIBUTE_MAX  32
 #define NAME_LENGTH    24
 
@@ -50,7 +49,6 @@
                        (t) == mqi_integer || \
                        (t) == mqi_unsignd || \
                        (t) == mqi_floating  )
-
 
 #define ZONE_ID_IDX          0
 #define ZONE_NAME_IDX        1

@@ -46,6 +46,8 @@
 #include "wayland/output.h"
 #include "application/application.h"
 
+#define ANY_OUTPUT  (~((uint32_t)0))
+#define ANY_AREA    (~((uint32_t)0))
 
 #ifdef BIT
 #undef BIT
@@ -82,6 +84,8 @@
 #define ATTR_END            {NULL, 0, 0, {.string=NULL}}
 
 typedef struct screen_resource_s   screen_resource_t;
+typedef struct disable_iterator_s  disable_iterator_t;
+typedef struct output_iterator_s   output_iterator_t;
 
 
 struct screen_resource_s {
@@ -89,11 +93,33 @@ struct screen_resource_s {
     mrp_resmgr_screen_t *screen;
     mrp_resource_t *res;
     uint32_t zoneid;
+    size_t outputid;
     size_t areaid;
     uint32_t key;
     bool acquire;
     bool grant;
     uint32_t grantid;
+    mrp_application_requisite_t requisite;
+    mrp_resmgr_disable_t disable;
+};
+
+struct disable_iterator_s {
+    uint32_t outputid;
+    uint32_t areaid;
+    bool disable;
+    mrp_resmgr_disable_t type;
+    uint32_t mask;
+    union {
+        const char *appid;
+        mrp_application_requisite_t req;
+    };
+    uint32_t zones;
+    int counter;
+};
+
+struct output_iterator_s {
+    const char *name;
+    mrp_wayland_output_t *out;
 };
 
 static int hash_compare(const void *, const void *);
@@ -208,6 +234,173 @@ void mrp_resmgr_screen_destroy(mrp_resmgr_screen_t *screen)
     }
 }
 
+static int screen_disable_cb(void *key, void *object, void *user_data)
+{
+    screen_resource_t *sr = (screen_resource_t *)object;
+    disable_iterator_t *it = (disable_iterator_t *)user_data;
+    const char *appid;
+    uint32_t disable;
+
+    MRP_UNUSED(key);
+
+    MRP_ASSERT(sr && it, "invalid argument");
+
+    if ((it->outputid == ANY_OUTPUT || sr->outputid == it->outputid) &&
+        (it->areaid   == ANY_AREA   || sr->areaid   == it->areaid   )  )
+    {
+        switch (it->type) {
+
+        case MRP_RESMGR_DISABLE_REQUISITE:
+            if (it->req && (it->req & sr->requisite) == it->req)
+                goto disable;
+            break;
+
+        case MRP_RESMGR_DISABLE_APPID:
+            if ((appid = get_appid_for_resource(sr->res)) &&
+                it->appid && !strcmp(it->appid, appid))
+                goto disable;
+            break;
+
+        disable:
+            disable = sr->disable & it->mask;
+            if (it->disable) {
+                if (disable)
+                    break;
+                sr->disable |= it->mask;
+            }
+            else {
+                if (!disable)
+                    break;
+                sr->disable &= ~it->mask;
+            }
+            it->counter++;
+            it->zones |= (((uint32_t)1) << sr->zoneid);
+            break;
+
+        default:
+            return MRP_HTBL_ITER_STOP;
+        }
+    }
+    
+    return MRP_HTBL_ITER_MORE;
+}
+
+static int output_find_cb(void *key, void *object, void *user_data)
+{
+    mrp_wayland_output_t *out = (mrp_wayland_output_t *)object;
+    output_iterator_t *it = (output_iterator_t *)user_data;
+
+    MRP_UNUSED(key);
+
+    MRP_ASSERT(out && it, "invalid argument");
+
+    if (out->name && !strcmp(it->name, out->outputname)) {
+        it->out = out;
+        return MRP_HTBL_ITER_STOP;
+    }
+
+    return MRP_HTBL_ITER_MORE;
+}
+
+int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
+                              const char *output_name,
+                              const char *area_name,
+                              bool disable,
+                              mrp_resmgr_disable_t type,
+                              void *data)
+{
+    mrp_wayland_t *w;
+    disable_iterator_t dit;
+    output_iterator_t oit;
+    mrp_wayland_output_t *o;
+    mrp_wayland_area_t *a;
+    mrp_wayland_t *wl = NULL;
+    uint32_t output_id = ANY_OUTPUT;
+    uint32_t area_id = ANY_AREA;
+    void *i;
+    char fullname[1024];
+    uint32_t mask;
+    uint32_t z;
+
+    MRP_ASSERT(screen && data, "invalid argument");
+
+    mrp_debug("output_name='%s' area_name='%s' %s, type=0x%02x data=%p",
+              output_name ? output_name : "<any output>",
+              area_name ? area_name : "<any area>",
+              disable ? "disable" : "enable",
+              type, data);
+
+    if (output_name && strcmp(output_name, "*")) {
+        memset(&oit, 0, sizeof(oit));
+        oit.name = output_name;
+        
+        mrp_wayland_foreach(w, i) {
+            mrp_htbl_foreach(w->outputs, output_find_cb, &oit);
+
+            if ((o = oit.out)) {
+                wl = w;
+                output_id = o->outputid;
+                break;
+            }
+        }
+        if (output_id == ANY_OUTPUT) {
+            mrp_log_error("system-controller: failed to disable screen: "
+                          "can't find output '%s'", output_name);
+            return -1;
+        }
+    }
+
+    if (wl && area_name && strcmp(area_name, "*")) {
+        snprintf(fullname, sizeof(fullname), "%s.%s", output_name, area_name);
+        if ((a = mrp_wayland_area_find(wl, fullname)))
+            area_id = a->areaid;
+        else {
+            mrp_log_error("system-controller: failed to disable screen: "
+                          "can't find area '%s'", area_name);
+            return -1;
+        }
+    }
+
+    memset(&dit, 0, sizeof(dit));
+    dit.outputid = output_id;
+    dit.areaid = area_id;
+    dit.disable = disable;
+    dit.type = type;
+    dit.mask = BIT(type - 1);
+    dit.zones = 0;
+    dit.counter = 0;
+    
+    switch (type) {
+
+    case MRP_RESMGR_DISABLE_REQUISITE:
+        dit.req = *(mrp_application_requisite_t *)data;
+        break;
+
+    case MRP_RESMGR_DISABLE_APPID:
+        dit.appid = (const char *)data;
+        break;
+
+    default:
+        mrp_log_error("system-controller: invalid type %d of "
+                      "screen disable", type);
+        return -1;
+    }
+
+    mrp_htbl_foreach(screen->resources, screen_disable_cb, &dit);
+
+    for (z = 0;   dit.zones && z < MRP_ZONE_MAX;   z++) {
+        mask = (((uint32_t)1) << z);
+
+        if ((mask & dit.zones)) {
+            dit.zones &= ~mask;
+            mrp_resource_owner_recalc(z);
+        }
+    }
+
+    return dit.counter;
+}
+
+
 int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
                             uint32_t zoneid,
                             char *buf, int len)
@@ -227,6 +420,8 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
     screen_resource_t *sr;
     mrp_attr_t a;
     size_t i;
+    char disable[256];
+    char requisite[1024];
 
     MRP_ASSERT(screen && buf && len > 0, "invalid argument");
 
@@ -257,8 +452,18 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
             mrp_list_foreach_back(resources, rentry, rn) {
                 sr = mrp_list_entry(rentry, screen_resource_t, link);
 
-                PRINT("            0x%08x %s %u",
-                      sr->key, sr->acquire ? "acquire":"release", sr->grantid);
+                mrp_resmgr_disable_print(sr->disable, disable,
+                                         sizeof(disable));
+                mrp_application_requisite_print(sr->requisite, requisite,
+                                                sizeof(requisite));
+
+                PRINT("            "
+                      "key:0x%08x %s grantid:%u requisite:%s disable:%s",
+                      sr->key,
+                      sr->acquire ? "acquire":"release",
+                      sr->grantid,
+                      requisite,
+                      disable);
 
                 for (i = 0;  i < MRP_ARRAY_SIZE(screen_attrs) - 1;  i++) {
                     if ((mrp_resource_read_attribute(sr->res, i, &a))) {
@@ -746,11 +951,13 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     }
 
     mrp_list_init(&sr->link);
-    sr->screen = screen;
-    sr->res    = res;
-    sr->zoneid = mrp_zone_get_id(zone);
-    sr->areaid = areaid;
-    sr->key    = resource_key(res, ac);
+    sr->screen    = screen;
+    sr->res       = res;
+    sr->zoneid    = mrp_zone_get_id(zone);
+    sr->outputid  = area->outputid;
+    sr->areaid    = areaid;
+    sr->key       = resource_key(res, ac);
+    sr->requisite = app->requisites.screen;
                     
     area_insert_resource(area, sr);
 
@@ -929,7 +1136,7 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
 
             MRP_ASSERT(sr->res, "confused with data structures");
 
-            if (sr->acquire) {
+            if (sr->acquire && !sr->disable) {
                 if (!(appid = get_appid_for_resource(sr->res)))
                     appid = "<unknown>";
 

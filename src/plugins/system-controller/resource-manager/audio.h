@@ -48,6 +48,12 @@ struct mrp_resmgr_audio_s {
 mrp_resmgr_audio_t *mrp_resmgr_audio_create(mrp_resmgr_t *resmgr);
 void mrp_resmgr_audio_destroy(mrp_resmgr_audio_t *audio);
 
+int mrp_resmgr_audio_disable(mrp_resmgr_audio_t *audio,
+                             const char *zone_name,
+                             bool disable,
+                             mrp_resmgr_disable_t type,
+                             void *data);
+
 int mrp_resmgr_audio_print(mrp_resmgr_audio_t *audio, uint32_t zoneid,
                             char *buf, int len);
 
