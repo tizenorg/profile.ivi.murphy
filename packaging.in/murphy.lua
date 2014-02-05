@@ -1110,6 +1110,25 @@ application {
     screen_priority = 20
 }
 
+application {
+    appid           = "org.tizen.ico.camera_left",
+    area            = "Center.SysApp.Left",
+    privileges      = { screen = "system", audio = "none" },
+    requisites      = { screen = "blinker_left", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 30
+}
+
+
+application {
+    appid           = "org.tizen.ico.camera_right",
+    area            = "Center.SysApp.Right",
+    privileges      = { screen = "system", audio = "none" },
+    requisites      = { screen = "blinker_right", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 30
+}
+
 
 if sc then
     sc.client_handler = function (self, cid, msg)
