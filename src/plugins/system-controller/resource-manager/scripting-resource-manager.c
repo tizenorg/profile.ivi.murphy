@@ -46,6 +46,7 @@
 
 #include "scripting-resource-manager.h"
 #include "wayland/scripting-wayland.h"
+#include "application/scripting-application.h"
 #include "screen.h"
 #include "notifier.h"
 
@@ -97,6 +98,10 @@ MRP_LUA_CLASS_DEF_SIMPLE (
 
 static mrp_funcbridge_t *area_create;
 static mrp_funcbridge_t *window_raise;
+static mrp_funcbridge_t *disable_screen_by_appid;
+static mrp_funcbridge_t *disable_screen_by_requisite;
+static mrp_funcbridge_t *disable_audio_by_appid;
+static mrp_funcbridge_t *disable_audio_by_requisite;
 
 void mrp_resmgr_scripting_init(lua_State *L)
 {
@@ -213,6 +218,22 @@ static int resmgr_getfield(lua_State *L)
 
         case WINDOW_RAISE:
             mrp_funcbridge_push(L, window_raise);
+            break;
+
+        case DISABLE_SCREEN_BY_APPID:
+            mrp_funcbridge_push(L, disable_screen_by_appid);
+            break;
+
+        case DISABLE_SCREEN_BY_REQUISITE:
+            mrp_funcbridge_push(L, disable_screen_by_requisite);
+            break;
+
+        case DISABLE_AUDIO_BY_APPID:
+            mrp_funcbridge_push(L, disable_audio_by_appid);
+            break;
+
+        case DISABLE_AUDIO_BY_REQUISITE:
+            mrp_funcbridge_push(L, disable_audio_by_requisite);
             break;
 
         case SCREEN_EVENT_HANDLER:
@@ -421,14 +442,168 @@ static bool window_raise_bridge(lua_State *L,
 }
 
 
+static bool disable_screen_bridge(lua_State *L,
+                                  void *data,
+                                  const char *signature,
+                                  mrp_funcbridge_value_t *args,
+                                  char *ret_type,
+                                  mrp_funcbridge_value_t *ret_val)
+{
+    mrp_resmgr_disable_t type;
+    mrp_resmgr_t *resmgr;
+    const char *output_name;
+    const char *area_name;
+    bool disable;
+    int cnt;
+
+    MRP_UNUSED(L);
+    MRP_UNUSED(ret_val);
+    MRP_ASSERT(data && signature && args && ret_type, "invalid argument");
+
+    *ret_type = MRP_FUNCBRIDGE_NO_DATA;
+
+    if (!strcmp((const char *)data, "app")) {
+        if (strcmp(signature, "osssb")) {
+            mrp_log_error("bad signature: expected 'osssb' got '%s'",
+                          signature);
+            return false;
+        }
+        type = MRP_RESMGR_DISABLE_APPID;
+        data = (void *)args[3].string;
+    }
+    else if (!strcmp((const char *)data, "req")) {
+        if (strcmp(signature, "ossob")) {
+            mrp_log_error("bad signature: expected 'ossob' got '%s'",
+                          signature);
+            return false;
+        }
+        type = MRP_RESMGR_DISABLE_REQUISITE;
+        data = (void *)mrp_application_scripting_req_unwrap(args[3].pointer);
+
+        if (!data) {
+            mrp_log_error("argument 4 is not a requisite");
+            return false;
+        }
+    }
+    else {
+        mrp_log_error("system-controller: %s(): bad type '%s'",
+                      __FUNCTION__, (const char *)data);
+        return false;
+    }
+
+    if (!(resmgr = mrp_resmgr_scripting_unwrap(args[0].pointer))) {
+        mrp_log_error("argument 1 is not a 'resource_manager' class object");
+        return false;
+    }
+
+    if (!(output_name = args[1].string)) {
+        mrp_log_error("argument 2 is an invalid output name string");
+        return false;
+    }
+
+    if (!(area_name = args[2].string)) {
+        mrp_log_error("argument 3 is an invalid appid string");
+        return false;
+    }
+
+    disable = args[4].boolean;
+
+    cnt = mrp_resmgr_screen_disable(resmgr->screen, output_name, area_name,
+                                    disable, type, data);
+    if (cnt < 0)
+        return false;
+
+    mrp_debug("%s %d screen resource at output '%s' in area '%s'",
+              disable ? "disabled":"enabled", cnt, output_name, area_name);
+
+    return true;
+}
+
+
+static bool disable_audio_bridge(lua_State *L,
+                                 void *data,
+                                 const char *signature,
+                                 mrp_funcbridge_value_t *args,
+                                 char *ret_type,
+                                 mrp_funcbridge_value_t *ret_val)
+{
+    mrp_resmgr_disable_t type;
+    mrp_resmgr_t *resmgr;
+    const char *zone_name;
+    bool disable;
+    int cnt;
+
+    MRP_UNUSED(L);
+    MRP_UNUSED(ret_val);
+    MRP_ASSERT(data && signature && args && ret_type, "invalid argument");
+
+    *ret_type = MRP_FUNCBRIDGE_NO_DATA;
+
+    if (!strcmp((const char *)data, "app")) {
+        if (strcmp(signature, "ossb")) {
+            mrp_log_error("bad signature: expected 'ossb' got '%s'",
+                          signature);
+            return false;
+        }
+        type = MRP_RESMGR_DISABLE_APPID;
+        data = (void *)args[2].string;
+    }
+    else if (!strcmp((const char *)data, "req")) {
+        if (strcmp(signature, "osob")) {
+            mrp_log_error("bad signature: expected 'osob' got '%s'",
+                          signature);
+            return false;
+        }
+        type = MRP_RESMGR_DISABLE_REQUISITE;
+        data = (void *)mrp_application_scripting_req_unwrap(args[2].pointer);
+
+        if (!data) {
+            mrp_log_error("argument 3 is not a requisite");
+            return false;
+        }
+    }
+    else {
+        mrp_log_error("system-controller: %s(): bad type '%s'",
+                      __FUNCTION__, (const char *)data);
+        return false;
+    }
+
+    if (!(resmgr = mrp_resmgr_scripting_unwrap(args[0].pointer))) {
+        mrp_log_error("argument 1 is not a 'resource_manager' class object");
+        return false;
+    }
+
+    if (!(zone_name = args[1].string)) {
+        mrp_log_error("argument 2 is an invalid zone name string");
+        return false;
+    }
+
+    disable = args[3].boolean;
+
+    cnt = mrp_resmgr_audio_disable(resmgr->audio, zone_name,
+                                   disable, type, data);
+    if (cnt < 0)
+        return false;
+
+    mrp_debug("%s %d audio resource in zone '%s'",
+              disable ? "disabled":"enabled", cnt, zone_name);
+
+    return true;
+}
+
+
 static bool register_methods(lua_State *L)
 {
-#define FUNCBRIDGE(n,s,d) { #n, s, n##_bridge, d, &n }
-#define FUNCBRIDGE_END    { NULL, NULL, NULL, NULL, NULL }
+#define FUNCBRIDGE(n,f,s,d) { #n, s, f##_bridge, d, &n }
+#define FUNCBRIDGE_END      { NULL, NULL, NULL, NULL, NULL }
 
     static funcbridge_def_t funcbridge_defs[] = {
-        FUNCBRIDGE(area_create   , "oos" , NULL),
-        FUNCBRIDGE(window_raise  , "osdd", NULL),
+        FUNCBRIDGE(area_create                , area_create   , "oos"  , NULL),
+        FUNCBRIDGE(window_raise               , window_raise  , "osdd" , NULL),
+        FUNCBRIDGE(disable_screen_by_appid    , disable_screen, "osssb","app"),
+        FUNCBRIDGE(disable_screen_by_requisite, disable_screen, "ossob","req"),
+        FUNCBRIDGE(disable_audio_by_appid     , disable_audio , "ossb" ,"app"),
+        FUNCBRIDGE(disable_audio_by_requisite , disable_audio , "osob" ,"req"),
         FUNCBRIDGE_END
     };
 
@@ -553,8 +728,18 @@ mrp_resmgr_scripting_field_name_to_type(const char *name, ssize_t len)
         break;
 
     case 9:
-        if (!strcmp(name, "SHAREABLE"))
-            return SHAREABLE;
+        switch (name[0]) {
+        case 'r':
+            if (!strcmp(name, "requisite"))
+                return REQUISITE;
+            break;
+        case 's':
+            if (!strcmp(name, "shareable"))
+                return SHAREABLE;
+            break;
+        default:
+            break;
+        }
         break;
 
     case 10:
@@ -580,6 +765,26 @@ mrp_resmgr_scripting_field_name_to_type(const char *name, ssize_t len)
     case 20:
         if (!strcmp(name, "screen_event_handler"))
             return SCREEN_EVENT_HANDLER;
+        break;
+
+    case 22:
+        if (!strcmp(name, "disable_audio_by_appid"))
+            return DISABLE_AUDIO_BY_APPID;
+        break;
+
+    case 23:
+        if (!strcmp(name, "disable_screen_by_appid"))
+            return DISABLE_SCREEN_BY_APPID;
+        break;
+
+    case 26:
+        if (!strcmp(name, "disable_audio_by_requisite"))
+            return DISABLE_AUDIO_BY_REQUISITE;
+        break;
+
+    case 27:
+        if (!strcmp(name, "disable_screen_by_requisite"))
+            return DISABLE_SCREEN_BY_REQUISITE;
         break;
 
     default:
