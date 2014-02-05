@@ -52,14 +52,20 @@ char *mrp_wayland_scripting_canonical_name(const char *, char *, size_t);
 
 
 #define APPLICATION_CLASS      MRP_LUA_CLASS_SIMPLE(application)
+#define REQUISITE_CLASS        MRP_LUA_CLASS_SIMPLE(requisite)
 
 typedef enum mrp_sysctl_scripting_field_e  field_t;
 typedef struct scripting_app_s  scripting_app_t;
+typedef struct scripting_req_s  scripting_req_t;
 
 
 struct scripting_app_s {
     mrp_application_t *app;
     char *id;
+};
+
+struct scripting_req_s {
+    mrp_application_requisite_t rq;
 };
 
 
@@ -73,9 +79,28 @@ static void app_destroy_from_lua(void *);
 static scripting_app_t *app_check(lua_State *, int);
 static int  app_lookup(lua_State *L);
 
+static scripting_req_t *req_create_from_c(lua_State *,
+                                          mrp_application_requisite_t);
+static int  req_create_from_lua(lua_State *);
+static int  req_getfield(lua_State *);
+static int  req_setfield(lua_State *);
+static int  req_stringify(lua_State *);
+static void req_destroy_from_lua(void *);
+
+static scripting_req_t *req_check(lua_State *, int);
+
+mrp_application_requisite_t get_requisite(field_t);
+
 static mrp_application_privileges_t *priv_check(lua_State *, int);
 static void priv_free(mrp_application_privileges_t *);
 static int  priv_push(lua_State *L, mrp_application_privileges_t *);
+
+static mrp_application_requisites_t *reqs_check(lua_State *, int);
+static void reqs_free(mrp_application_requisites_t *);
+static int reqs_push(lua_State *, mrp_application_requisites_t *);
+
+static int reqs_entry_check(lua_State *, int);
+
 
 static field_t field_check(lua_State *, int, const char **);
 static field_t field_name_to_type(const char *, ssize_t);
@@ -96,10 +121,26 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
+MRP_LUA_CLASS_DEF_SIMPLE (
+    requisite,                    /* class name */
+    scripting_req_t,              /* userdata type */
+    req_destroy_from_lua,         /* userdata destructor */
+    MRP_LUA_METHOD_LIST (         /* methods */
+       MRP_LUA_METHOD_CONSTRUCTOR   (req_create_from_lua)
+    ),
+    MRP_LUA_METHOD_LIST (         /* overrides */
+       MRP_LUA_OVERRIDE_CALL        (req_create_from_lua)
+       MRP_LUA_OVERRIDE_GETFIELD    (req_getfield)
+       MRP_LUA_OVERRIDE_SETFIELD    (req_setfield)
+       MRP_LUA_OVERRIDE_STRINGIFY   (req_stringify)
+    )
+);
+
 
 void mrp_application_scripting_init(lua_State *L)
 {
     mrp_lua_create_object_class(L, APPLICATION_CLASS);
+    mrp_lua_create_object_class(L, REQUISITE_CLASS);
 
     lua_pushcfunction(L, app_lookup);
     lua_setglobal(L, "application_lookup");
@@ -199,6 +240,7 @@ static int app_create_from_lua(lua_State *L)
     const char *class = NULL;
     int32_t spri = 0;
     mrp_application_privileges_t *privs = NULL;
+    mrp_application_requisites_t *reqs = NULL;
     char *id;
     char buf[4096];
 
@@ -213,6 +255,7 @@ static int app_create_from_lua(lua_State *L)
         case APPID:           appid = luaL_checkstring(L, -1);           break;
         case AREA:            arnam = luaL_checkstring(L, -1);           break;
         case PRIVILEGES:      privs = priv_check(L, -1);                 break;
+        case REQUISITES:      reqs  = reqs_check(L, -1);                 break;
         case RESOURCE_CLASS:  class = luaL_checkstring(L, -1);           break;
         case SCREEN_PRIORITY: spri  = luaL_checkinteger(L, -1);          break;
         default:              luaL_error(L, "bad field '%s'", fldnam);   break;
@@ -247,6 +290,14 @@ static int app_create_from_lua(lua_State *L)
         u.privileges.audio = privs->audio;
         priv_free(privs);
     }
+
+    if (reqs) {
+        u.mask |= MRP_APPLICATION_REQUISITES_MASK;
+        u.requisites.screen = reqs->screen;
+        u.requisites.audio = reqs->audio;
+        reqs_free(reqs);
+    }
+
 
     if ((app = mrp_application_create(&u, a))) {
         a->app = app;
@@ -289,6 +340,9 @@ static int app_getfield(lua_State *L)
             break;
         case PRIVILEGES:
             priv_push(L, &app->privileges);
+            break;
+        case REQUISITES:
+            reqs_push(L, &app->requisites);
             break;
         case RESOURCE_CLASS:
             lua_pushstring(L, app->resource_class ? app->resource_class : "");
@@ -389,6 +443,258 @@ static int app_lookup(lua_State *L)
     MRP_LUA_LEAVE(1);
 }
 
+
+void *
+mrp_application_scripting_req_create_from_c(mrp_application_requisite_t rq)
+{
+    lua_State *L;
+    scripting_req_t *r;
+
+    if (!(L = mrp_lua_get_lua_state())) {
+        mrp_log_error("can't create scripting requisites: "
+                      "LUA is not initialized");
+        return NULL;
+    }
+
+    if ((r = req_create_from_c(L, rq)))
+        lua_pop(L, 1);
+
+    return r;
+}
+
+static scripting_req_t *req_create_from_c(lua_State *L,
+                                          mrp_application_requisite_t rq)
+{
+    scripting_req_t *r;
+
+    r = (scripting_req_t *)mrp_lua_create_object(L, REQUISITE_CLASS, NULL, 0);
+    
+    if (r)
+        r->rq = rq;
+    else {
+        mrp_log_error("can't create scripting requisites: "
+                      "LUA object creation failed");
+    }
+
+    return r;
+}
+
+static int req_create_from_lua(lua_State *L)
+{
+    size_t fldnamlen;
+    const char *fldnam;
+    scripting_req_t *r;
+    field_t fld, val;
+    mrp_application_requisite_t rq = 0;
+
+    MRP_LUA_ENTER;
+
+    luaL_checktype(L, 2, LUA_TTABLE);
+
+    MRP_LUA_FOREACH_FIELD(L, 2, fldnam, fldnamlen) {
+        fld = field_name_to_type(fldnam, fldnamlen);
+        
+        switch (fld) {
+
+        case MASK:
+            rq = lua_tointeger(L, -1);
+            break;
+
+        case NONE:
+            if (!(val = lua_toboolean(L, -1)))
+                rq |= (MRP_APPLICATION_REQUISITE_MAX - 1);
+            break;
+
+        case DRIVING:
+            if ((val = lua_toboolean(L, -1)))
+                rq |= MRP_APPLICATION_REQUISITE_DRIVING;
+            else
+                rq &= ~MRP_APPLICATION_REQUISITE_DRIVING;
+            break;
+
+        case PARKED:
+            if ((val = lua_toboolean(L, -1)))
+                rq |= MRP_APPLICATION_REQUISITE_PARKED;
+            else
+                rq &= ~MRP_APPLICATION_REQUISITE_PARKED;
+            break;
+
+        case REVERSES:
+            if ((val = lua_toboolean(L, -1)))
+                rq |= MRP_APPLICATION_REQUISITE_REVERSES;
+            else
+                rq &= ~MRP_APPLICATION_REQUISITE_REVERSES;
+            break;
+
+        case BLINKER_LEFT:
+            if ((val = lua_toboolean(L, -1)))
+                rq |= MRP_APPLICATION_REQUISITE_BLINKER_LEFT;
+            else
+                rq &= ~MRP_APPLICATION_REQUISITE_BLINKER_LEFT;
+            break;
+
+        case BLINKER_RIGHT:
+            if ((val = lua_toboolean(L, -1)))
+                rq |= MRP_APPLICATION_REQUISITE_BLINKER_RIGHT;
+            else
+                rq &= ~MRP_APPLICATION_REQUISITE_BLINKER_RIGHT;
+            break;
+
+        default:
+            luaL_error(L, "invalid prerequiste '%s'", fldnam);
+            break;
+        }
+    }
+
+    r = (scripting_req_t *)mrp_lua_create_object(L, REQUISITE_CLASS, NULL, 0);
+
+    if (!r)
+        luaL_error(L, "can't create requisite");
+
+    r->rq = rq;
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int req_getfield(lua_State *L)
+{
+    scripting_req_t *r;
+    field_t fld;
+    mrp_application_requisite_t mask;
+
+    MRP_LUA_ENTER;
+
+    r = req_check(L, 1);
+    fld = field_check(L, 2, NULL);
+
+    lua_pop(L, 1);
+
+    if (!r)
+        lua_pushnil(L);
+    else {
+        switch (fld) {
+        case MASK:
+            lua_pushinteger(L, r->rq);
+            break;
+        case NONE:
+            lua_pushboolean(L, r->rq ? 0 : 1);
+            break;
+        case DRIVING:
+            mask = MRP_APPLICATION_REQUISITE_DRIVING;
+            goto push_value;
+        case PARKED:
+            mask = MRP_APPLICATION_REQUISITE_PARKED;
+            goto push_value;
+        case REVERSES:
+            mask = MRP_APPLICATION_REQUISITE_REVERSES;
+            goto push_value;
+        case BLINKER_LEFT:
+            mask = MRP_APPLICATION_REQUISITE_BLINKER_LEFT;
+            goto push_value;
+        case BLINKER_RIGHT:
+            mask = MRP_APPLICATION_REQUISITE_BLINKER_RIGHT;
+            goto push_value;
+        default:
+            lua_pushnil(L);
+            break;
+        push_value:
+            lua_pushboolean(L, (r->rq & mask) ? 1 : 0);
+            break;
+        }
+    }
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int req_setfield(lua_State *L)
+{
+    scripting_req_t *r;
+    const char *fldstr;
+    field_t fld;
+    mrp_application_requisite_t mask;
+
+    MRP_LUA_ENTER;
+
+    r = req_check(L, 1);
+    fld = field_check(L, 2, &fldstr);
+
+    lua_pop(L, 2);
+
+    if (r) {
+        switch (fld) {
+        case MASK:
+            r->rq = lua_tointeger(L, 3);
+            break;
+        case DRIVING:
+            mask = MRP_APPLICATION_REQUISITE_DRIVING;
+            goto set_value;
+        case PARKED:
+            mask = MRP_APPLICATION_REQUISITE_PARKED;
+            goto set_value;
+        case REVERSES:
+            mask = MRP_APPLICATION_REQUISITE_REVERSES;
+            goto set_value;
+        case BLINKER_LEFT:
+            mask = MRP_APPLICATION_REQUISITE_BLINKER_LEFT;
+            goto set_value;
+        case BLINKER_RIGHT:
+            mask = MRP_APPLICATION_REQUISITE_BLINKER_RIGHT;
+            goto set_value;
+        default:
+            break;
+        set_value:
+            if (lua_toboolean(L, 3))
+                r->rq |= mask;
+            else
+                r->rq &= ~mask;
+            break;
+        }
+    }
+
+    MRP_LUA_LEAVE(0);
+}
+
+static int req_stringify(lua_State *L)
+{
+    scripting_req_t *r;
+    char buf[4096];
+
+    MRP_LUA_ENTER;
+
+    r = req_check(L, 1);
+
+    mrp_application_requisite_print(r->rq, buf, sizeof(buf));
+
+    lua_pushstring(L, buf);
+
+    MRP_LUA_LEAVE(1);
+}
+
+static void req_destroy_from_lua(void *data)
+{
+    scripting_req_t *r = (scripting_req_t *)data;
+
+    MRP_UNUSED(r);
+}
+
+static scripting_req_t *req_check(lua_State *L, int idx)
+{
+    return (scripting_req_t *)mrp_lua_check_object(L, REQUISITE_CLASS, idx);
+}
+
+
+mrp_application_requisite_t get_requisite(field_t fld)
+{
+    switch(fld) {
+    case NONE:            return MRP_APPLICATION_REQUISITE_NONE;
+    case DRIVING:         return MRP_APPLICATION_REQUISITE_DRIVING;
+    case PARKED:          return MRP_APPLICATION_REQUISITE_PARKED;
+    case REVERSES:        return MRP_APPLICATION_REQUISITE_REVERSES;
+    case BLINKER_LEFT:    return MRP_APPLICATION_REQUISITE_BLINKER_LEFT; 
+    case BLINKER_RIGHT:   return MRP_APPLICATION_REQUISITE_BLINKER_RIGHT;
+    default:              return 0;
+    }
+}
 
 static mrp_application_privileges_t *priv_check(lua_State *L, int idx)
 {
@@ -492,16 +798,131 @@ static int priv_push(lua_State *L, mrp_application_privileges_t *privs)
     return 1;
 }
 
+static mrp_application_requisites_t *reqs_check(lua_State *L, int idx)
+{
+    mrp_application_requisites_t *reqs;
+    int screen = -1;
+    int audio = -1;
+    size_t fldnamlen;
+    const char *fldnam;
+
+    idx = mrp_lua_absidx(L, idx);
+
+    luaL_checktype(L, idx, LUA_TTABLE);
+
+    MRP_LUA_FOREACH_FIELD(L, idx, fldnam, fldnamlen) {
+        switch (field_name_to_type(fldnam, fldnamlen)) {
+
+        case SCREEN:  screen = reqs_entry_check(L, -1);          break;
+        case AUDIO:   audio  = reqs_entry_check(L, -1);          break;
+        default:      luaL_error(L, "bad field '%s'", fldnam);   break;
+
+        } /* switch fldnam */
+    } /* FOREACH_FIELD */
+
+    if (screen < 0)
+        luaL_error(L, "missing or invalid 'screen' field");
+    if (audio < 0)
+        luaL_error(L, "missing or invalid 'audio' field");
+
+    if ((reqs = mrp_allocz(sizeof(*reqs)))) {
+        reqs->screen = screen;
+        reqs->audio = audio;
+    }
+
+    return reqs;
+}
+
+static void reqs_free(mrp_application_requisites_t *reqs)
+{
+    mrp_free(reqs);
+}
+
+static int reqs_push(lua_State *L, mrp_application_requisites_t *reqs)
+{
+    if (!reqs)
+        lua_pushnil(L);
+    else {
+        lua_createtable(L, 0, 2);
+
+        lua_pushstring(L, "screen");
+        req_create_from_c(L, reqs->screen);
+        lua_settable(L, -3);
+
+        lua_pushstring(L, "audio");
+        req_create_from_c(L, reqs->audio);
+        lua_settable(L, -3);
+    }
+
+    return 1;
+}
+
+static int reqs_entry_check(lua_State *L, int idx)
+{
+    int r;
+    int type;
+    int i, j, n;
+    const char *name;
+
+    r = 0;
+    idx = mrp_lua_absidx(L, idx);
+    type = lua_type(L, idx);
+
+    if (type == LUA_TTABLE) {
+        j = -1;
+        n = lua_objlen(L, idx);
+    }
+    else if (type == LUA_TSTRING) {
+        j = idx;
+        n = 1;
+    }
+    else if (type == LUA_TNUMBER) {
+        r = lua_tointeger(L, idx);
+        if (r < 0 || r >= MRP_APPLICATION_REQUISITE_MAX) {
+            luaL_error(L, "requisite mask is out of range (0 - %d)",
+                       MRP_APPLICATION_REQUISITE_MAX - 1);
+            r = -1;
+        }
+        n = 0;
+    }
+    else {
+        luaL_error(L, "requisite type must be either table or string");
+        n = 0;
+        r = -1;
+    }
+
+    for (i = 0;  i < n;  i++) {
+        if (type == LUA_TTABLE) {
+            lua_pushinteger(L, i+1);
+            lua_gettable(L, idx);
+        }
+
+        switch (field_check(L, j, &name)) {
+        case NONE:          r = MRP_APPLICATION_REQUISITE_NONE;          break;
+        case DRIVING:       r = MRP_APPLICATION_REQUISITE_DRIVING;       break;
+        case PARKED:        r = MRP_APPLICATION_REQUISITE_PARKED;        break;
+        case REVERSES:      r = MRP_APPLICATION_REQUISITE_REVERSES;      break;
+        case BLINKER_LEFT:  r = MRP_APPLICATION_REQUISITE_BLINKER_LEFT;  break;
+        case BLINKER_RIGHT: r = MRP_APPLICATION_REQUISITE_BLINKER_RIGHT; break;
+        default:            luaL_error(L,"invalid requisite '%s'",name); break;
+        }
+    }
+
+    return r;
+}
+
 static field_t field_check(lua_State *L, int idx, const char **ret_fldnam)
 {
     const char *fldnam;
     size_t fldnamlen;
     field_t fldtyp;
 
-    if (!(fldnam = lua_tolstring(L, idx, &fldnamlen)))
-        fldtyp = 0;
-    else
+    if ((fldnam = lua_tolstring(L, idx, &fldnamlen)))
         fldtyp = field_name_to_type(fldnam, fldnamlen);
+    else {
+        fldnam = "<invalid type>";
+        fldtyp = 0;
+    }
 
     if (ret_fldnam)
         *ret_fldnam = fldnam;
@@ -517,8 +938,22 @@ static field_t field_name_to_type(const char *name, ssize_t len)
     switch (len) {
 
     case 4:
-        if (!strcmp(name, "area"))
-            return AREA;
+        switch (name[0]) {
+        case 'a':
+            if (!strcmp(name, "area"))
+                return AREA;
+            break;
+        case 'm':
+            if (!strcmp(name, "mask"))
+                return MASK;
+            break;
+        case 'n':
+            if (!strcmp(name, "none"))
+                return NONE;
+            break;
+        default:
+            break;
+        }
         break;
 
     case 5:
@@ -529,13 +964,53 @@ static field_t field_name_to_type(const char *name, ssize_t len)
         break;
 
     case 6:
-        if (!strcmp(name, "screen"))
-            return SCREEN;
+        switch (name[0]) {
+        case 'p':
+            if (!strcmp(name, "parked"))
+                return PARKED;
+            break;
+        case 's':
+            if (!strcmp(name, "screen"))
+                return SCREEN;
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case 7:
+        if (!strcmp(name, "driving"))
+            return DRIVING;
+        break;
+
+    case 8:
+        if (!strcmp(name, "reverses"))
+            return REVERSES;
         break;
 
     case 10:
-        if (!strcmp(name, "privileges"))
-            return PRIVILEGES;
+        switch (name[0]) {
+        case 'p':
+            if (!strcmp(name, "privileges"))
+                return PRIVILEGES;
+            break;
+        case 'r':
+            if (!strcmp(name, "requisites"))
+                return REQUISITES;
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case 12:
+        if (!strcmp(name, "blinker_left"))
+            return BLINKER_LEFT;
+        break;
+
+    case 13:
+        if (!strcmp(name, "blinker_right"))
+            return BLINKER_RIGHT;
         break;
 
     case 14:
@@ -554,4 +1029,3 @@ static field_t field_name_to_type(const char *name, ssize_t len)
 
     return 0;
 }
-
