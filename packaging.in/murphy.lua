@@ -348,7 +348,7 @@ sink.lua {
         print("Night mode updated: " .. tostring(data))
 
         -- tell homescreen that night mode was updated
-        sc:send_message(sysctlid, m:JSON({command=0x60001,arg=m:JSON({stateid=2,state=data})}))
+        sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=2,state=data})}))
         return true
     end
 }
@@ -434,7 +434,7 @@ sink.lua {
         print("Driving mode updated: " .. tostring(data))
 
         -- tell homescreen that driving mode was updated
-        sc:send_message(sysctlid, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
+        sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
         return true
     end
 }
