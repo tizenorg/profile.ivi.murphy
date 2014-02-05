@@ -268,6 +268,37 @@ if sc then
 end
 
 
+-- CPU load and memory pressure monitoring tests
+--[[
+
+sm = m:get_system_monitor()
+
+sm.interval = 5000
+
+function cpu_event(cpu, prev, curr, data)
+    print('CPU-' .. cpu .. ' changed from ' ..
+          tostring(prev) .. ' to ' .. tostring(curr) .. ', CB data: ' ..
+          tostring(data))
+end
+
+sm:add_cpu_watch('load', { low = 10, light = 33, medium = 50, high = 75 },
+                          cpu_event, 'cpu-load-data')
+
+sm:add_cpu_watch('idle', { low = 10, light = 33, medium = 50, high = 75 },
+                          cpu_event, 'cpu-idle-data')
+
+function mem_event(mem, prev, curr, data)
+    print('Memory(' .. mem .. ') changed from ' ..
+          tostring(prev) .. ' to ' .. tostring(curr) .. ', CB data: ' ..
+          tostring(data))
+end
+
+sm:add_mem_watch('Dirty', { low = '4k', light = '64k',
+                            medium = '128k', high = '256k' },
+                            mem_event, 'mem-dirty-data')
+
+--]]
+
 -- test initial limited transport bindings
 
 --[[
