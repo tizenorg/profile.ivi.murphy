@@ -108,6 +108,10 @@ mrp_application_t *mrp_application_create(mrp_application_update_t *u,
         app->resource_class = mrp_strdup(u->resource_class);
     IF_PRESENT(u, SCREEN_PRIORITY)
         app->screen_priority = u->screen_priority;
+    IF_PRESENT(u, SCREEN_REQUISITES)
+        app->requisites.screen = u->requisites.screen;
+    IF_PRESENT(u, AUDIO_REQUISITES)
+        app->requisites.audio = u->requisites.audio;
 
     if (!scripting_data)
         scripting_data = mrp_application_scripting_app_create_from_c(app);
@@ -179,6 +183,8 @@ size_t mrp_application_print(mrp_application_t *app,
 
     mrp_wayland_area_t *area;
     char *p, *e;
+    char sbuf[1024];
+    char abuf[1024];
 
     e = (p = buf) + len;
 
@@ -193,7 +199,7 @@ size_t mrp_application_print(mrp_application_t *app,
             PRINT("area: %d - '%s'", area->areaid, area->name);
     }
     if ((mask & MRP_APPLICATION_PRIVILEGES_MASK)) {
-        PRINT("privileges: screen=%s audio=%s",
+        PRINT("privileges: screen=%s, audio=%s",
               mrp_application_privilege_str(app->privileges.screen),
               mrp_application_privilege_str(app->privileges.audio));
     }
@@ -203,6 +209,13 @@ size_t mrp_application_print(mrp_application_t *app,
     }
     if ((mask & MRP_APPLICATION_SCREEN_PRIORITY_MASK)) {
         PRINT("screen_priority: %d", app->screen_priority);
+    }
+    if ((mask & MRP_APPLICATION_REQUISITES_MASK)) {
+        mrp_application_requisite_print(app->requisites.screen,
+                                        sbuf,sizeof(sbuf));
+        mrp_application_requisite_print(app->requisites.audio,
+                                        abuf,sizeof(abuf));
+        PRINT("requisites: screen=%s, audio=%s", sbuf, abuf);
     }
 
     return p - buf;
@@ -214,6 +227,7 @@ size_t mrp_application_print(mrp_application_t *app,
 void mrp_application_set_scripting_data(mrp_application_t *app, void *data)
 {
     MRP_ASSERT(app, "Invalid Argument");
+
 
     mrp_debug("%sset scripting data", data ? "" : "re");
 
@@ -237,6 +251,37 @@ const char *mrp_application_privilege_str(mrp_application_privilege_t priv)
     case MRP_APPLICATION_PRIVILEGE_UNLIMITED:      return "unlimited";
     default:                                       return "<unknown>";
     }
+}
+
+size_t mrp_application_requisite_print(mrp_application_requisite_t rqs,
+                                       char *buf, size_t len)
+{
+#define PRINT(mask)                                                     \
+    do {                                                                \
+        if (p < e && (rqs & MRP_APPLICATION_REQUISITE_ ## mask)) {      \
+            p += snprintf(p, e-p, "%s%s", p == q ? "":" | ", # mask);   \
+        }                                                               \
+    } while(0)
+
+    char *p, *q, *e;
+
+    e = (p = buf) + len;
+
+    q = (p += snprintf(p, e-p, "0x%03x - ", (unsigned int)rqs));
+
+    if (!rqs)
+        p += snprintf(p, e-p, "none");
+    else {
+        PRINT(DRIVING);
+        PRINT(PARKED);
+        PRINT(REVERSES);
+        PRINT(BLINKER_LEFT);
+        PRINT(BLINKER_RIGHT);
+    }
+
+    return p - buf;
+
+#undef PRINT
 }
 
 
