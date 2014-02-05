@@ -1545,7 +1545,12 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/wayland/scripting-window.c                    \
 	$(SYSTEMCTL_DIR)/wayland/scripting-output.c                    \
 	$(SYSTEMCTL_DIR)/wayland/scripting-area.c                      \
-	$(SYSTEMCTL_DIR)/wayland/scripting-layer.c
+	$(SYSTEMCTL_DIR)/wayland/scripting-layer.c		       \
+	$(SYSTEMCTL_DIR)/system-monitor/system-monitor.c	       \
+	$(SYSTEMCTL_DIR)/system-monitor/cpu.c			       \
+	$(SYSTEMCTL_DIR)/system-monitor/memory.c
+
+
 
 SYSTEMCTL_PLUGIN_CFLAGS  = \
 			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
