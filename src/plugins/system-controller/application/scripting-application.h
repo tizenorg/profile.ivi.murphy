@@ -45,6 +45,7 @@ void *mrp_application_scripting_app_create_from_c(mrp_application_t *app);
 void mrp_application_scripting_app_destroy_from_c(mrp_application_t *app);
 
 void *mrp_application_scripting_req_create_from_c(mrp_application_requisite_t);
+mrp_application_requisite_t *mrp_application_scripting_req_unwrap(void *sreq);
 
 
 #endif /* __MURPHY_APPLICTION_SCRIPTING_H__ */
