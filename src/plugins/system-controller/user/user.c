@@ -141,11 +141,42 @@ static int user_manager_create(lua_State *L)
     return 1;
 }
 
-static bool verify_path(const char *path)
+static bool verify_appid(const char *appid)
 {
-    /* TODO: check if path contains illegal elements */
+    /* check if appid contains illegal elements, since it's being used in
+       paths */
 
-    MRP_UNUSED(path);
+    /* allowed are [a-zA-Z0-9.-_] TODO: might be faster to do this with a
+       lookup table */
+
+    int i;
+    int len;
+
+    if (!appid)
+        return FALSE;
+
+    len = strlen(appid);
+
+    if (len == 0)
+        return FALSE;
+
+    for (i = 0; i < len; i++) {
+        char c = appid[i];
+
+        if (c >= 'a' && c <= 'z')
+            continue;
+
+        if (c >= 'A' && c <= 'Z')
+            continue;
+
+        if (c >= '0' && c <= '9')
+            continue;
+
+        if (c == '.' || c == '-' || c == '_')
+            continue;
+
+        return FALSE;
+    }
 
     return TRUE;
 }
@@ -472,7 +503,8 @@ static bool set_lastinfo(lua_State *L, const char *appid, const char *lastinfo)
 
     MRP_UNUSED(L);
 
-    /* FIXME: check that appid doesn't contain illegal characters */
+    if (!verify_appid(appid))
+        return FALSE;
 
     if (!current_user)
         return FALSE;
@@ -558,7 +590,8 @@ static bool get_lastinfo(lua_State *L, const char *appid)
 
     MRP_UNUSED(L);
 
-    /* FIXME: check that appid doesn't contain illegal characters */
+    if (!verify_appid(appid))
+        return FALSE;
 
     if (!current_user)
         return FALSE;
