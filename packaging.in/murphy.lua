@@ -1,4 +1,4 @@
-with_system_controller = true
+with_system_controller = false
 with_amb = false
 verbose = 0
 
@@ -68,7 +68,9 @@ else
     m:info("No audio session manager plugin found...")
 end
 
-if m:plugin_exists('ivi-resource-manager') then
+if m:plugin_exists('system-controller') then
+    with_system_controller = true
+elseif m:plugin_exists('ivi-resource-manager') then
     m:load_plugin('ivi-resource-manager')
     with_system_controller = false
 end
@@ -494,7 +496,7 @@ m:try_load_plugin('telephony')
 
 -- system controller test setup
 
-if not with_system_controller or not m:plugin_exists('system-controller') then
+if not with_system_controller then
    return
 end
 
