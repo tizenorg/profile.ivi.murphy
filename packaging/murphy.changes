@@ -1,3 +1,6 @@
+* Fri Feb 07 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.45
+- config: dynamically check whether ico-homescreen support is available.
+
 * Wed Feb  5 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.44
 - system-controller: initial CPU-load and memory pressure monitoring
 - system-controller: added input management
