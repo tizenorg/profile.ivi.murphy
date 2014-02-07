@@ -278,7 +278,7 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
     uint32_t zone_id;
     mrp_list_hook_t *classes;
     mrp_resmgr_class_t *rc;
-    audio_resource_t *ar;
+    audio_resource_t *ar = NULL;
 
     MRP_ASSERT(audio && zone && res && ac, "invalid argument");
     MRP_ASSERT(audio->data, "confused with data structures");
