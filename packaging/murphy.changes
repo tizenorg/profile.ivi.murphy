@@ -1,3 +1,24 @@
+* Fri Feb 14 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.46
+- config: use the regulation hooks
+- config: add applications for special handling
+- config: add support for regulating driving mode
+- config: check for nil system controller variable
+- amb: update to the new FindObject API
+- ivi-resource-manager: don't return random pointers
+- system-controller: add requisites to applications
+- system-controller: remove an element from the list in advance
+- system-controller: give gorrect appid for resource creation events
+- system-controller: resource_manager init, preallocate and commit notifications
+- system-controller: added initial support for application tracking
+- system-controller: add disable support to resource manager
+- system-controller: check appid for illegal characters
+- system-controller: split out system-monitor to a plugin of its own
+- system-monitor: better configurability, more Lua scriptability
+- lua-utils: add missing boolean support for funcbridge
+- packaging: mark system-controller conflict with ivi-resource-manager
+- packaging: look for linked-in plugin shared libs in the correct place
+- packaging: explicitly enable system-monitor
+
 * Fri Feb 07 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.45
 - config: dynamically check whether ico-homescreen support is available.
 
