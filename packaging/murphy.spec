@@ -27,7 +27,7 @@
 
 Summary: Murphy policy framework
 Name: murphy
-Version: 0.0.45
+Version: 0.0.46
 Release: 1
 License: BSD-3-Clause
 Group: System/Service
@@ -215,6 +215,7 @@ Group: System/Service
 %package system-controller
 Summary: Murphy IVI System Controller plugin
 Group: System/Service
+Conflicts: murphy-ivi-resource-manager
 %endif
 
 %description
