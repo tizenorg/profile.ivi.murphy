@@ -253,7 +253,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     uint32_t zone_id;
     mrp_list_hook_t *classes;
     mrp_resmgr_class_t *rc;
-    screen_resource_t *sr;
+    screen_resource_t *sr = NULL;
 
     MRP_ASSERT(screen && zone && res && ac, "invalid argument");
     MRP_ASSERT(screen->data, "confused with data structures");
