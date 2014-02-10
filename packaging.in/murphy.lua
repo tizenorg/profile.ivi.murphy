@@ -349,8 +349,10 @@ sink.lua {
         data = mdb.select.select_night_mode.single_value
         print("Night mode updated: " .. tostring(data))
 
-        -- tell homescreen that night mode was updated
-        sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=2,state=data})}))
+        if sc then
+            -- tell homescreen that night mode was updated
+            sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=2,state=data})}))
+        end
         return true
     end
 }
@@ -435,8 +437,10 @@ sink.lua {
         data = mdb.select.select_driving_mode.single_value
         print("Driving mode updated: " .. tostring(data))
 
-        -- tell homescreen that driving mode was updated
-        sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
+        if sc then
+            -- tell homescreen that driving mode was updated
+            sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
+        end
         return true
     end
 }
