@@ -1049,10 +1049,31 @@ static void find_property_reply_handler(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg,
         goto error;
     }
 
+    /* Array of object paths */
+
+    if (mrp_dbus_msg_arg_type(msg, NULL) != MRP_DBUS_TYPE_ARRAY) {
+        mrp_log_error("AMB: FindObject response doesn't contain an array");
+        goto error;
+    }
+
+    mrp_dbus_msg_enter_container(msg, MRP_DBUS_TYPE_ARRAY, NULL);
+
+    /* We take the first one for now. */
+
+    /* TODO: open this for configuration? What does it mean if there are
+       multiple VehicleSpeed property objects, for example? */
+
+    if (mrp_dbus_msg_arg_type(msg, NULL) != MRP_DBUS_TYPE_OBJECT_PATH) {
+        mrp_log_error("AMB: no objects in the object path array");
+        goto error;
+    }
+
     if(!mrp_dbus_msg_read_basic(msg, MRP_DBUS_TYPE_OBJECT_PATH, &obj)) {
         mrp_log_error("AMB: Error fetching the object path from the message");
         goto error;
     }
+
+    mrp_dbus_msg_exit_container(msg); /* array */
 
     mrp_free((char *) w->lua_prop->dbus_data.obj);
     w->lua_prop->dbus_data.obj = mrp_strdup(obj);
@@ -1078,7 +1099,7 @@ static int find_property_object(data_t *ctx, dbus_property_watch_t *w,
     mrp_dbus_call(ctx->dbus,
             ctx->amb_addr, "/",
             "org.automotive.Manager",
-            "findProperty", 3000, find_property_reply_handler, w,
+            "FindObject", 3000, find_property_reply_handler, w,
             MRP_DBUS_TYPE_STRING, prop, MRP_DBUS_TYPE_INVALID);
 
     return 0;
