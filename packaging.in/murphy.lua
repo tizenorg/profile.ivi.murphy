@@ -347,13 +347,15 @@ sink.lua {
     name = "nightmode_homescreen",
     inputs = { owner = mdb.select.select_night_mode },
     initiate = function(self)
-        data = mdb.select.select_night_mode.single_value
-        print("Night mode initiated: " .. tostring(data))
+        -- data = mdb.select.select_night_mode.single_value
         return true
     end,
     update = function(self)
         data = mdb.select.select_night_mode.single_value
-        print("Night mode updated: " .. tostring(data))
+
+        if verbose > 1 then
+            print("Night mode updated: " .. tostring(data))
+        end
 
         if sc then
             -- tell homescreen that night mode was updated
@@ -429,24 +431,131 @@ mdb.select {
     condition = "key = 'TurnSignal'"
 }
 
+-- define three categories
+
+mdb.select {
+    name = "undefined_applications",
+    table = "aul_applications",
+    columns = { "appid" },
+    condition = "category = '<undefined>'"
+}
+
+mdb.select {
+    name = "basic_applications",
+    table = "aul_applications",
+    columns = { "appid" },
+    condition = "category = 'basic'"
+}
+
+mdb.select {
+    name = "entertainment_applications",
+    table = "aul_applications",
+    columns = { "appid" },
+    condition = "category = 'entertainment'"
+}
+
+function ft(t)
+    -- filter the object garbage out of the tables
+    ret = {}
+
+    for k,v in pairs(t) do
+        if k ~= "userdata" and k ~= "new" then
+            ret[k] = v
+        end
+    end
+
+    return ret
+end
+
+function getApplication(appid)
+    local conf = nil
+
+    -- find the correct local application definition
+
+    for k,v in pairs(ft(application)) do
+        if appid == v.appid then
+            conf = v
+            break
+        end
+    end
+
+    return conf
+end
+
+function regulateApplications(t, regulation)
+    for k,v in pairs(ft(t)) do
+
+        -- iterate through the undefined and entertainment apps, see if
+        -- they have been overruled in local config
+
+        local conf = getApplication(v.appid)
+
+        if conf and conf.resource_class ~= "player" then
+            -- override, don't disable
+            resmgr:disable_screen_by_appid("*", "*", v.appid, false)
+        else
+            resmgr:disable_screen_by_appid("*", "*", v.appid, regulation == 1)
+        end
+    end
+end
+
 -- regulation (on), use "select_driving_mode"
 
 sink.lua {
     name = "driving_regulation",
     inputs = { owner = mdb.select.select_driving_mode },
     initiate = function(self)
-        data = mdb.select.select_driving_mode.single_value
-        print("Driving mode initiated: " .. tostring(data))
+        -- local data = mdb.select.select_driving_mode.single_value
         return true
     end,
     update = function(self)
-        data = mdb.select.select_driving_mode.single_value
-        print("Driving mode updated: " .. tostring(data))
+        local data = mdb.select.select_driving_mode.single_value
 
-        if sc then
-            -- tell homescreen that driving mode was updated
-            sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
+        if verbose > 1 then
+            print("Driving mode updated: " .. tostring(data))
         end
+
+        if not sc then
+            return true
+        end
+
+        -- tell homescreen that driving mode was updated
+        sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
+
+        --[[
+        -- bulk handle the applications that need requisites
+        r = requisite { driving = true }
+        resmgr:disable_screen_by_requisite("*", "*", r, data == 1)
+        --]]
+
+        regulateApplications(ft(mdb.select.entertainment_applications), data)
+        regulateApplications(ft(mdb.select.undefined_applications), data)
+
+        return true
+    end
+}
+
+sink.lua {
+    name = "regulated_app_change",
+    inputs = { undef = mdb.select.undefined_applications,
+               entertainment = mdb.select.entertainment_applications },
+    initiate = function(self)
+        return true
+    end,
+    update = function(self)
+        local data = mdb.select.select_driving_mode.single_value
+
+        if not sc then
+            return
+        end
+
+        if verbose > 1 then
+            print("regulated application list was changed")
+        end
+
+        regulateApplications(ft(mdb.select.entertainment_applications), data)
+        regulateApplications(ft(mdb.select.undefined_applications), data)
+
         return true
     end
 }
@@ -1025,7 +1134,7 @@ imgr = input_manager {
 
   input_update = function(self, oper, inp, mask)
                      if verbose > 0 then
-                         print("### INPUT UPDATE:" .. 
+                         print("### INPUT UPDATE:" ..
                                 input_operation_name(oper) ..
                                 " mask: " .. tostring(mask))
                           if verbose > 1 then
