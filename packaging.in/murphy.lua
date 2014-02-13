@@ -783,24 +783,53 @@ resmgr = resource_manager {
 
                              elseif event == "create" then
 
-                               if verbose > 0 then
+                                if verbose > 0 then
                                     print("*** screen resource event: " ..
                                           tostring(ev))
-                                 end
-
-                                -- For now, consider every application to be an "entertainment"
-                                -- application. Whitelist those applications that we know. Later
-                                -- check the aul_applications table for actual category (when
-                                -- we get the categories there).
+                                end
 
                                 local regulation = mdb.select.select_driving_mode.single_value
 
                                 if regulation == 1 then
-                                    conf = getApplication(ev.appid)
+
+                                    local blacklisted = false
+
+                                    -- applications which have their category set to "entertainment"
+                                    -- or "undefined" are blacklisted, meaning they should be regulated
+
+                                    for i,v in pairs(ft(mdb.select.undefined_applications)) do
+                                        if v.appid == ev.appid then
+                                            if verbose > 0 then
+                                                print(ev.appid .. " was blacklisted (undefined)")
+                                            end
+                                            blacklisted = true
+                                            break
+                                        end
+                                    end
+
+                                    if not blacklisted then
+                                        for i,v in pairs(ft(mdb.select.entertainment_applications)) do
+                                            if v.appid == ev.appid then
+                                                if verbose > 0 then
+                                                    print(ev.appid .. " was blacklisted (entertainment)")
+                                                end
+                                                blacklisted = true
+                                                break
+                                            end
+                                        end
+                                    end
+
+                                    -- our local application config, which takes precedence
+                                    local conf = getApplication(ev.appid)
 
                                     -- disable only non-whitelisted applications
                                     if not conf or conf.resource_class == "player" then
-                                        resmgr:disable_screen_by_appid("*", "*", ev.appid, true)
+                                        if blacklisted then
+                                            if verbose > 0 then
+                                                print("disabling screen for " .. ev.appid)
+                                            end
+                                            resmgr:disable_screen_by_appid("*", "*", ev.appid, true)
+                                        end
                                     end
                                 end
 
