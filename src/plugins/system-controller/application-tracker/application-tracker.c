@@ -41,6 +41,7 @@
 #include <murphy-db/mql.h>
 
 #include <aul/aul.h>
+#include <ail.h>
 
 #define AUL_APPLICATION_TABLE_NAME "aul_applications"
 #define DB_BUF_SIZE 1024
@@ -85,6 +86,12 @@ static int add_app_to_db(const char *appid, pid_t pid, const char *category)
     mql_result_t *r;
     mqi_handle_t tx;
 
+    if (appid == NULL)
+        appid = "<undefined>";
+
+    if (category == NULL)
+        category = "<undefined>";
+
     buflen = snprintf(buf, DB_BUF_SIZE, "INSERT INTO %s VALUES ('%s', %i, '%s')",
             AUL_APPLICATION_TABLE_NAME, appid, pid, category);
 
@@ -104,28 +111,84 @@ static int add_app_to_db(const char *appid, pid_t pid, const char *category)
     return 0;
 }
 
+static ail_cb_ret_e handle_appinfo(const ail_appinfo_h appinfo, void *user_data)
+{
+    char *val = NULL;
+    char **str = user_data;
+
+    ail_appinfo_get_str(appinfo, AIL_PROP_CATEGORIES_STR, &val);
+
+    mrp_log_info("got category '%s'", val ? val : "NULL");
+
+    if (val && strcmp(val, "(NULL)") != 0)
+        *str = mrp_strdup(val);
+    else
+        *str = NULL;
+
+    return AIL_CB_RET_CANCEL;
+}
+
+static char *get_category(const char *appid)
+{
+    ail_error_e e;
+    char *value = NULL;
+    ail_filter_h f;
+
+    if (!appid)
+        return NULL;
+
+    e = ail_filter_new(&f);
+
+    if (e != AIL_ERROR_OK)
+        return NULL;
+
+    e = ail_filter_add_str(f, AIL_PROP_X_SLP_APPID_STR, appid);
+    if (e != AIL_ERROR_OK)
+        goto end;
+
+    e = ail_filter_list_appinfo_foreach(f, handle_appinfo, &value);
+    if (e != AIL_ERROR_OK)
+        goto end;
+
+end:
+    ail_filter_destroy(f);
+    return value;
+}
+
 static int aul_launch_signal(int pid, void *user_data)
 {
     char appid[512];
+    char *category;
+
     MRP_UNUSED(user_data);
 
     mrp_log_info("tracker: launched app %i", pid);
 
     aul_app_get_appid_bypid(pid, appid, 511);
 
-    add_app_to_db(appid, pid, "<undefined>");
+    category = get_category(appid);
+
+    add_app_to_db(appid, pid, category);
+
+    mrp_free(category);
 
     return 0;
 }
 
 static int aul_iter_app_info(const aul_app_info *ai, void *user_data)
 {
+    char *category;
+
     MRP_UNUSED(user_data);
 
     mrp_log_info("tracker: app info pid %i, appid: %s, pkg_name %s", ai->pid,
             ai->appid ? ai->appid : "NULL", ai->pkg_name);
 
-    add_app_to_db(ai->appid ? ai->appid : "<undefined>", ai->pid, "<undefined>");
+    category = get_category(ai->appid);
+
+    add_app_to_db(ai->appid, ai->pid, category);
+
+    mrp_free(category);
 
     return 0;
 }
