@@ -47,6 +47,7 @@
 #include "application/scripting-application.h"
 #include "wayland/scripting-wayland.h"
 #include "user/user.h"
+#include "application-tracker/application-tracker.h"
 
 
 #define DEFAULT_ADDRESS "wsck:127.0.0.1:18081/ico_syc_protocol"
@@ -705,9 +706,10 @@ static int plugin_init(mrp_plugin_t *plugin)
 
         scptr = sc;
 
-       return TRUE;
-    }
+        mrp_application_tracker_create();
 
+        return TRUE;
+    }
 
  fail:
     if (sc != NULL) {
@@ -725,6 +727,8 @@ static void plugin_exit(mrp_plugin_t *plugin)
     sysctl_t *sc = (sysctl_t *)plugin->data;
 
     scptr = NULL;
+
+    mrp_application_tracker_destroy();
 
     transport_destroy(sc);
 

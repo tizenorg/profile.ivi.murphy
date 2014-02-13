@@ -44,6 +44,12 @@ else
     m:info("No domain-control plugin found...")
 end
 
+if m:plugin_exists('glib') then
+    m:load_plugin('glib')
+else
+    m:info("No glib plugin found...")
+end
+
 -- load the AMB plugin
 if m:plugin_exists('amb') then
     m:try_load_plugin('amb')
