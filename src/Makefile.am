@@ -1544,12 +1544,12 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 
 SYSTEMCTL_PLUGIN_CFLAGS  = \
 			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
-			$(AUL_CFLAGS) \
+			$(AUL_CFLAGS) $(AIL_CFLAGS) \
 			-Iico-uxf-weston-plugin \
                         -I$(top_builddir)/src/$(SYSTEMCTL_DIR)
 SYSTEMCTL_PLUGIN_LIBS    = \
 			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) $(LIBXML2_LIBS) $(AUL_LIBS) \
-			-lico-uxf-weston-plugin
+			$(AIL_CFLAGS) -lico-uxf-weston-plugin
 
 SYSTEMCTL_PLUGIN_LOADER  = linkedin-system-controller-loader.c
 
