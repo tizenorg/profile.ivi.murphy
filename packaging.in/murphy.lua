@@ -1234,7 +1234,6 @@ application {
     screen_priority = 30
 }
 
-
 application {
     appid           = "org.tizen.ico.camera_right",
     area            = "Center.SysApp.Right",
@@ -1244,6 +1243,13 @@ application {
     screen_priority = 30
 }
 
+application {
+    appid           = "net.zmap.navi",
+    area            = "Center.Full",
+    privileges      = { screen = "none", audio = "none" },
+    resource_class  = "navigator",
+    screen_priority = 30
+}
 
 if sc then
     sc.client_handler = function (self, cid, msg)
