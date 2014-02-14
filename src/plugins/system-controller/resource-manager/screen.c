@@ -910,6 +910,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
 {
     mrp_resmgr_t *resmgr;
     const char *zonename;
+    const char *appid;
     mrp_application_t *app;
     mrp_resmgr_screen_area_t *area;
     int32_t layerid;
@@ -926,6 +927,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     sr = NULL;
 
     zonename = mrp_zone_get_name(zone);
+    appid = get_appid_for_resource(res);
 
     if (!(app = get_application_for_resource(res))) {
         mrp_log_error("system-controller: failed to create screen resource: "
@@ -976,7 +978,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
 
     mrp_resmgr_notifier_queue_screen_event(screen->resmgr, sr->zoneid,zonename,
                                            MRP_RESMGR_EVENTID_CREATE,
-                                           app->appid, surfaceid, layerid,
+                                           appid, surfaceid, layerid,
                                            area->name);
     mrp_resmgr_notifier_flush_screen_events(screen->resmgr, sr->zoneid);
 
