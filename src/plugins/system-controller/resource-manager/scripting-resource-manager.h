@@ -41,6 +41,8 @@ mrp_resmgr_t *mrp_resmgr_scripting_unwrap(void *void_rm);
 
 /* scripting-notifier.c */
 void  mrp_resmgr_scripting_notifier_init(lua_State *L);
+void *mrp_resmgr_scripting_generic_event_create_from_c(lua_State *L,
+                                                    mrp_resmgr_event_t *event);
 void *mrp_resmgr_scripting_screen_event_create_from_c(lua_State *L,
                                                     mrp_resmgr_event_t *event);
 void *mrp_resmgr_scripting_audio_event_create_from_c(lua_State *L,
