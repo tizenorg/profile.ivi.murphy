@@ -525,6 +525,22 @@ AC_SUBST(WAYLAND_CLIENT_LIBS)
 AC_SUBST(LIBXML2_CFLAGS)
 AC_SUBST(LIBXML2_LIBS)
 
+# Check if system-monitor (plugin) support should be enabled.
+AC_ARG_ENABLE(system-monitor,
+              [  --enable-system-monitor enable system-monitor support],
+	      [enable_sysmon=$enableval], [enable_sysmon=no])
+
+if test "$enable_sysmon" = "yes"; then
+    AC_MSG_NOTICE([System-monitor support is enabled.])
+    AC_DEFINE([SYSMON_ENABLED], 1, [Enable system-monitor support ?])
+else
+    AC_MSG_NOTICE([System-monitor support is disabled.])
+fi
+
+AM_CONDITIONAL(SYSMON_ENABLED, [test "$enable_sysmon" = "yes"])
+AC_SUBST(SYSMON_ENABLED)
+
+
 # Check if dlog support was enabled.
 AC_ARG_ENABLE(dlog,
               [  --enable-dlog           enable dlog support],
@@ -691,6 +707,7 @@ AM_CONDITIONAL(DISABLED_PLUGIN_TELEPHONY, [check_if_disabled telephony])
 AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_ASM,     [check_if_disabled resource-asm])
 
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMCTL,  [test $enable_systemctl != yes])
+AM_CONDITIONAL(DISABLED_PLUGIN_SYSMON,  [test $enable_sysmon != yes])
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
@@ -707,6 +724,7 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMD,  [check_if_internal systemd])
 AM_CONDITIONAL(BUILTIN_PLUGIN_TELEPHONY, [check_if_internal telephony])
 AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_ASM,      [check_if_internal resource-asm])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMCTL, [check_if_internal system-controller])
+AM_CONDITIONAL(BUILTIN_PLUGIN_SYSMON, [check_if_internal system-monitor])
 
 # Check for Check (unit test framework).
 PKG_CHECK_MODULES(CHECK,
@@ -852,6 +870,7 @@ echo "Websockets support: $enable_websockets"
 echo "systemd support: $enable_systemd"
 echo "Telephony support: $enable_telephony"
 echo "System controller support: $enable_systemctl"
+echo "System monitor support: $enable_sysmon"
 echo "AIL support: $enable_ail"
 echo "Plugins:"
 echo "  - linked-in:"
