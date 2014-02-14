@@ -1552,10 +1552,7 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/wayland/ico-input-manager.c                   \
 	$(SYSTEMCTL_DIR)/wayland/scripting-input-manager.c             \
 	$(SYSTEMCTL_DIR)/wayland/scripting-input.c                     \
-	$(SYSTEMCTL_DIR)/wayland/scripting-code.c		       \
-	$(SYSTEMCTL_DIR)/system-monitor/system-monitor.c	       \
-	$(SYSTEMCTL_DIR)/system-monitor/cpu.c			       \
-	$(SYSTEMCTL_DIR)/system-monitor/memory.c
+	$(SYSTEMCTL_DIR)/wayland/scripting-code.c
 
 SYSTEMCTL_PLUGIN_CFLAGS  = \
 			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
