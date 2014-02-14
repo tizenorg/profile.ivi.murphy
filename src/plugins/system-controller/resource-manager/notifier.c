@@ -98,6 +98,7 @@ void mrp_resmgr_notifier_register_event_callback(mrp_resmgr_t *resmgr,
 
 void mrp_resmgr_notifier_queue_screen_event(mrp_resmgr_t *resmgr,
                                             uint32_t zoneid,
+                                            const char *zonename,
                                             mrp_resmgr_eventid_t eventid,
                                             const char *appid,
                                             int32_t surfaceid,
@@ -118,7 +119,8 @@ void mrp_resmgr_notifier_queue_screen_event(mrp_resmgr_t *resmgr,
 
         ev->type = MRP_RESMGR_EVENT_SCREEN;
         ev->eventid = eventid;
-        ev->appid = mrp_strdup(appid);
+        ev->appid = mrp_strdup(appid ? appid : "<unknown>");
+        ev->zone = mrp_strdup(zonename ? zonename : "<unknown>");
         ev->surfaceid = surfaceid;
         ev->layerid = layerid;
         ev->area = mrp_strdup(area ? area : "<unknown>");
@@ -136,10 +138,10 @@ void mrp_resmgr_notifier_queue_screen_event(mrp_resmgr_t *resmgr,
 
 void mrp_resmgr_notifier_queue_audio_event(mrp_resmgr_t *resmgr,
                                            uint32_t zoneid,
+                                           const char *zonename,
                                            mrp_resmgr_eventid_t eventid,
                                            const char *appid,
-                                           uint32_t audioid,
-                                           const char *zonename)
+                                           uint32_t audioid)
 {
     mrp_resmgr_notifier_t *notifier;
     mrp_resmgr_notifier_zone_t *nz;
@@ -155,9 +157,9 @@ void mrp_resmgr_notifier_queue_audio_event(mrp_resmgr_t *resmgr,
 
         ev->type = MRP_RESMGR_EVENT_AUDIO;
         ev->eventid = eventid;
-        ev->appid = mrp_strdup(appid);
-        ev->audioid = audioid;
+        ev->appid = mrp_strdup(appid ? appid : "<unknown>");
         ev->zone = mrp_strdup(zonename ? zonename : "<unknown>");
+        ev->audioid = audioid;
 
         mrp_list_append(&nz->events, &ev->link);
 
@@ -313,6 +315,7 @@ static void event_destroy(mrp_resmgr_event_t *ev)
         mrp_list_delete(&ev->link);
 
         mrp_free((void *)ev->appid);
+        mrp_free((void *)ev->zone);
 
         switch (ev->type) {
 
@@ -321,7 +324,6 @@ static void event_destroy(mrp_resmgr_event_t *ev)
             break;
 
         case MRP_RESMGR_EVENT_AUDIO:
-            mrp_free((void *)ev->zone);
             break;
 
         case MRP_RESMGR_EVENT_INPUT:
