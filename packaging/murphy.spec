@@ -386,9 +386,11 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/murphy/*.la
 # Generate list of linkedin plugins (depends on the configuration).
 outdir="`pwd`"
 pushd $RPM_BUILD_ROOT >& /dev/null && \
-find ./%{_libdir}/murphy/plugins -name libmurphy-plugin-*.so* | \
+find ./%{_libdir} -name libmurphy-plugin-*.so* | \
 sed 's#^./*#/#g' > $outdir/filelist.plugins-base && \
 popd >& /dev/null
+echo "Found the following linked-in plugin files:"
+cat $outdir/filelist.plugins-base | sed 's/^/    /g'
 
 # Generate list of header files, filtering ones that go to subpackages.
 outdir="`pwd`"
