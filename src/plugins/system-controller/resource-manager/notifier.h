@@ -48,8 +48,13 @@ enum mrp_resmgr_event_type_e {
 
 enum mrp_resmgr_eventid_e {
     MRP_RESMGR_EVENTID_UNKNOWN = 0,
+    MRP_RESMGR_EVENTID_CREATE,
+    MRP_RESMGR_EVENTID_DESTROY,
+    MRP_RESMGR_EVENTID_INIT,
+    MRP_RESMGR_EVENTID_PREALLOCATE,
     MRP_RESMGR_EVENTID_GRANT,
     MRP_RESMGR_EVENTID_REVOKE,
+    MRP_RESMGR_EVENTID_COMMIT,
 };
 
 struct mrp_resmgr_notifier_zone_s {
@@ -71,6 +76,7 @@ struct mrp_resmgr_event_s {
     mrp_list_hook_t link;
     mrp_resmgr_event_type_t type;
     mrp_resmgr_eventid_t eventid;
+    char *zone;
     char *appid;
 
     union {
@@ -83,7 +89,6 @@ struct mrp_resmgr_event_s {
         /* audio specific fields */
         struct {
             uint32_t audioid;
-            char *zone;
         };
     };
 };
@@ -98,6 +103,7 @@ void mrp_resmgr_notifier_register_event_callback(mrp_resmgr_t *resmgr,
 
 void mrp_resmgr_notifier_queue_screen_event(mrp_resmgr_t *resmgr,
                                             uint32_t zoneid,
+                                            const char *zonename,
                                             mrp_resmgr_eventid_t eventid,
                                             const char *appid,
                                             int32_t surfaceid,
@@ -105,10 +111,10 @@ void mrp_resmgr_notifier_queue_screen_event(mrp_resmgr_t *resmgr,
                                             const char *area);
 void mrp_resmgr_notifier_queue_audio_event(mrp_resmgr_t *resmgr,
                                            uint32_t zoneid,
+                                           const char *zonename,
                                            mrp_resmgr_eventid_t eventid,
                                            const char *appid,
-                                           uint32_t audioid,
-                                           const char *zonename);
+                                           uint32_t audioid);
 
 void mrp_notifier_remove_last_event(mrp_resmgr_t *resmgr,
                                     uint32_t zoneid,
