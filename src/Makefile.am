@@ -1606,6 +1606,73 @@ clean-linker-script::
 generate-linker-scripts: linker-script.system-controller
 endif
 
+# system-monitor
+if SYSMON_ENABLED
+SYSMON_PLUGIN_SOURCES =						\
+	plugins/system-monitor/plugin-system-monitor.c		\
+	plugins/system-monitor/system-monitor.c			\
+	plugins/system-monitor/cpu-watch.c			\
+	plugins/system-monitor/cpu-sampler.c			\
+	plugins/system-monitor/mem-watch.c			\
+	plugins/system-monitor/mem-sampler.c
+
+
+SYSMON_PLUGIN_CFLAGS  = -I$(top_builddir)/src/plugins/system-monitor
+SYSTEMCTL_PLUGIN_LIBS = -lm
+
+SYSMON_PLUGIN_LOADER  = linkedin-system-monitor-loader.c
+
+if !DISABLED_PLUGIN_SYSMON
+if BUILTIN_PLUGIN_SYSMON
+LINKEDIN_PLUGINS     += libmurphy-plugin-system-monitor.la
+lib_LTLIBRARIES      += libmurphy-plugin-system-monitor.la
+SYSMON_PLUGIN_CFLAGS += $(BUILTIN_CFLAGS)
+
+
+libmurphy_plugin_system_monitor_ladir =					\
+		$(includedir)/murphy/system-monitor
+
+libmurphy_plugin_system_monitor_la_SOURCES =			 	\
+		$(SYSMON_PLUGIN_SOURCES)		 		\
+		$(SYSMON_PLUGIN_LOADER)
+
+libmurphy_plugin_system_monitor_la_CFLAGS =		 		\
+		$(SYSMON_PLUGIN_CFLAGS)		 			\
+		$(AM_CFLAGS)
+
+libmurphy_plugin_system_monitor_la_LDFLAGS =				\
+		-Wl,-version-script=linker-script.system-monitor	\
+		-version-info @MURPHY_VERSION_INFO@
+
+libmurphy_plugin_system_monitor_la_LIBADD =				\
+		libmurphy-core.la   					\
+		libmurphy-common.la					\
+		$(SYSMON_PLUGIN_LIBS)
+
+libmurphy_plugin_system_monitor_la_DEPENDENCIES =			\
+		linker-script.system-monitor				\
+	$(filter %.la, $(libmurphy_plugin_system_monitor_la_LIBADD))
+else
+plugin_system_monitor_la_SOURCES = $(SYSMON_PLUGIN_SOURCES)
+plugin_system_monitor_la_CFLAGS  = $(SYSMON_PLUGIN_CFLAGS) 		\
+				   $(MURPHY_CFLAGS) $(AM_CFLAGS)
+plugin_system_monitor_la_LDFLAGS = -module -avoid-version
+plugin_system_monitor_la_LIBADD  = $(SYSMON_PLUGIN_LIBS)
+plugin_LTLIBRARIES                 += plugin-system-monitor.la
+endif
+endif
+
+# linkedin system-monitor plugin linker script generation
+linker-script.system-monitor: $(SYSMON_PLUGIN_LOADER:%.c=%.h)
+	$(QUIET_GEN)$(top_builddir)/build-aux/gen-linker-script -q \
+		-c "$(libmurphy_plugin_system_monitor_la_CFLAGS)" -o $@ $^
+
+clean-linker-script::
+	-rm -f linker-script.system-monitor
+
+generate-linker-scripts: linker-script.system-monitor
+endif
+
 # telephony plugin
 TELEPHONY_PLUGIN_SOURCES =  plugins/plugin-telephony.c		\
                             plugins/telephony/telephony.c	\
