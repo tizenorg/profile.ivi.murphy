@@ -494,6 +494,7 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
     static uint32_t audioid;
 
     const char *zonename;
+    const char *appid;
     const char *class_name;
     mrp_resmgr_t *resmgr;
     mrp_application_t *app;
@@ -505,6 +506,7 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
 
     resmgr = audio->resmgr;
     zonename = mrp_zone_get_name(zone);
+    appid = get_appid_for_resource(res);
     class_name = mrp_application_class_get_name(ac);
     ar = NULL;
 
