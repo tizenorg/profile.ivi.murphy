@@ -207,7 +207,7 @@ void mrp_notifier_remove_last_event(mrp_resmgr_t *resmgr,
 
         if (++it > MRP_RESMGR_EVENT_MAX)
             break;
-        
+
         if (type == ev->type) {
             mrp_debug("removing %s event in zone %u (eventid=%s "
                       "appid='%s' surfaceid=%d layerid=%d, area='%s'",
@@ -292,6 +292,8 @@ void mrp_resmgr_notifier_flush_events(mrp_resmgr_t *resmgr,
         ev = mrp_list_entry(entry, mrp_resmgr_event_t, link);
 
         if (type == MRP_RESMGR_EVENT_ALL || type == ev->type) {
+            mrp_list_delete(&ev->link);
+
             if (notifier->callback)
                 notifier->callback(resmgr, ev);
 
