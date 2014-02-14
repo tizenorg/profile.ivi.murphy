@@ -528,7 +528,7 @@ AC_SUBST(LIBXML2_LIBS)
 # Check if system-monitor (plugin) support should be enabled.
 AC_ARG_ENABLE(system-monitor,
               [  --enable-system-monitor enable system-monitor support],
-	      [enable_sysmon=$enableval], [enable_sysmon=no])
+	      [enable_sysmon=$enableval], [enable_sysmon=yes])
 
 if test "$enable_sysmon" = "yes"; then
     AC_MSG_NOTICE([System-monitor support is enabled.])
