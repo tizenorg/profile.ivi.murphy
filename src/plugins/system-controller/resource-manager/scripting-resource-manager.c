@@ -48,6 +48,7 @@
 #include "wayland/scripting-wayland.h"
 #include "application/scripting-application.h"
 #include "screen.h"
+#include "audio.h"
 #include "notifier.h"
 
 #define RESOURCE_MANAGER_CLASS   MRP_LUA_CLASS_SIMPLE(resource_manager)
