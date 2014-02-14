@@ -909,8 +909,10 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
                                                  mrp_application_class_t *ac)
 {
     mrp_resmgr_t *resmgr;
+    const char *zonename;
     mrp_application_t *app;
     mrp_resmgr_screen_area_t *area;
+    int32_t layerid;
     int32_t areaid;
     int32_t surfaceid;
     screen_resource_t *sr;
@@ -923,12 +925,16 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     resmgr = screen->resmgr;
     sr = NULL;
 
+    zonename = mrp_zone_get_name(zone);
+
     if (!(app = get_application_for_resource(res))) {
         mrp_log_error("system-controller: failed to create screen resource: "
                       "can't find app");
         return NULL;
     }
             
+    layerid = get_layerid_for_resource(sr->res);
+
     if ((areaid = get_area_for_resource(res)) < 0 ||
         (size_t)areaid >= screen->narea           ||
         !(area = screen->areas[areaid])            )
@@ -968,6 +974,12 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     mrp_debug("inserting surface to hash table: key=%p value=%p", hk, sr);
     mrp_htbl_insert(screen->resources, hk, sr);
 
+    mrp_resmgr_notifier_queue_screen_event(screen->resmgr, sr->zoneid,zonename,
+                                           MRP_RESMGR_EVENTID_CREATE,
+                                           app->appid, surfaceid, layerid,
+                                           area->name);
+    mrp_resmgr_notifier_flush_screen_events(screen->resmgr, sr->zoneid);
+
     return sr;
 }
 
@@ -977,18 +989,34 @@ static void screen_resource_destroy(mrp_resmgr_screen_t *screen,
                                     mrp_resource_t *res)
 {
     screen_resource_t *sr;
+    const char *zonename;
+    const char *appid;
+    int32_t layerid;
     int32_t surfaceid;
+    const char *areaname;
 
     MRP_ASSERT(res && screen && screen->resources, "invalid argument");
     MRP_ASSERT(screen->resmgr, "confused with data structures");
-
+    
     if ((sr = mrp_resmgr_remove_resource(screen->resmgr, zone, res))) {
+        zonename  = mrp_zone_get_name(zone);
+        appid     = get_appid_for_resource(res);
+        surfaceid = get_surfaceid_for_resource(res);
+        layerid   = get_layerid_for_resource(res);
+        areaname  = get_areaname_for_resource(res);
 
-        if ((surfaceid = get_surfaceid_for_resource(res)))
+        mrp_resmgr_notifier_queue_screen_event(screen->resmgr,
+                                               sr->zoneid, zonename,
+                                               MRP_RESMGR_EVENTID_DESTROY,
+                                               appid, surfaceid, layerid,
+                                               areaname);
+        if (surfaceid)
             mrp_htbl_remove(screen->resources, NULL + surfaceid, false);
 
         mrp_list_delete(&sr->link);
         mrp_free(sr);
+
+        mrp_resmgr_notifier_flush_screen_events(screen->resmgr, sr->zoneid);
     }
 }
 
@@ -1007,7 +1035,7 @@ static screen_resource_t *screen_resource_lookup(mrp_resmgr_screen_t *screen,
 }
 
 static bool screen_resource_is_on_top(mrp_resmgr_screen_t *screen,
-                                         screen_resource_t *sr)
+                                      screen_resource_t *sr)
 {
     mrp_resmgr_screen_area_t *area;
     bool on_top;
@@ -1154,6 +1182,7 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
 static void screen_queue_events(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
 {
     uint32_t zoneid;
+    const char *zonename;
     uint32_t grantid;
     mrp_list_hook_t *areas, *aentry, *an;
     mrp_list_hook_t *resources, *rentry, *rn;
@@ -1164,9 +1193,10 @@ static void screen_queue_events(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
     const char *appid, *areaname;
     int32_t surfaceid, layerid;
 
-    zoneid  = mrp_zone_get_id(zone);
-    areas   = screen->zones + zoneid;
-    grantid = screen->grantids[zoneid];
+    zoneid   = mrp_zone_get_id(zone);
+    zonename = mrp_zone_get_name(zone);
+    areas    = screen->zones + zoneid;
+    grantid  = screen->grantids[zoneid];
     
     mrp_list_foreach(areas, aentry, an) {
         area = mrp_list_entry(aentry, mrp_resmgr_screen_area_t, link);
@@ -1187,7 +1217,8 @@ static void screen_queue_events(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
                 areaname  = get_areaname_for_resource(sr->res);
 
                 mrp_resmgr_notifier_queue_screen_event(screen->resmgr,
-                                                       zoneid, eventid,
+                                                       zoneid, zonename,
+                                                       eventid,
                                                        appid, surfaceid,
                                                        layerid, areaname);
             }
