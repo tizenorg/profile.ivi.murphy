@@ -19,6 +19,7 @@
 %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
 %{!?_with_smack:%{!?_without_smack:%define _with_smack 1}}
 %{!?_with_icosyscon:%{!?_without_icosyscon:%define _with_icosyscon 1}}
+%{!?_with_sysmon:%{!?_without_sysmon:%define _with_sysmon 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
 # TODO: take care of /lib vs /lib64...
@@ -351,6 +352,12 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-smack"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-controller"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-controller"
+%endif
+
+%if %{?_with_sysmon:1}%{!?_with_sysmon:0}
+CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-monitor"
+%else
+CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-monitor"
 %endif
 
 NUM_CPUS="`cat /proc/cpuinfo | tr -s '\t' ' ' | \
