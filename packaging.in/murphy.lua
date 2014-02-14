@@ -534,7 +534,7 @@ sink.lua {
         return true
     end
 }
-
+--[[
 sink.lua {
     name = "regulated_app_change",
     inputs = { undef = mdb.select.undefined_applications,
@@ -559,6 +559,7 @@ sink.lua {
         return true
     end
 }
+--]]
 
 -- shift position (parking, reverse, other)
 
@@ -760,6 +761,35 @@ resmgr = resource_manager {
                                  local r = m:JSON({surface = ev.surface,
                                                    visible = 0})
                                  wmgr:window_request(r,a,0)
+
+                             elseif event == "create" then
+
+                               if verbose > 0 then
+                                    print("*** screen resource event: " ..
+                                          tostring(ev))
+                                 end
+
+                                -- For now, consider every application to be an "entertainment"
+                                -- application. Whitelist those applications that we know. Later
+                                -- check the aul_applications table for actual category (when
+                                -- we get the categories there).
+
+                                local regulation = mdb.select.select_driving_mode.single_value
+
+                                if regulation then
+                                    conf = getApplication(ev.appid)
+
+                                    -- disable only non-whitelisted applications
+                                    if not conf or conf.resource_class == "player" then
+                                        resmgr:disable_screen_by_appid("*", "*", v.appid, true)
+                                    end
+                                end
+
+                             elseif event == "destroy" then
+                               if verbose > 0 then
+                                    print("*** screen resource event: " ..
+                                          tostring(ev))
+                                 end
                              else
                                  if verbose > 0 then
                                     print("*** screen resource event: " ..
