@@ -493,6 +493,7 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
 {
     static uint32_t audioid;
 
+    const char *zonename;
     const char *class_name;
     mrp_resmgr_t *resmgr;
     mrp_application_t *app;
@@ -503,6 +504,7 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
     MRP_ASSERT(audio->resmgr, "confused with data structures");
 
     resmgr = audio->resmgr;
+    zonename = mrp_zone_get_name(zone);
     class_name = mrp_application_class_get_name(ac);
     ar = NULL;
 
@@ -536,6 +538,11 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
     mrp_debug("inserting audio to hash table: key=%p value=%p", hk, ar);
     mrp_htbl_insert(audio->resources, hk, ar);
 
+    mrp_resmgr_notifier_queue_audio_event(audio->resmgr, ar->zoneid, zonename,
+                                          MRP_RESMGR_EVENTID_CREATE,
+                                          app->appid, ar->audioid);
+    mrp_resmgr_notifier_flush_audio_events(audio->resmgr, ar->zoneid);
+
     return ar;
 }
 
@@ -545,15 +552,27 @@ static void audio_resource_destroy(mrp_resmgr_audio_t *audio,
                                     mrp_resource_t *res)
 {
     audio_resource_t *ar;
+    const char *zonename;
+    const char *appid;
 
     MRP_ASSERT(audio && res && zone, "invalid argument");
     MRP_ASSERT(audio->resmgr, "confused with data structures");
 
     if ((ar = mrp_resmgr_remove_resource(audio->resmgr, zone, res))) {
+        zonename = mrp_zone_get_name(zone);
+        appid = get_appid_for_resource(res);
+
+        mrp_resmgr_notifier_queue_audio_event(audio->resmgr,
+                                              ar->zoneid, zonename,
+                                              MRP_RESMGR_EVENTID_DESTROY,
+                                              appid, ar->audioid);
+
         mrp_htbl_remove(audio->resources, NULL + ar->audioid, false);
 
         mrp_list_delete(&ar->link);
         mrp_free(ar);
+
+        mrp_resmgr_notifier_flush_audio_events(audio->resmgr, ar->zoneid);
     }
 }
 
@@ -643,10 +662,10 @@ static void audio_queue_events(mrp_resmgr_audio_t *audio, mrp_zone_t *zone)
     mrp_resmgr_eventid_t eventid;
     const char *appid;
 
-    zoneid  = mrp_zone_get_id(zone);
-    zonename = mrp_zone_get_name(zone);
+    zoneid    = mrp_zone_get_id(zone);
+    zonename  = mrp_zone_get_name(zone);
     resources = audio->zones + zoneid;
-    grantid = audio->grantids[zoneid];
+    grantid   = audio->grantids[zoneid];
     
     mrp_list_foreach_back(resources, rentry, rn) {
         ar = mrp_list_entry(rentry, audio_resource_t, link);
@@ -658,8 +677,9 @@ static void audio_queue_events(mrp_resmgr_audio_t *audio, mrp_zone_t *zone)
             appid = get_appid_for_resource(ar->res);
 
             mrp_resmgr_notifier_queue_audio_event(audio->resmgr,
-                                                  zoneid, eventid, appid,
-                                                  ar->audioid, zonename);
+                                                  zoneid, zonename,
+                                                  eventid,
+                                                  appid, ar->audioid);
         }
 
         ar->grant = grant;
