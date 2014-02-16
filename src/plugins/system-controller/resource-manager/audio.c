@@ -542,7 +542,7 @@ static audio_resource_t *audio_resource_create(mrp_resmgr_audio_t *audio,
 
     mrp_resmgr_notifier_queue_audio_event(audio->resmgr, ar->zoneid, zonename,
                                           MRP_RESMGR_EVENTID_CREATE,
-                                          app->appid, ar->audioid);
+                                          appid, ar->audioid);
     mrp_resmgr_notifier_flush_audio_events(audio->resmgr, ar->zoneid);
 
     return ar;
