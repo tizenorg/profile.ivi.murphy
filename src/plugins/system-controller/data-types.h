@@ -69,6 +69,7 @@ enum mrp_sysctl_scripting_field_e {
              SCREEN_EVENT_HANDLER,
     /* 22 */ DISABLE_AUDIO_BY_APPID,
     /* 23 */ DISABLE_SCREEN_BY_APPID,
+    /* 25 */ DISABLE_SCREEN_BY_SURFACE,
     /* 26 */ DISABLE_AUDIO_BY_REQUISITE,
     /* 27 */ DISABLE_SCREEN_BY_REQUISITE,
 };
