@@ -76,6 +76,7 @@ MRP_LUA_MEMBER_LIST_TABLE(cpu_watch_members,
     MRP_LUA_CLASS_ANY    ("limits"  , 0, setmember, getmember, RO        )
     MRP_LUA_CLASS_INTEGER("polling" , 0, setmember, getmember, RO|NOINIT )
     MRP_LUA_CLASS_INTEGER("window"  , 0, setmember, getmember,    NOFLAGS)
+    MRP_LUA_CLASS_DOUBLE ("alpha"   , 0, setmember, getmember, NOFLAGS   )
     MRP_LUA_CLASS_INTEGER("raw"     , 0, setmember, getmember, RO|NOINIT )
     MRP_LUA_CLASS_INTEGER("value"   , 0, setmember, getmember, RO|NOINIT )
     MRP_LUA_CLASS_STRING ("current" , 0, setmember, getmember, RO|NOINIT )
@@ -96,6 +97,7 @@ typedef enum {
     CPU_WATCH_MEMBER_LIMITS,
     CPU_WATCH_MEMBER_POLLING,
     CPU_WATCH_MEMBER_WINDOW,
+    CPU_WATCH_MEMBER_ALPHA,
     CPU_WATCH_MEMBER_RAW,
     CPU_WATCH_MEMBER_VALUE,
     CPU_WATCH_MEMBER_CURRENT,
@@ -134,7 +136,8 @@ cpu_watch_lua_t *cpu_watch_create(sysmon_lua_t *sm, int polling, lua_State *L)
     w->sysmon  = sm;
     w->polling = polling;
     w->limref  = LUA_NOREF;
-    w->window  = CPU_WATCH_WINDOW;
+    w->window  = -1;
+    w->value.a = -1;
 
     if (mrp_lua_init_members(w, L, 2, e, sizeof(e)) != 1) {
         luaL_error(L, "failed to initialize CPU watch (error: %s)",
@@ -147,7 +150,11 @@ cpu_watch_lua_t *cpu_watch_create(sysmon_lua_t *sm, int polling, lua_State *L)
     else
         w->value.S = 0;
 
-    recalc_smoothing(w);
+    if (w->window == -1 && w->value.a == -1)
+        w->window = CPU_WATCH_WINDOW;
+
+    if (w->window != -1)
+        recalc_smoothing(w);
 
     return w;
 }
@@ -218,6 +225,17 @@ static int cpu_watch_setmember(void *data, lua_State *L, int member,
         cpu_watch_set_window(w, v->s32);
         return 1;
 
+    case CPU_WATCH_MEMBER_ALPHA:
+        if (w->window == -1) {
+            w->value.a = v->dbl;
+            return 1;
+        }
+        else {
+            mrp_log_error("Can't set both window and alpha for CPU watch.");
+            return 0;
+        }
+        break;
+
     case CPU_WATCH_MEMBER_NOTIFY: fptr = &w->notify; goto set_bridge;
     case CPU_WATCH_MEMBER_UPDATE: fptr = &w->update;
     set_bridge:
@@ -270,6 +288,10 @@ static int cpu_watch_getmember(void *data, lua_State *L, int member,
         v->s32 = w->window;
         return 1;
 
+    case CPU_WATCH_MEMBER_ALPHA:
+        v->dbl = w->value.a;
+        return 1;
+
     case CPU_WATCH_MEMBER_POLLING:
         v->s32 = w->polling;
         return 1;
@@ -307,9 +329,10 @@ static ssize_t cpu_watch_tostring(mrp_lua_tostr_mode_t mode, char *buf,
     switch (mode & MRP_LUA_TOSTR_MODEMASK) {
     case MRP_LUA_TOSTR_LUA:
     default:
-        return snprintf(buf, size, "{CPU watch %s/%s @ %d sec window}",
+        return snprintf(buf, size,
+                        "{%s/%s watch, %d/%d sec window/poll, %.2f alpha}",
                         get_cpu_name(w->cpu), get_sample_name(w->sample),
-                        w->window / 1000);
+                        w->window / 1000, w->polling / 1000, w->value.a);
     }
 
 }
@@ -355,8 +378,10 @@ void cpu_watch_set_polling(cpu_watch_lua_t *w, int polling)
     if (w->polling == polling)
         return;
 
-    w->polling = polling;
-    recalc_smoothing(w);
+    if (w->window != -1) {
+        w->polling = polling;
+        recalc_smoothing(w);
+    }
 }
 
 
