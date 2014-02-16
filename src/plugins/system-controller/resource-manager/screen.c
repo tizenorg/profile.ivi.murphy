@@ -112,6 +112,7 @@ struct disable_iterator_s {
     union {
         const char *appid;
         mrp_application_requisite_t req;
+        uint32_t surfaceid;
     };
     uint32_t zones;
     int counter;
@@ -261,6 +262,9 @@ static int screen_disable_cb(void *key, void *object, void *user_data)
                 goto disable;
             break;
 
+        case MRP_RESMGR_DISABLE_SURFACEID:
+            goto disable;
+
         disable:
             disable = sr->disable & it->mask;
             if (it->disable) {
@@ -321,6 +325,7 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
     char fullname[1024];
     uint32_t mask;
     uint32_t z;
+    void *hk, *obj;
 
     MRP_ASSERT(screen && data, "invalid argument");
 
@@ -366,18 +371,33 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
     dit.areaid = area_id;
     dit.disable = disable;
     dit.type = type;
-    dit.mask = BIT(type - 1);
     dit.zones = 0;
     dit.counter = 0;
-    
+        
     switch (type) {
 
     case MRP_RESMGR_DISABLE_REQUISITE:
+        dit.mask = BIT(MRP_RESMGR_DISABLE_REQUISITE - 1);
         dit.req = *(mrp_application_requisite_t *)data;
+        mrp_htbl_foreach(screen->resources, screen_disable_cb, &dit);
+        break;
+        
+    case MRP_RESMGR_DISABLE_APPID:
+        dit.mask = BIT(MRP_RESMGR_DISABLE_APPID - 1);
+        dit.appid = (const char *)data;
+        mrp_htbl_foreach(screen->resources, screen_disable_cb, &dit);
         break;
 
-    case MRP_RESMGR_DISABLE_APPID:
-        dit.appid = (const char *)data;
+    case MRP_RESMGR_DISABLE_SURFACEID:
+        dit.mask = BIT(MRP_RESMGR_DISABLE_APPID - 1);
+        dit.surfaceid = *(uint32_t *)data;
+        hk = NULL + dit.surfaceid;
+        if (!(obj = mrp_htbl_lookup(screen->resources, hk))) {
+            mrp_log_error("system-controller: failed to disable screen: "
+                          "can't find surface %u", dit.surfaceid);
+            return -1;
+        }
+        screen_disable_cb(hk, obj, &dit);
         break;
 
     default:
@@ -386,11 +406,9 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
         return -1;
     }
 
-    mrp_htbl_foreach(screen->resources, screen_disable_cb, &dit);
-
     for (z = 0;   dit.zones && z < MRP_ZONE_MAX;   z++) {
         mask = (((uint32_t)1) << z);
-
+        
         if ((mask & dit.zones)) {
             dit.zones &= ~mask;
             mrp_resource_owner_recalc(z);
