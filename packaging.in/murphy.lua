@@ -776,12 +776,12 @@ resmgr = resource_manager {
 
                                 local regulation = mdb.select.select_driving_mode.single_value
 
-                                if regulation then
+                                if regulation == 1 then
                                     conf = getApplication(ev.appid)
 
                                     -- disable only non-whitelisted applications
                                     if not conf or conf.resource_class == "player" then
-                                        resmgr:disable_screen_by_appid("*", "*", v.appid, true)
+                                        resmgr:disable_screen_by_appid("*", "*", ev.appid, true)
                                     end
                                 end
 
@@ -1364,7 +1364,7 @@ if sc then
                 if  msg.arg.anim_time then
                     local t = msg.arg.anim_time
                     time = m:AND(t, time_mask)
-                    nores = m:AND(t, nores_mask)
+                    nores = not m:AND(t, nores_mask)
                     if m:AND(t, raise_mask) then
                         msg.arg.raise = 1
                     elseif m:AND(t, lower_mask) then
@@ -1405,7 +1405,7 @@ if sc then
                 if msg.arg.anim_time then
                     local t = msg.arg.anim_time
                     time = m:AND(t, time_mask)
-                    nores = m:AND(t, nores_mask)
+                    nores = not m:AND(t, nores_mask)
                 end
                 if msg.arg.anim_name then
                     a.hide = { msg.arg.anim_name, time }
