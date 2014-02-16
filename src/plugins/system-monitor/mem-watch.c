@@ -74,6 +74,7 @@ MRP_LUA_MEMBER_LIST_TABLE(mem_watch_members,
     MRP_LUA_CLASS_STRING ("sample"  , 0, setmember, getmember, RO        )
     MRP_LUA_CLASS_ANY    ("limits"  , 0, setmember, getmember, RO        )
     MRP_LUA_CLASS_INTEGER("polling" , 0, setmember, getmember, RO|NOINIT )
+    MRP_LUA_CLASS_INTEGER("alpha"   , 0, setmember, getmember,    NOFLAGS)
     MRP_LUA_CLASS_INTEGER("window"  , 0, setmember, getmember,    NOFLAGS)
     MRP_LUA_CLASS_INTEGER("raw"     , 0, setmember, getmember, RO|NOINIT )
     MRP_LUA_CLASS_INTEGER("value"   , 0, setmember, getmember, RO|NOINIT )
@@ -94,6 +95,7 @@ typedef enum {
     MEM_WATCH_MEMBER_LIMITS,
     MEM_WATCH_MEMBER_POLLING,
     MEM_WATCH_MEMBER_WINDOW,
+    MEM_WATCH_MEMBER_ALPHA,
     MEM_WATCH_MEMBER_RAW,
     MEM_WATCH_MEMBER_VALUE,
     MEM_WATCH_MEMBER_CURRENT,
@@ -130,7 +132,8 @@ mem_watch_lua_t *mem_watch_create(sysmon_lua_t *sm, int polling, lua_State *L)
     w->sysmon  = sm;
     w->polling = polling;
     w->limref  = LUA_NOREF;
-    w->window  = MEM_WATCH_WINDOW;
+    w->window  = -1;
+    w->value.a = -1;
 
     if (mrp_lua_init_members(w, L, 2, e, sizeof(e)) != 1) {
         luaL_error(L, "failed to initialize memory watch (error: %s)",
@@ -138,9 +141,11 @@ mem_watch_lua_t *mem_watch_create(sysmon_lua_t *sm, int polling, lua_State *L)
         return NULL;
     }
 
-    w->value.S = 0;
+    if (w->window == -1 && w->value.a == -1)
+        w->window = MEM_WATCH_WINDOW;
 
-    recalc_smoothing(w);
+    if (w->window != -1)
+        recalc_smoothing(w);
 
     return w;
 }
@@ -204,6 +209,17 @@ static int mem_watch_setmember(void *data, lua_State *L, int member,
         mem_watch_set_window(w, v->s32);
         return 1;
 
+    case MEM_WATCH_MEMBER_ALPHA:
+        if (w->window == -1) {
+            w->value.a = v->dbl;
+            return 1;
+        }
+        else {
+            mrp_log_error("Can't set both window and alpha for memory watch.");
+            return 0;
+        }
+        break;
+
     case MEM_WATCH_MEMBER_NOTIFY: fptr = &w->notify; goto set_bridge;
     case MEM_WATCH_MEMBER_UPDATE: fptr = &w->update;
     set_bridge:
@@ -253,6 +269,10 @@ static int mem_watch_getmember(void *data, lua_State *L, int member,
         v->s32 = w->window;
         return 1;
 
+    case MEM_WATCH_MEMBER_ALPHA:
+        v->dbl = w->value.a;
+        return 1;
+
     case MEM_WATCH_MEMBER_POLLING:
         v->s32 = w->polling;
         return 1;
@@ -290,8 +310,10 @@ static ssize_t mem_watch_tostring(mrp_lua_tostr_mode_t mode, char *buf,
     switch (mode & MRP_LUA_TOSTR_MODEMASK) {
     case MRP_LUA_TOSTR_LUA:
     default:
-        return snprintf(buf, size, "{memory watch of %s @ %d sec window}",
-                        get_sample_name(w->sample), w->window / 1000);
+        return snprintf(buf, size,
+                        "{%s memory watch, %d/%d sec window/poll, %.2f alpha}",
+                        get_sample_name(w->sample), w->window / 1000,
+                        w->polling / 1000, w->value.a);
     }
 
 }
@@ -337,8 +359,10 @@ void mem_watch_set_polling(mem_watch_lua_t *w, int polling)
     if (w->polling == polling)
         return;
 
-    w->polling = polling;
-    recalc_smoothing(w);
+    if (w->window != -1) {
+        w->polling = polling;
+        recalc_smoothing(w);
+    }
 }
 
 
