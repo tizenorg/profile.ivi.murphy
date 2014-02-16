@@ -99,6 +99,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
 
 static mrp_funcbridge_t *area_create;
 static mrp_funcbridge_t *window_raise;
+static mrp_funcbridge_t *disable_screen_by_surface;
 static mrp_funcbridge_t *disable_screen_by_appid;
 static mrp_funcbridge_t *disable_screen_by_requisite;
 static mrp_funcbridge_t *disable_audio_by_appid;
@@ -219,6 +220,10 @@ static int resmgr_getfield(lua_State *L)
 
         case WINDOW_RAISE:
             mrp_funcbridge_push(L, window_raise);
+            break;
+
+        case DISABLE_SCREEN_BY_SURFACE:
+            mrp_funcbridge_push(L, disable_screen_by_surface);
             break;
 
         case DISABLE_SCREEN_BY_APPID:
@@ -463,7 +468,16 @@ static bool disable_screen_bridge(lua_State *L,
 
     *ret_type = MRP_FUNCBRIDGE_NO_DATA;
 
-    if (!strcmp((const char *)data, "app")) {
+    if (!strcmp((const char *)data, "sur")) {
+        if (strcmp(signature, "ossdb")) {
+            mrp_log_error("bad signature: expected 'ossdb' got '%s'",
+                          signature);
+            return false;
+        }
+        type = MRP_RESMGR_DISABLE_SURFACEID;
+        data = (void *)&args[3].integer;
+    }
+    else if (!strcmp((const char *)data, "app")) {
         if (strcmp(signature, "osssb")) {
             mrp_log_error("bad signature: expected 'osssb' got '%s'",
                           signature);
@@ -601,6 +615,7 @@ static bool register_methods(lua_State *L)
     static funcbridge_def_t funcbridge_defs[] = {
         FUNCBRIDGE(area_create                , area_create   , "oos"  , NULL),
         FUNCBRIDGE(window_raise               , window_raise  , "osdd" , NULL),
+        FUNCBRIDGE(disable_screen_by_surface  , disable_screen, "ossdb","sur"),
         FUNCBRIDGE(disable_screen_by_appid    , disable_screen, "osssb","app"),
         FUNCBRIDGE(disable_screen_by_requisite, disable_screen, "ossob","req"),
         FUNCBRIDGE(disable_audio_by_appid     , disable_audio , "ossb" ,"app"),
@@ -776,6 +791,11 @@ mrp_resmgr_scripting_field_name_to_type(const char *name, ssize_t len)
     case 23:
         if (!strcmp(name, "disable_screen_by_appid"))
             return DISABLE_SCREEN_BY_APPID;
+        break;
+
+    case 25:
+        if (!strcmp(name, "disable_screen_by_surface"))
+            return DISABLE_SCREEN_BY_SURFACE;
         break;
 
     case 26:
