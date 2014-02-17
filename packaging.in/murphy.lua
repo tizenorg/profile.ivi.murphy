@@ -1380,6 +1380,23 @@ if sc then
                 print(msg)
             end
         end
+
+        -- known commands: 1 for SEND_APPID, synthetic command 0xFFFF for
+        -- disconnection
+
+        if command == 0xFFFF then
+            if verbose > 1 then
+                print('client ' .. cid .. ' disconnected')
+            end
+            if msg.appid == homescreen then
+                connected = false
+                homescreen = ""
+            end
+            return
+        end
+
+        -- handle the connection
+
         if not connected then
             print('Setting homescreen='..msg.appid)
             homescreen = msg.appid
