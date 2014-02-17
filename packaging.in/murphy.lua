@@ -98,6 +98,13 @@ application_class {
     order    = "fifo"
 }
 application_class {
+    name     = "system",
+    priority = 52,
+    modal    = false,
+    share    = true,
+    order    = "lifo"
+}
+application_class {
     name     = "alert",
     priority = 51,
     modal    = false,
@@ -892,93 +899,116 @@ wmgr = window_manager {
                      return { privileges = {screen="none", audio="none"} }
                 end,
 
-  outputs = { { name  = "Center",
+  output_order = { 1, 0 },
+
+  outputs = { { name  = "Mid",
                 id    = 0,
                 zone  = "driver",
-                areas = { Status = {
+                areas = { Full = {
+                              id     = 20,
+                              pos_x  = 0,
+                              pos_y  = 0,
+                              width  = function(w,h) return w end,
+                              height = function(w,h) return h end
+                          },
+                          Left = {
+                              id     = 21,
+                              pos_x  = 0,
+                              pos_y  = 0,
+                              width  = 320,
+                              height = function(w,h) return h end
+                          },
+                          Right = {
+                              id     = 22,
+                              pos_x  = function(w,h) return w-320 end,
+                              pos_y  = 0,
+                              width  = 320,
+                              height = function(w,h) return h end
+                          }
+                        }
+               },
+               { name  = "Center",
+                 id    = 1,
+                 zone  = "driver",
+                 areas = { Status = {
                               id     = 0,
                               pos_x  = 0,
                               pos_y  = 0,
                               width  = function(w,h) return w end,
                               height = 64
-                          },
-                          Full = {
+                           },
+                           Full = {
                               id     = 1,
                               pos_x  = 0,
                               pos_y  = 64,
                               width  = function(w,h) return w end,
                               height = function(w,h) return h-64-128 end
-                          },
-                          Upper = {
+                           },
+                           Upper = {
                               id     = 2,
                               pos_x  = 0,
                               pos_y  = 64,
                               width  = function(w,h) return w end,
                               height = function(w,h) return (h-64-128)/2 end
-                          },
-                          Lower = {
+                           },
+                           Lower = {
                               id     = 3,
                               pos_x  = 0,
                               pos_y  = function(w,h) return (h-64-128)/2+64 end,
                               width  = function(w,h) return w end,
                               height = function(w,h) return (h-64-128)/2 end
-                          },
-                          UpperLeft = {
+                           },
+                           UpperLeft = {
                               id     = 4,
                               pos_x  = 0,
                               pos_y  = 64,
                               width  = function(w,h) return w/2 end,
                               height = function(w,h) return (h-64-128)/2 end
-                          },
-                          UpperRight = {
+                           },
+                           UpperRight = {
                               id     = 5,
                               pos_x  = function(w,h) return w/2 end,
                               pos_y  = 64,
                               width  = function(w,h) return w/2 end,
                               height = function(w,h) return (h-64-128)/2 end
-                          },
-                          LowerLeft = {
+                           },
+                           LowerLeft = {
                               id     = 6,
                               pos_x  = 0,
                               pos_y  = function(w,h) return (h-64-128/2)+64 end,
                               width  = function(w,h) return w/2 end,
                               height = function(w,h) return (h-64-128)/2 end
-                          },
-                          LowerRight = {
+                           },
+                           LowerRight = {
                               id     = 7,
                               pos_x  = function(w,h) return w/2 end,
                               pos_y  = function(w,h) return (h-64-128/2)+64 end,
                               width  = function(w,h) return w/2 end,
                               height = function(w,h) return (h-64-128)/2 end
-                          },
-                          SysApp = {
+                           },
+                           SysApp = {
                               id     = 8,
                               pos_x  = 0,
                               pos_y  = 64,
                               width  = function(w,h) return w end,
                               height = function(w,h) return h-64-128 end
-                          },
-                          ["SysApp.Left"] = {
+                           },
+                           ["SysApp.Left"] = {
                               id     = 9,
                               pos_x  = 0,
                               pos_y  = 64,
                               width  = function(w,h) return w/2-181 end,
                               height = function(w,h) return h-64-128 end
-                          },
-                          ["SysApp.Right"] = {
+                           },
+                           ["SysApp.Right"] = {
                               id     = 10,
                               pos_x  = function(w,h) return w/2+181 end,
                               pos_y  = 64,
                               width  = function(w,h) return w/2-181 end,
                               height = function(w,h) return h-64-128 end
-                          },
+                           },
                         }
-               },
-               { name  = "Mid",
-                 zone  = "driver",
-                 id    = 1
-               }
-
+              }
   },
   layers = { {      0, "Background"   , 1 },
              {      1, "Application"  , 2 },
@@ -1158,12 +1188,16 @@ wmgr = window_manager {
 
   output_update = function(self, oper, out, mask)
                       local idx = out.index
+                      local defidx = self.output_order[idx+1]
                       if verbose > 0 then
                           print("### OUTPUT UPDATE:" .. oper ..
                                 " mask: "..tostring(mask))
                       end
+                      if not defidx then
+                          return
+                      end
                       print(out)
-                      local outdef = self.outputs[idx+1]
+                      local outdef = self.outputs[defidx+1]
                       if (oper == 1) then -- create
                           if outdef then
                               self:output_request(m:JSON({index = idx,
@@ -1329,6 +1363,14 @@ application {
     screen_priority = 30
 }
 
+application {
+    appid           = "GV3ySIINq7.GhostCluster",
+    area            = "Mid.Full",
+    privileges      = { screen = "none", audio = "none" },
+    resource_class  = "system",
+    screen_priority = 30
+}
+
 if sc then
     sc.client_handler = function (self, cid, msg)
         local command = msg.command
@@ -1429,6 +1471,9 @@ if sc then
                 local s = p.privileges.screen
                 if s == "system" then
                     nores = true
+                    if not msg.arg.raise then
+                        msg.arg.raise = 1
+                    end
                 end
             end
             if verbose > 2 then
@@ -1465,6 +1510,7 @@ if sc then
                 local s = p.privileges.screen
                 if s == "system" then
                     nores = true
+                    msg.arg.raise = 0
                 end
             end
             if verbose > 2 then
@@ -1480,6 +1526,9 @@ if sc then
             if verbose > 2 then
                 print('### ==> MOVE REQUEST')
                 print(tostring(msg.arg))
+            end
+            if msg.arg.zone then
+                msg.arg.area = msg.arg.zone
             end
             wmgr:window_request(msg.arg, a, 0)
             -- TODO: handle if area changed
