@@ -373,9 +373,7 @@ static void check_if_ready(mrp_wayland_t *wl, mrp_wayland_output_t *out)
 
     MRP_ASSERT(wl && out, "invalid argument");
 
-    if (!out->initialized && out->width > 0 && out->height > 0 &&
-        out->physical_width > 0 && out->physical_height > 0)
-    {
+    if (!out->initialized && out->width > 0 && out->height > 0) {
         out->initialized = true;
 
         mrp_wayland_output_print(out, -1, buf,sizeof(buf));
