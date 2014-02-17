@@ -309,8 +309,10 @@ static void window_configure_callback(void *data,
 {
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
     mrp_wayland_window_t *win;
+    mrp_wayland_output_t *output;
     mrp_wayland_t *wl;
     mrp_wayland_window_update_t u;
+    int32_t x_offs, y_offs;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
@@ -325,6 +327,13 @@ static void window_configure_callback(void *data,
     if (!(win = find_window(wm, surfaceid, "configuration update")))
         return;
 
+    if (!win->area || !(output = win->area->output))
+        x_offs = y_offs = 0;
+    else {
+        x_offs = output->pixel_x;
+        y_offs = output->pixel_y;
+    }
+
     memset(&u, 0, sizeof(u));
     u.mask = MRP_WAYLAND_WINDOW_NODEID_MASK    |
              MRP_WAYLAND_WINDOW_LAYERTYPE_MASK ;
@@ -334,11 +343,11 @@ static void window_configure_callback(void *data,
     if (hint == ICO_WINDOW_MGR_HINT_CHANGE) {
         if (x <= MAX_COORDINATE) {
             u.mask |= MRP_WAYLAND_WINDOW_X_MASK;
-            u.x = x;
+            u.x = x - x_offs;
         }
         if (y <= MAX_COORDINATE) {
             u.mask |= MRP_WAYLAND_WINDOW_Y_MASK;
-            u.y = y;
+            u.y = y - y_offs;
         }
         if (width <= MAX_COORDINATE) {
             u.mask |= MRP_WAYLAND_WINDOW_WIDTH_MASK;
@@ -614,10 +623,12 @@ static void set_window_area(mrp_wayland_window_t *win,
 
     MRP_ASSERT(output, "confused withdata structures");
 
+#if 0
     if (win->nodeid != output->outputid) {
         u->mask |= MRP_WAYLAND_WINDOW_NODEID_MASK;
         u->nodeid = output->outputid;
     }
+#endif
 
     u->mask |= MRP_WAYLAND_WINDOW_POSITION_MASK | MRP_WAYLAND_WINDOW_SIZE_MASK;
 
@@ -639,19 +650,24 @@ static void set_window_geometry(mrp_wayland_window_t *win,
 {
     struct ico_window_mgr *ico_window_mgr;
     mrp_wayland_window_update_mask_t mask;
+    mrp_wayland_area_t *area;
+    mrp_wayland_output_t *output;
     int32_t node;
     int32_t x, y;
     int32_t width, height;
     int32_t flags;
     bool first_time;
+    bool output_changed;
     bool need_nodechanging;
     bool need_positioning;
     bool need_resizing;
+    int32_t x_offs, y_offs;
 
     ico_window_mgr = (struct ico_window_mgr *)win->wm->proxy;
     mask = u->mask;
     flags = ICO_WINDOW_MGR_FLAGS_NO_CONFIGURE;
     first_time = win->nodeid < 0;
+    output_changed = false;
 
     node = (mask & MRP_WAYLAND_WINDOW_NODEID_MASK) ? u->nodeid : win->nodeid;
     if (node < 0)
@@ -659,33 +675,46 @@ static void set_window_geometry(mrp_wayland_window_t *win,
     need_nodechanging = (mask & MRP_WAYLAND_WINDOW_NODEID_MASK) ||
                         node != win->nodeid;
 
+    area = (mask & MRP_WAYLAND_WINDOW_AREA_MASK) ? u->area : win->area;
+    if (!area || !(output = area->output))
+        x_offs = y_offs = 0;
+    else {
+        x_offs = output->pixel_x;
+        y_offs = output->pixel_y;
+
+        if (!win->area || win->area->output != output)
+            output_changed = true;
+    }
+
     need_positioning = false;
     if (!(mask & MRP_WAYLAND_WINDOW_X_MASK) ||
-        ((u->x == win->x) && !(passthrough & MRP_WAYLAND_WINDOW_X_MASK)))
+        ((u->x == win->x) && !output_changed &&
+         !(passthrough & MRP_WAYLAND_WINDOW_X_MASK)))
     {
         if (!first_time)
             x = ICO_WINDOW_MGR_V_NOCHANGE;
         else {
-            x = win->x;
+            x = win->x + x_offs;
             need_positioning = true;
         }
     }
     else {
-        x = u->x;
+        x = u->x + x_offs;
         need_positioning = true;
     }
     if (!(mask & MRP_WAYLAND_WINDOW_Y_MASK) ||
-        ((u->y == win->y) && !(passthrough & MRP_WAYLAND_WINDOW_Y_MASK)))
+        ((u->y == win->y) && !output_changed &&
+         !(passthrough & MRP_WAYLAND_WINDOW_Y_MASK)))
     {
         if (!first_time)
             y = ICO_WINDOW_MGR_V_NOCHANGE;
         else {
-            y = win->y;
+            y = win->y + y_offs;
             need_positioning = true;
         }
     }
     else {
-        y = u->y;
+        y = u->y + y_offs;
         need_positioning = true;
     }
 
@@ -707,7 +736,7 @@ static void set_window_geometry(mrp_wayland_window_t *win,
     }
     if (!(mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK) ||
         ((u->height == win->height) &&
-         !(passthrough && MRP_WAYLAND_WINDOW_HEIGHT_MASK)))
+         !(passthrough & MRP_WAYLAND_WINDOW_HEIGHT_MASK)))
     {
         if (!first_time)
             height = ICO_WINDOW_MGR_V_NOCHANGE;
