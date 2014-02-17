@@ -54,6 +54,8 @@ static int aul_dead_signal(int pid, void *user_data)
     mql_result_t *r;
     mqi_handle_t tx;
 
+    MRP_UNUSED(user_data);
+
     mrp_log_info("tracker: dead app %i", pid);
 
     buflen = snprintf(buf, DB_BUF_SIZE, "DELETE FROM %s WHERE pid = +%i",
