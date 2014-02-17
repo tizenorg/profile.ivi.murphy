@@ -68,7 +68,7 @@ mrp_wayland_area_t *mrp_wayland_area_create(mrp_wayland_t *wl,
 
     MRP_ASSERT(wl && u &&
                (u->mask & MRP_WAYLAND_AREA_NAME_MASK) && u->name &&
-               (u->mask & MRP_WAYLAND_AREA_OUTPUT_MASK) &&
+               (u->mask & MRP_WAYLAND_AREA_OUTPUT_MASK) && u->output &&
                (u->mask & MRP_WAYLAND_AREA_WIDTH_MASK) &&
                (u->mask & MRP_WAYLAND_AREA_HEIGHT_MASK),
                "invalid argument");
