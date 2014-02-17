@@ -251,6 +251,61 @@ static void connection_evt(mrp_transport_t *lt, void *user_data)
 }
 
 
+static void disconnected_event(client_t *c)
+{
+    mrp_json_t            *req;
+    int                    size;
+    char                   buf[1024];
+    mrp_funcbridge_t      *h;
+    mrp_funcbridge_value_t args[4];
+    mrp_funcbridge_value_t ret;
+    char                   rt;
+
+    /*
+     * crate and emit a synthetic disconnection message if the client
+     * disconnected
+     */
+
+    if (c->app)
+        size = snprintf(buf, 1024,
+                "{ \"command\" : 65535, \"appid\" : \"%s\", \"pid\" : %d }",
+                c->app, c->pid);
+    else
+        size = snprintf(buf, 1024, "{ \"command\" : 65535, \"pid\" : %d }",
+                c->pid);
+
+    if (size < 0 || size >= 1024) {
+        /* too long appid? */
+        mrp_log_error("Could not create disconnect message");
+        return;
+    }
+
+    req = mrp_json_string_to_object(buf, size);
+
+    if (!req) {
+        mrp_log_error("failed to parse json string '%s'", buf);
+        return;
+    }
+
+    h = c->sc->handler.client;
+
+    if (h != NULL) {
+        args[0].pointer = c->sc->scl;
+        args[1].integer = c->id;
+        args[2].pointer = mrp_json_lua_wrap(c->sc->L, req);
+
+        if (!mrp_funcbridge_call_from_c(c->sc->L, h, "odo", &args[0],
+                                        &rt, &ret)) {
+            mrp_log_error("Failed to dispatch client-connection (%s).",
+                          ret.string ? ret.string : "<unknown error>");
+            mrp_free((void *)ret.string);
+        }
+    }
+
+    mrp_json_unref(req);
+}
+
+
 static void closed_evt(mrp_transport_t *t, int error, void *user_data)
 {
     client_t *c = (client_t *)user_data;
@@ -262,6 +317,9 @@ static void closed_evt(mrp_transport_t *t, int error, void *user_data)
                       error, strerror(error));
     else
         mrp_log_info("System controller client #%d closed connection.", c->id);
+
+    /* call the disconnection handler if it exists */
+    disconnected_event(c);
 
     destroy_client(c);
 }
@@ -368,7 +426,7 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
     }
 
     /*
-     * emit a connection message if this is the fist message with an appid
+     * emit a connection message if this is the first message with an appid
      */
 
     if (mrp_json_get_integer(req, "pid", &pid))
