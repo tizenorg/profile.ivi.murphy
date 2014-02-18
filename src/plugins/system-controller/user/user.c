@@ -44,6 +44,9 @@
 #include <murphy/core/lua-utils/object.h>
 #include <murphy/core/lua-utils/funcbridge.h>
 
+#include <murphy-db/mqi.h>
+#include <murphy-db/mql.h>
+
 #include <lualib.h>
 #include <lauxlib.h>
 
@@ -102,7 +105,9 @@ static int lua_get_lastinfo(lua_State *L);
 static int lua_get_userlist(lua_State *L);
 static int lua_change_user(lua_State *L);
 
+#if 0
 static void hs_check(mrp_timer_t *t, void *user_data);
+#endif
 
 MRP_LUA_METHOD_LIST_TABLE(user_manager_methods,
                           MRP_LUA_METHOD_CONSTRUCTOR(user_manager_create)
@@ -320,38 +325,6 @@ static void delete_flag_file(user_manager_config_t *ctx)
 {
     unlink(ctx->flag_file_path);
 }
-
-#if 0
-static int hs_dead_signal(int pid, void *user_data)
-{
-    user_manager_config_t *ctx = (user_manager_config_t *) user_data;
-
-    mrp_log_info("dead app %i", pid);
-
-    if (pid == ctx->current_hs_pid) {
-        mrp_log_info("homescreen %i is dead", pid);
-    }
-
-    return 0;
-}
-
-static int hs_launch_signal(int pid, void *user_data)
-{
-    char buf[1024];
-    user_manager_config_t *ctx = (user_manager_config_t *) user_data;
-
-    mrp_log_info("launched app %i", pid);
-
-    aul_app_get_appid_bypid(pid, buf, 1023);
-
-    if (current_user && strcmp(buf, current_user->homescreen) == 0) {
-        mrp_log_info("homescreen %i is alive", pid);
-        /* ctx->current_hs_pid = pid; */
-    }
-
-    return 0;
-}
-#endif
 
 static void launch_hs_deferred(mrp_timer_t *t, void *user_data)
 {
@@ -858,44 +831,6 @@ end:
     return success;
 }
 
-static void hs_check(mrp_timer_t *t, void *user_data)
-{
-    user_manager_config_t *ctx = (user_manager_config_t *) user_data;
-    /* mrp_pid_watch_t *w; */ /* TODO, when we get the capabilities */
-    pid_t hs_pid = -1;
-
-#if 0
-    mrp_log_info("hs_check %i", ctx->homescreen_count);
-#endif
-
-    if (!current_user) {
-        mrp_log_error("no current user for homescreen check");
-        return;
-    }
-
-    /* is the homescreen already up? */
-
-    hs_pid = get_hs_pid(current_user->homescreen);
-
-    if (hs_pid > 0) {
-
-        // current_hs_pid = hs_pid;
-        ctx->current_hs_pid = hs_pid;
-#if 0
-        aul_listen_app_dead_signal(hs_dead_signal, ctx);
-        aul_listen_app_launch_signal(hs_launch_signal, ctx);
-#endif
-        mrp_del_timer(t);
-        ctx->t = NULL;
-    }
-    else if (ctx->homescreen_count >= 600) {
-        mrp_log_error("didn't find homescreen in ten minutes, giving up");
-        mrp_del_timer(t);
-        ctx->t = NULL;
-    }
-    ctx->homescreen_count++;
-}
-
 static void user_manager_config_free(user_manager_config_t *ctx)
 {
     mrp_free(ctx->defaultapps_path);
@@ -905,14 +840,84 @@ static void user_manager_config_free(user_manager_config_t *ctx)
     return;
 }
 
+static void find_hs(user_manager_config_t *ctx, mql_result_t *select_r,
+        mqi_event_type_t evtype)
+{
+    int i, n_rows;
+
+    if (!select_r || select_r->type != mql_result_rows)
+        return;
+
+    n_rows = mql_result_rows_get_row_count(select_r);
+
+    for (i = 0; i < n_rows; i++) {
+        const char *appid;
+        int pid;
+
+        pid = mql_result_rows_get_integer(select_r, 0, i);
+        appid = mql_result_rows_get_string(select_r, 1, i, NULL, 0);
+
+        mrp_log_info("application %s (pid: %d) running",
+            appid ? appid : "NULL", pid);
+
+        if (!appid)
+            continue;
+
+        if (strcmp(appid, current_user->homescreen) == 0) {
+            if (evtype == mqi_row_inserted) {
+                ctx->current_hs_pid = pid;
+                mrp_log_info("set current homescreen pid to %d", pid);
+            }
+            else if (evtype == mqi_row_deleted) {
+                ctx->current_hs_pid = -1;
+                mrp_log_info("reset current homescreen pid");
+            }
+            return;
+        }
+    }
+}
+
+static void application_event_cb(mql_result_t *result, void *user_data)
+{
+     user_manager_config_t *ctx = (user_manager_config_t *) user_data;
+
+     if (!current_user || !current_user->homescreen)
+        return;
+
+    if (result->type == mql_result_event) {
+
+        mqi_event_type_t evtype = mql_result_event_get_type(result);
+
+        /* If the result value is asked as a string, this is what we get:
+
+            event         table
+            -------------------------------
+            'row deleted'  aul_applications
+
+                    pid appid
+            ----------------------------------------------------------
+                    369 org.tizen.ico.onscreen
+        */
+
+        find_hs(ctx, mql_result_event_get_changed_rows(result), evtype);
+    }
+}
+
 static bool user_init(mrp_mainloop_t *ml, const char *filename,
         const char *user_dir)
 {
     char *default_user = NULL;
     current_user = NULL;
     mrp_list_hook_t *p, *n;
-    int user_dir_len;
+    int user_dir_len, ret;
     user_manager_config_t *ctx;
+    mql_result_t *r;
+    mqi_handle_t tx;
+    const char *trigger_s = "CREATE TRIGGER row_trigger"
+            " ON ROWS IN aul_applications"
+            " CALLBACK application_event_cb"
+            " SELECT pid, appid";
+    const char *select_s = "SELECT pid, appid FROM aul_applications";
 
     user_dir_len = strlen(user_dir);
 
@@ -922,6 +927,7 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
         return FALSE;
 
     ctx->ml = ml;
+    ctx->current_hs_pid = -1; /* unknown still */
 
     ctx->user_dir_base = mrp_strdup(user_dir);
     ctx->defaultapps_path =
@@ -937,7 +943,8 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
 
     memcpy(ctx->defaultapps_path, user_dir, user_dir_len);
     ctx->defaultapps_path[user_dir_len] = '/';
-    memcpy(ctx->defaultapps_path+user_dir_len+1, "defaultApps.info", strlen("defaultApps.info"));
+    memcpy(ctx->defaultapps_path+user_dir_len+1, "defaultApps.info",
+            strlen("defaultApps.info"));
 
     /* load the user data (username and password pairs) from a file */
 
@@ -997,18 +1004,56 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
 
     ctx->flag_file_path = mrp_strdup("/tmp/ico/changeUser.flag");
     if (!ctx->flag_file_path) {
-        user_manager_config_free(ctx);
-        /* TODO: delete also the user list */
-        return FALSE;
+        goto error;
     }
 
-    /* We need to know homescreen PID so that we can follow it. Query the
-     * homescreen running status every second until it's up or ten minutes have
-     * passed. */
+    ret = mql_register_callback("application_event_cb", mql_result_event,
+            application_event_cb, ctx);
 
-    ctx->t = mrp_add_timer(ml, 1000, hs_check, ctx);
+    if (ret < 0) {
+        mrp_log_error("failed to register database trigger");
+        goto error;
+    }
+
+    tx = mqi_begin_transaction();
+
+    r = mql_exec_string(mql_result_string, trigger_s);
+
+   if (!mql_result_is_success(r)) {
+        mrp_log_error("db error: %s", mql_result_error_get_message(r));
+    }
+
+    mql_result_free(r);
+
+    mqi_commit_transaction(tx);
+
+    /* get the current list of running applications and see if homescreen
+       is present */
+
+    tx = mqi_begin_transaction();
+
+    r = mql_exec_string(mql_result_rows, select_s);
+
+    if (!mql_result_is_success(r)) {
+        mrp_log_error("db error: %s", mql_result_error_get_message(r));
+
+        /* find the home screen */
+        find_hs(ctx, r, mqi_row_inserted);
+
+        mql_result_free(r);
+    }
+    else {
+        mql_result_free(r);
+    }
+
+    mqi_commit_transaction(tx);
 
     return TRUE;
+
+error:
+    /* TODO: delete also the user list */
+    user_manager_config_free(ctx);
+    return FALSE;
 }
 
 static bool user_deinit()

@@ -759,12 +759,13 @@ static int plugin_init(mrp_plugin_t *plugin)
         if (!transport_create(sc))
             goto fail;
 
+        /* init the db table for application tracking */
+        mrp_application_tracker_create();
+
         if (!register_lua_bindings(sc))
             goto fail;
 
         scptr = sc;
-
-        mrp_application_tracker_create();
 
         return TRUE;
     }
