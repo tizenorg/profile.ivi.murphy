@@ -118,7 +118,7 @@ static ail_cb_ret_e handle_appinfo(const ail_appinfo_h appinfo, void *user_data)
 
     ail_appinfo_get_str(appinfo, AIL_PROP_CATEGORIES_STR, &val);
 
-    mrp_log_info("got category '%s'", val ? val : "NULL");
+    mrp_debug("got category '%s'", val ? val : "NULL");
 
     if (val && strcmp(val, "(NULL)") != 0)
         *str = mrp_strdup(val);
@@ -162,9 +162,13 @@ static int aul_launch_signal(int pid, void *user_data)
 
     MRP_UNUSED(user_data);
 
+    memset(appid, 0, sizeof(appid));
+
     mrp_log_info("tracker: launched app %i", pid);
 
-    aul_app_get_appid_bypid(pid, appid, 511);
+    if (aul_app_get_appid_bypid(pid, appid, 511) < 0) {
+        appid[0] = '\0';
+    }
 
     category = get_category(appid);
 
