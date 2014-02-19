@@ -133,6 +133,8 @@ cpu_watch_lua_t *cpu_watch_create(sysmon_lua_t *sm, int polling, lua_State *L)
                                                  NULL, 0);
 
     mrp_list_init(&w->hook);
+    w->cpu     = -1;
+    w->sample  = -1;
     w->sysmon  = sm;
     w->polling = polling;
     w->limref  = LUA_NOREF;
@@ -143,6 +145,18 @@ cpu_watch_lua_t *cpu_watch_create(sysmon_lua_t *sm, int polling, lua_State *L)
         luaL_error(L, "failed to initialize CPU watch (error: %s)",
                    *e ? e : "<unknown error>");
         return NULL;
+    }
+
+    if (w->cpu == -1 || w->sample == -1) {
+        luaL_error(L, "failed to initialize CPU watch, missing CPU or sample");
+        return NULL;
+    }
+
+    if (w->cpu >= cpu_get_cpus(NULL)) {
+        if (w->sample != CPU_SAMPLE_LOAD && w->sample != CPU_SAMPLE_IDLE) {
+            luaL_error(L, "cgroup CPU monitor has only load and idle samples");
+            return NULL;
+        }
     }
 
     if (w->sample == CPU_SAMPLE_IDLE)
@@ -187,6 +201,11 @@ static int cpu_watch_delete(lua_State *L)
     mrp_funcbridge_unref(L, w->notify);
     w->update = NULL;
     w->notify = NULL;
+
+    if (w->cpu >= cpu_get_cpus(NULL)) {
+        cpu_unregister_cgroup(w->cpu);
+        w->cpu = NULL;
+    }
 
     return 0;
 }
@@ -480,7 +499,12 @@ void cpu_watch_notify(cpu_watch_lua_t *w, lua_State *L)
 
 static inline int get_cpu_id(const char *name)
 {
-    return cpu_get_id(name);
+    int id;
+
+    if ((id = cpu_get_id(name)) >= 0)
+        return id;
+    else
+        return cpu_register_cgroup(name);
 }
 
 
