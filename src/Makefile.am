@@ -1612,7 +1612,8 @@ SYSMON_PLUGIN_SOURCES =						\
 	plugins/system-monitor/cpu-watch.c			\
 	plugins/system-monitor/cpu-sampler.c			\
 	plugins/system-monitor/mem-watch.c			\
-	plugins/system-monitor/mem-sampler.c
+	plugins/system-monitor/mem-sampler.c			\
+	plugins/system-monitor/cgroup.c
 
 
 SYSMON_PLUGIN_CFLAGS  = -I$(top_builddir)/src/plugins/system-monitor
