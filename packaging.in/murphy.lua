@@ -218,6 +218,16 @@ resource.class {
      shareable = false
 }
 
+resource.class {
+     name = "speech_recognition",
+     shareable = true
+}
+
+resource.class {
+     name = "speech_synthesis",
+     shareable = true
+}
+
 if not m:plugin_exists('ivi-resource-manager') and
    not with_system_controller
 then
