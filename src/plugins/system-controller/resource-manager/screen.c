@@ -86,6 +86,7 @@
 typedef struct screen_resource_s   screen_resource_t;
 typedef struct disable_iterator_s  disable_iterator_t;
 typedef struct output_iterator_s   output_iterator_t;
+typedef struct area_iterator_s     area_iterator_t;
 
 
 struct screen_resource_s {
@@ -121,6 +122,19 @@ struct disable_iterator_s {
 struct output_iterator_s {
     const char *name;
     mrp_wayland_output_t *out;
+};
+
+struct area_iterator_s {
+    mrp_resmgr_t *resmgr;
+    const char *fullname;
+    size_t areaid;
+    size_t outputid;
+    mrp_resmgr_screen_area_t *area;
+    struct {
+        uint32_t mask;
+        const char *names[MRP_ZONE_MAX + 1];
+    } zone;
+    int counter;
 };
 
 static int hash_compare(const void *, const void *);
@@ -505,6 +519,54 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
     return p - buf;
 }
 
+static int area_resolution_cb(void *key, void *object, void *user_data)
+{
+    
+    screen_resource_t  *sr = (screen_resource_t *)object;
+    area_iterator_t *ait = (area_iterator_t *)user_data;
+    const char *areaname;
+    const char *appid;
+    const char *zonename;
+    int32_t surfaceid;
+    int32_t layerid;
+
+    MRP_UNUSED(key);
+
+    MRP_ASSERT(sr && sr->res && ait, "confused with data structures");
+
+    if (sr->areaid == ANY_AREA && sr->zoneid < MRP_ZONE_MAX) {
+        areaname = get_areaname_for_resource(sr->res);
+
+        if (areaname && !strcmp(areaname, ait->fullname)) {
+            appid = get_appid_for_resource(sr->res);
+            surfaceid = get_surfaceid_for_resource(sr->res);
+            layerid = -1;
+            
+            mrp_debug("  resolving screen resource for '%s'",
+                      appid ? appid : "<unknown appid>");
+
+            sr->areaid = ait->areaid;
+            sr->outputid = ait->outputid;
+
+            area_insert_resource(ait->area, sr);
+
+            ait->counter++;
+            ait->zone.mask |= (((uint32_t)1) << sr->zoneid);
+
+            if ((zonename = ait->zone.names[sr->zoneid])) {
+                mrp_resmgr_notifier_queue_screen_event(ait->resmgr,
+                                                    sr->zoneid, zonename,
+                                                    MRP_RESMGR_EVENTID_CREATE,
+                                                    appid, surfaceid, layerid,
+                                                    ait->area->name);
+                mrp_resmgr_notifier_flush_screen_events(ait->resmgr,
+                                                    sr->zoneid);
+            }
+        }
+    }
+
+    return MRP_HTBL_ITER_MORE;
+}
 
 void mrp_resmgr_screen_area_create(mrp_resmgr_screen_t *screen,
                                    mrp_wayland_area_t *wlarea,
@@ -517,6 +579,9 @@ void mrp_resmgr_screen_area_create(mrp_resmgr_screen_t *screen,
     int32_t outputid;
     size_t i;
     int32_t x, x0, x1, y, y0, y1;
+    area_iterator_t ait;
+    uint32_t mask;
+    uint32_t z;
 
     MRP_ASSERT(screen && wlarea && wlarea->output && zonename,
                "invalid argument");
@@ -576,6 +641,31 @@ void mrp_resmgr_screen_area_create(mrp_resmgr_screen_t *screen,
             {
                 overlap_add(a, areaid);
                 overlap_add(rmarea, i);
+            }
+        }
+    }
+
+    mrp_debug("resolving resources in '%s' area", wlarea->fullname);
+
+    memset(&ait, 0, sizeof(ait));
+    ait.resmgr   = screen->resmgr;
+    ait.fullname = wlarea->fullname;
+    ait.areaid   = areaid;
+    ait.outputid = outputid;
+    ait.area     = rmarea;
+    mrp_zone_get_all_names(MRP_ZONE_MAX + 1, ait.zone.names);
+
+    mrp_htbl_foreach(screen->resources, area_resolution_cb, &ait);
+
+    if (ait.zone.mask) {
+        mrp_debug("recalculating owners ...");
+
+        for (z = 0;   ait.zone.mask && z < MRP_ZONE_MAX;   z++) {
+            mask = (((uint32_t)1) << z);
+            
+            if ((mask & ait.zone.mask)) {
+                ait.zone.mask &= ~mask;
+                mrp_resource_owner_recalc(z);
             }
         }
     }
@@ -931,8 +1021,10 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     const char *appid;
     mrp_application_t *app;
     mrp_resmgr_screen_area_t *area;
-    int32_t layerid;
-    int32_t areaid;
+    int32_t id;
+    size_t layerid;
+    size_t areaid;
+    int32_t outputid;
     int32_t surfaceid;
     screen_resource_t *sr;
     void *hk;
@@ -955,13 +1047,18 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
             
     layerid = get_layerid_for_resource(sr->res);
 
-    if ((areaid = get_area_for_resource(res)) < 0 ||
-        (size_t)areaid >= screen->narea           ||
-        !(area = screen->areas[areaid])            )
+    if ((id = get_area_for_resource(res)) >= 0 &&
+        (size_t)id < screen->narea             &&
+        (area = screen->areas[id])              )
     {
-        mrp_log_error("system-controller: failed to create screen resource: "
-                      "can't find area");
-        return NULL;
+        areaid = id;
+        outputid = area->outputid;
+    }
+    else {
+        mrp_debug("delayed area resolution");
+        area = NULL;
+        areaid = ANY_AREA;
+        outputid = ANY_OUTPUT;
     }
 
     if (!(surfaceid = get_surfaceid_for_resource(res))) {
@@ -980,12 +1077,13 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     sr->screen    = screen;
     sr->res       = res;
     sr->zoneid    = mrp_zone_get_id(zone);
-    sr->outputid  = area->outputid;
+    sr->outputid  = outputid;
     sr->areaid    = areaid;
     sr->key       = resource_key(res, ac);
     sr->requisite = app->requisites.screen;
-                    
-    area_insert_resource(area, sr);
+
+    if (area)
+        area_insert_resource(area, sr);
 
     mrp_debug("inserting resource to hash table: key=%p value=%p", res, sr);
     mrp_resmgr_insert_resource(resmgr, zone, res, sr);
@@ -994,11 +1092,14 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
     mrp_debug("inserting surface to hash table: key=%p value=%p", hk, sr);
     mrp_htbl_insert(screen->resources, hk, sr);
 
-    mrp_resmgr_notifier_queue_screen_event(screen->resmgr, sr->zoneid,zonename,
-                                           MRP_RESMGR_EVENTID_CREATE,
-                                           appid, surfaceid, layerid,
-                                           area->name);
-    mrp_resmgr_notifier_flush_screen_events(screen->resmgr, sr->zoneid);
+    if (area) {
+        mrp_resmgr_notifier_queue_screen_event(screen->resmgr,
+                                               sr->zoneid,zonename,
+                                               MRP_RESMGR_EVENTID_CREATE,
+                                               appid, surfaceid, layerid,
+                                               area->name);
+        mrp_resmgr_notifier_flush_screen_events(screen->resmgr, sr->zoneid);
+    }
 
     return sr;
 }
