@@ -1,3 +1,18 @@
+* Fri Feb 21 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.47
+- system-controller: support for disabling single windows (surfaces).
+- system-monitor: support for cgroup CPU usage/load monitoring.
+- system-monitor: initial support for cgroup Lua bindings.
+- config: added dedicated resources for speech recognition and synthesis.
+- system-controller: use database for getting the app info.
+- system-controller: handle client disconnects.
+- system-controller: support for delayed area resolution for screen resources
+- system-controller: fixes for multi display setups
+- packaging: added aul dependency when building system-controller.
+- system-controller: added AIL support for getting application categories.
+- amb: followd ambd D-Bus name.
+- system-controller: cleanups for application-tracker.
+- config: load telephony plugin only after 'audio_playback' gets defined.
+
 * Fri Feb 14 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.46
 - config: use the regulation hooks
 - config: add applications for special handling
