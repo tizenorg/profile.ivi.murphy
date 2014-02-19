@@ -514,6 +514,8 @@ if test "$enable_systemctl" = "yes"; then
     PKG_CHECK_MODULES(WAYLAND_CLIENT, wayland-client)
     PKG_CHECK_MODULES(LIBXML2, libxml-2.0)
     AC_CHECK_HEADER([ico-uxf-weston-plugin/ico_input_mgr-client-protocol.h])
+    PKG_CHECK_MODULES(AIL, ail)
+
 else
     AC_MSG_NOTICE([System-controller support is disabled.])
 fi
@@ -524,6 +526,8 @@ AC_SUBST(WAYLAND_CLIENT_CFLAGS)
 AC_SUBST(WAYLAND_CLIENT_LIBS)
 AC_SUBST(LIBXML2_CFLAGS)
 AC_SUBST(LIBXML2_LIBS)
+AC_SUBST(AIL_CFLAGS)
+AC_SUBST(AIL_LIBS)
 
 # Check if system-monitor (plugin) support should be enabled.
 AC_ARG_ENABLE(system-monitor,
@@ -589,16 +593,6 @@ if test "$enable_resource_asm" = "yes"; then
 fi
 AM_CONDITIONAL(RESOURCE_ASM_ENABLED, [test "$enable_resource_asm" = "yes"])
 AC_SUBST(RESOURCE_ASM_ENABLED)
-
-PKG_CHECK_MODULES(AIL, ail, [have_ail=yes], [have_ail=no])
-if test "$have_ail" = "no" ; then
-    AC_MSG_ERROR([AIL development headers not found.])
-fi
-AC_SUBST(AIL_CFLAGS)
-AC_SUBST(AIL_LIBS)
-
-enable_ail="$have_ail"
-
 
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
@@ -880,7 +874,6 @@ echo "systemd support: $enable_systemd"
 echo "Telephony support: $enable_telephony"
 echo "System controller support: $enable_systemctl"
 echo "System monitor support: $enable_sysmon"
-echo "AIL support: $enable_ail"
 echo "Plugins:"
 echo "  - linked-in:"
 for plugin in ${INTERNAL_PLUGINS:-none}; do
