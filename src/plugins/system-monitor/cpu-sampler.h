@@ -108,4 +108,10 @@ int cpu_sample_load(void);
 /** Get the last load for the given CPU and sample type. */
 int cpu_get_sample(int cpu, cpu_sample_t sample);
 
+/** Register a (cpuacct) cgroup for monitoring. */
+int cpu_register_cgroup(const char *name);
+
+/** Unregister the cgroup with the given id. */
+void cpu_unregister_cgroup(int id);
+
 #endif /* __MURPHY_SYSTEM_MONITOR_CPU_SAMPLER_H__ */
