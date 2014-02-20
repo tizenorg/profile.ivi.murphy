@@ -78,7 +78,7 @@ enum amb_type {
 #define AMB_SIGNATURE           "signature"
 #define AMB_BASIC_TABLE_NAME    "basic_table_name"
 #define AMB_OUTPUTS             "outputs"
-
+#define AMB_STATE_TABLE_NAME    "amb_state"
 
 /*
 signal sender=:1.35 -> dest=(null destination) serial=716 path=/c0ffee8ac6054a06903459c1deadbeef/0/Transmission; interface=org.automotive.Transmission; member=GearPositionChanged
@@ -162,13 +162,9 @@ typedef struct {
     const char *config_file;
     const char *amb_id;
     const char *tport_addr;
-    bool force_subscription;
     lua_State *L;
     mrp_list_hook_t lua_properties;
     mrp_htbl_t *dbus_property_objects; /* path to dbus_property_object_t */
-
-    mrp_process_state_t amb_state;
-    uint32_t amb_startup_delay;
 
     mrp_mainloop_t *ml;
 
@@ -1315,6 +1311,80 @@ static void delete_basic_table_data(basic_table_data_t *tdata)
     mrp_free(tdata);
 }
 
+static int create_amb_state_table()
+{
+    mqi_handle_t table;
+    mqi_column_def_t defs[3];
+    char buf[512];
+    int buflen;
+    mql_result_t *r;
+    mqi_handle_t tx;
+
+    defs[0].name = "id";
+    defs[0].type = mqi_unsignd;
+    defs[0].flags = 0;
+
+    defs[1].name = "state";
+    defs[1].type = mqi_integer;
+    defs[1].flags = 0;
+
+    memset(&defs[2], 0, sizeof(defs[2]));
+
+    table = MQI_CREATE_TABLE(AMB_STATE_TABLE_NAME, MQI_TEMPORARY, defs, NULL);
+
+    if (!table)
+        return -1;
+
+    /* initial value: unknown (-1) */
+
+    buflen = snprintf(buf, 512, "INSERT INTO %s VALUES (0, %d)",
+            AMB_STATE_TABLE_NAME, -1);
+
+    if (buflen <= 0 || buflen == 512) {
+        return -1;
+    }
+
+    tx = mqi_begin_transaction();
+
+    mrp_log_info("AMB: '%s'", buf);
+
+    r = mql_exec_string(mql_result_string, buf);
+    mql_result_free(r);
+
+    mqi_commit_transaction(tx);
+
+    return 0;
+}
+
+static int update_amb_state_table(data_t *ctx, int state)
+{
+    char buf[512];
+    int buflen;
+    mql_result_t *r;
+    mqi_handle_t tx;
+
+    MRP_UNUSED(ctx);
+
+    buflen = snprintf(buf, 512, "UPDATE %s SET state = +%d where id = 0",
+            AMB_STATE_TABLE_NAME, state);
+
+    if (buflen <= 0 || buflen == 512) {
+        return -1;
+    }
+
+    tx = mqi_begin_transaction();
+
+    mrp_log_info("AMB: '%s'", buf);
+
+    r = mql_exec_string(mql_result_string, buf);
+    mql_result_free(r);
+
+    mqi_commit_transaction(tx);
+
+    return 0;
+}
+
+
 static basic_table_data_t *create_basic_property_table(const char *table_name,
         const char *member, int type)
 {
@@ -1424,34 +1494,6 @@ static int load_config(lua_State *L, const char *path)
     }
 }
 
-static void amb_startup_timer(mrp_timer_t *t, void *data)
-{
-    data_t *ctx = (data_t *) data;
-    mrp_list_hook_t *p, *n;
-
-    mrp_del_timer(t);
-
-    /* check that ambd hasn't crashed meanwhile */
-
-    if (!ctx->force_subscription && ctx->amb_state != MRP_PROCESS_STATE_READY)
-        return;
-
-    mrp_log_info("AMB: delayed querying of ambd properties\n");
-
-    /* query the ambd property D-Bus paths again and start listening to
-     * the signals. */
-
-    mrp_list_foreach(&ctx->lua_properties, p, n) {
-        dbus_property_watch_t *w =
-                mrp_list_entry(p, dbus_property_watch_t, hook);
-
-        if (w->lua_prop->dbus_data.undefined_object_path)
-            find_property_object(ctx, w, w->lua_prop->dbus_data.objectname);
-        else
-            subscribe_property(ctx, w);
-    }
-}
-
 static int unsubscribe_signal_cb(void *key, void *object, void *user_data)
 {
     dbus_property_object_t *o = (dbus_property_object_t *) object;
@@ -1464,38 +1506,6 @@ static int unsubscribe_signal_cb(void *key, void *object, void *user_data)
             "org.freedesktop.DBus.Properties",
             "PropertiesChanged", NULL);
     return MRP_HTBL_ITER_MORE;
-}
-
-static void amb_watch(const char *id, mrp_process_state_t state, void *data)
-{
-    data_t *ctx = (data_t *) data;
-
-    if (strcmp(id, ctx->amb_id) != 0)
-        return;
-
-    mrp_log_info("AMB: ambd state changed to %s",
-            state == MRP_PROCESS_STATE_READY ? "ready" : "not ready");
-
-
-    if (state == MRP_PROCESS_STATE_NOT_READY &&
-            ctx->amb_state == MRP_PROCESS_STATE_READY) {
-
-        mrp_log_error("AMB: lost connection to ambd");
-
-        /* stop listening to the ambd signals */
-        mrp_htbl_foreach(ctx->dbus_property_objects, unsubscribe_signal_cb, ctx);
-    }
-    else if (state == MRP_PROCESS_STATE_READY &&
-            ctx->amb_state != MRP_PROCESS_STATE_READY) {
-
-        mrp_log_info("AMB: ambd was started up\n");
-
-        /* give amb some time to get the D-Bus interface ready */
-
-        mrp_add_timer(ctx->ml, ctx->amb_startup_delay, amb_startup_timer, ctx);
-    }
-
-    ctx->amb_state = state;
 }
 
 /* functions for handling updating the AMB properties */
@@ -1541,10 +1551,10 @@ static int update_amb_property(char *name, enum amb_type type, void *value,
             break;
     }
 
-    if (!mrp_transport_send(ctx->t, msg))
+    if (!mrp_transport_send(ctx->t, msg)) {
+        mrp_log_error("AMB: failed to send message ambd");
         goto end;
-
-    mrp_log_info("AMB: Sent message to ambd");
+    }
 
     ret = 0;
 
@@ -1590,10 +1600,19 @@ static bool update_func(lua_State *L, void *data,
     int ret = -1;
     char *error = "unknown error";
 
+    data_t *ctx = (data_t *) data;
+    int property_index;
+
     MRP_UNUSED(L);
 
+    if (!ctx->t) {
+        error = "ambd is not connected to Murphy";
+        goto error;
+    }
+
     if (!signature || signature[0] != 'o') {
-        mrp_log_error("AMB: invalid signature '%s'", signature ? signature : "NULL");
+        mrp_log_error("AMB: invalid signature '%s'",
+                signature ? signature : "NULL");
         goto error;
     }
 
@@ -1604,6 +1623,18 @@ static bool update_func(lua_State *L, void *data,
     if (!property || strlen(property) == 0) {
         error = "invalid property";
         goto error;
+    }
+
+    property_index = mrp_lua_sink_get_input_index(sink, property);
+
+    if (property_index == -1) {
+        error = "invalid property index";
+        goto error;
+    }
+
+    if (mrp_lua_sink_get_row_count(sink, property_index) == 0) {
+        mrp_log_warning("AMB: no value to report -- no rows in property");
+        goto end;
     }
 
     /* ok, for now we only support updates of basic values */
@@ -1617,29 +1648,32 @@ static bool update_func(lua_State *L, void *data,
 
     switch (type[0]) {
         case amb_double:
-            d_val = mrp_lua_sink_get_floating(sink,0,0,0);
+            d_val = mrp_lua_sink_get_floating(sink,property_index,0,0);
+            mrp_log_info("value for '%s' : %f", property, d_val);
             ret = update_amb_property((char *) property,
-                    (enum amb_type) type[0], &d_val, (data_t *) data);
+                    (enum amb_type) type[0], &d_val, ctx);
             break;
         case amb_int16:
         case amb_int32:
-            i_val = mrp_lua_sink_get_integer(sink,0,0,0);
+            i_val = mrp_lua_sink_get_integer(sink,property_index,0,0);
+            mrp_log_info("value for '%s' : %d", property, i_val);
             ret = update_amb_property((char *) property,
-                    (enum amb_type) type[0], &i_val, (data_t *) data);
+                    (enum amb_type) type[0], &i_val, ctx);
             break;
         case amb_bool:
         case amb_byte:
         case amb_uint16:
         case amb_uint32:
-            u_val = mrp_lua_sink_get_unsigned(sink,0,0,0);
+            u_val = mrp_lua_sink_get_unsigned(sink,property_index,0,0);
+            mrp_log_info("value for '%s' : %u", property, u_val);
             ret = update_amb_property((char *) property,
-                    (enum amb_type) type[0], &u_val, (data_t *) data);
+                    (enum amb_type) type[0], &u_val, ctx);
             break;
         case amb_string:
-            s_val = mrp_lua_sink_get_string(sink,0,0,0,NULL,0);
+            s_val = mrp_lua_sink_get_string(sink,property_index,0,0,NULL,0);
+            mrp_log_info("value for '%s' : %s", property, s_val);
             ret = update_amb_property((char *) property,
-                    (enum amb_type) type[0], (void *) s_val,
-                    (data_t *) data);
+                    (enum amb_type) type[0], (void *) s_val, ctx);
             break;
     }
 
@@ -1648,18 +1682,20 @@ static bool update_func(lua_State *L, void *data,
         goto error;
     }
 
+end:
     *ret_type = MRP_FUNCBRIDGE_BOOLEAN;
     ret_val->boolean = true;
 
     return TRUE;
 
 error:
-    mrp_log_error("AMB: error processing the property change!");
+    mrp_log_error("AMB: error sending property change to ambd: %s!", error);
 
     *ret_type = MRP_FUNCBRIDGE_BOOLEAN;
     ret_val->boolean = false;
 
-    /* FIXME: this shouldn't be needed, but without this the element handler crashes */
+    /* FIXME: this shouldn't be needed, but without this the element handler
+       crashes */
     ret_val->string = mrp_strdup(error);
 
     return TRUE;
@@ -1695,6 +1731,7 @@ static void closed_evt(mrp_transport_t *t, int error, void *user_data)
 
     mrp_transport_destroy(t);
     ctx->t = NULL;
+    update_amb_state_table(ctx, 0);
 
     /* open the listening socket again */
 
@@ -1714,6 +1751,7 @@ static void connection_evt(mrp_transport_t *lt, void *user_data)
     }
     else {
         ctx->t = mrp_transport_accept(lt, ctx, 0);
+        update_amb_state_table(ctx, 1);
 
         /* amb murphy plugin is now connected to us */
     }
@@ -1723,7 +1761,6 @@ static void connection_evt(mrp_transport_t *lt, void *user_data)
     mrp_transport_destroy(lt);
     ctx->lt = NULL;
 }
-
 
 static int create_transport(mrp_mainloop_t *ml, data_t *ctx)
 {
@@ -1804,6 +1841,38 @@ static void htbl_free_obj(void *key, void *object)
     free_dbus_property_object(o);
 }
 
+void amb_state_cb(mrp_dbus_t *dbus, const char *name, int up, const char *owner,
+        void *user_data)
+{
+    data_t *ctx = (data_t *) user_data;
+    mrp_list_hook_t *p, *n;
+
+    MRP_UNUSED(dbus);
+    MRP_UNUSED(name);
+    MRP_UNUSED(owner);
+
+    mrp_log_info("AMB: ambd D-Bus interface was set to: %d", up);
+
+    if (up) {
+        mrp_log_info("subscribing properties");
+        /* amb D-Bus interface was brought up, subscribe properties */
+        mrp_list_foreach(&ctx->lua_properties, p, n) {
+            dbus_property_watch_t *w =
+                    mrp_list_entry(p, dbus_property_watch_t, hook);
+
+            if (w->lua_prop->dbus_data.undefined_object_path)
+                find_property_object(ctx, w, w->lua_prop->dbus_data.objectname);
+            else
+                subscribe_property(ctx, w);
+        }
+    }
+    else {
+        mrp_log_info("unsubscribing properties");
+        /* unsubscribe properties? The paths should be deterministic. */
+        mrp_htbl_foreach(ctx->dbus_property_objects, unsubscribe_signal_cb,
+                ctx);
+    }
+}
 
 /* plugin init and deinit */
 
@@ -1828,14 +1897,10 @@ static int amb_init(mrp_plugin_t *plugin)
     ctx->config_file = args[ARG_AMB_CONFIG_FILE].str;
     ctx->amb_id = args[ARG_AMB_ID].str;
     ctx->tport_addr = args[ARG_AMB_TPORT_ADDRESS].str;
-    ctx->amb_startup_delay = args[ARG_AMB_STARTUP_DELAY].u32;
-    ctx->force_subscription = args[ARG_AMB_FORCE_SUBSCRIPTION].bln;
 
     mrp_log_info("AMB: D-Bus address: %s", ctx->amb_addr);
     mrp_log_info("AMB: config file: %s", ctx->config_file);
     mrp_log_info("AMB: transport address: %s", ctx->tport_addr);
-    mrp_log_info("AMB: %s D-Bus subscription",
-            ctx->force_subscription ? "forced" : "didn't force");
 
     ctx->dbus = mrp_dbus_connect(plugin->ctx->ml, args[ARG_AMB_DBUS_BUS].str,
             NULL);
@@ -1897,19 +1962,12 @@ static int amb_init(mrp_plugin_t *plugin)
 
     mrp_process_set_state("murphy-amb", MRP_PROCESS_STATE_READY);
 
-    if (mrp_process_set_watch(ctx->amb_id, plugin->ctx->ml, amb_watch, ctx) < 0) {
-        /* let's not quit yet? */
-        mrp_log_error("AMB: setting the ambd status watch failed");
-    }
+    /* keep track if amb is connected to Murphy*/
+    create_amb_state_table();
 
-    ctx->amb_state = mrp_process_query_state(ctx->amb_id);
+    /* start following the amb D-Bus name */
 
-    /* query amb properties after amb has had time to ready the interface */
-
-    if (ctx->force_subscription || ctx->amb_state == MRP_PROCESS_STATE_READY) {
-        mrp_log_info("added the ambd timer after %u ms", ctx->amb_startup_delay);
-        mrp_add_timer(ctx->ml, ctx->amb_startup_delay, amb_startup_timer, ctx);
-    }
+    mrp_dbus_follow_name(ctx->dbus, ctx->amb_addr, amb_state_cb, ctx);
 
     return TRUE;
 
@@ -1991,10 +2049,6 @@ static mrp_plugin_arg_t args[] = {
     MRP_PLUGIN_ARGIDX(ARG_AMB_ID, STRING, "amb_id", "ambd"),
     MRP_PLUGIN_ARGIDX(ARG_AMB_TPORT_ADDRESS, STRING, "transport_address",
             "unxs:/tmp/murphy/amb"),
-    MRP_PLUGIN_ARGIDX(ARG_AMB_STARTUP_DELAY, UINT32, "amb_startup_delay",
-            2000),
-    MRP_PLUGIN_ARGIDX(ARG_AMB_FORCE_SUBSCRIPTION, BOOL,
-            "force_subscription", false),
 };
 
 MURPHY_REGISTER_PLUGIN("amb",
