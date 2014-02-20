@@ -89,7 +89,7 @@ static int add_app_to_db(const char *appid, pid_t pid, const char *category)
             AUL_APPLICATION_TABLE_NAME, appid, pid, category);
 
     if (buflen <= 0 || buflen == DB_BUF_SIZE) {
-        return 0;
+        return -1;
     }
 
     tx = mqi_begin_transaction();
@@ -161,7 +161,7 @@ int mrp_application_tracker_create()
     defs[2].length = 64;
     defs[2].flags = 0;
 
-    memset(&defs[3], 0, sizeof(defs[2]));
+    memset(&defs[3], 0, sizeof(defs[3]));
 
     table = MQI_CREATE_TABLE(AUL_APPLICATION_TABLE_NAME, MQI_TEMPORARY,
             defs, NULL);
