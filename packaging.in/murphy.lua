@@ -281,6 +281,13 @@ element.lua {
              end
 }
 
+mdb.select {
+    name = "amb_state",
+    table = "amb_state",
+    columns = { "state" },
+    condition = "id = 0"
+}
+
 -- Night mode processing chain
 
 mdb.select {
@@ -343,7 +350,8 @@ mdb.select {
 if with_amb then
     sink.lua {
         name = "night_mode",
-        inputs = { owner = mdb.select.select_night_mode },
+        inputs = { NightMode = mdb.select.select_night_mode,
+                   amb_state = mdb.select.amb_state },
         property = "NightMode",
         type = "b",
         initiate = builtin.method.amb_initiate,
@@ -424,7 +432,8 @@ mdb.select {
 if with_amb then
     sink.lua {
         name = "driving_mode",
-        inputs = { owner = mdb.select.select_driving_mode },
+        inputs = { DrivingMode = mdb.select.select_driving_mode,
+                   amb_state = mdb.select.amb_state },
         property = "DrivingMode",
         type = "u",
         initiate = builtin.method.amb_initiate,
