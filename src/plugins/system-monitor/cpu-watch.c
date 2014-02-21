@@ -48,7 +48,6 @@
 #define RO                  MRP_LUA_CLASS_READONLY
 #define NOINIT              MRP_LUA_CLASS_NOINIT
 #define NOFLAGS             MRP_LUA_CLASS_NOFLAGS
-#define SETGET              cpu_watch_setmember, cpu_watch_getmember
 #define setmember           cpu_watch_setmember
 #define getmember           cpu_watch_getmember
 
@@ -204,7 +203,7 @@ static int cpu_watch_delete(lua_State *L)
 
     if (w->cpu >= cpu_get_cpus(NULL)) {
         cpu_unregister_cgroup(w->cpu);
-        w->cpu = NULL;
+        w->cpu = -1;
     }
 
     return 0;
