@@ -41,6 +41,9 @@
 #include <murphy/common/mm.h>
 #include <murphy/common/list.h>
 #include <murphy/common/refcnt.h>
+#include <murphy/core/lua-utils/object.h>
+#include <murphy/core/lua-utils/funcbridge.h>
+#include <murphy/core/lua-bindings/murphy.h>
 
 #include "cpu-sampler.h"
 #include "cgroup.h"
@@ -53,35 +56,39 @@ static MRP_LIST_HOOK(groups);            /* list of tracked groups */
  * control file descriptors
  */
 
-typedef union {
+typedef struct {
     struct {                             /* common controls for all types */
         int tasks;                       /*     tasks */
+        int procs;                       /*     cgroup.procs */
     } any;
     struct {                             /* memory-specific controls */
-        int tasks;                       /*     tasks */
         int limit;                       /*     limit_in_bytes */
-        int usage;                       /*     usage_in_bytes */
         int soft_limit;                  /*     soft_limit_in_bytes */
+        int usage;                       /*     usage_in_bytes */
+        int max_usage;                   /*     usage_in_bytes */
         int memsw_limit;                 /*     memsw_limit_in_bytes */
         int memsw_usage;                 /*     memsw_usage_in_bytes */
+        int memsw_max_usage;             /*     memsw_usage_in_bytes */
         int swappiness;                  /*     swappiness */
     } memory;
     struct {                             /* cpuacct-specific controls */
-        int tasks;                       /*     tasks */
         int usage_percpu;                /*     usage_percpu */
     } cpuacct;
     struct {                             /* cpu-specific controls */
-        int tasks;                       /*     tasks */
+        int shares;                      /*     shares */
         int cfs_period;                  /*     cfs_period_us */
         int cfs_quota;                   /*     cfs_quota_us */
         int rt_period;                   /*     rt_period_us */
         int rt_runtime;                  /*     rt_runtime_us */
     } cpu;
+    struct {
+        int state;
+    } freezer;
 } control_t;
 
 
 /*
- * a tracked control group
+ * a known control group
  */
 
 struct cgroup_s {
@@ -107,40 +114,151 @@ typedef struct {
 } control_path_t;
 
 
-#define ROPATH(_path, _field)                           \
-    { _path, MRP_OFFSET(control_t, _field), FALSE }
-#define RWPATH(_path, _field)                           \
-    { _path, MRP_OFFSET(control_t, _field), TRUE  }
 
-static control_path_t memory_controls[] = {
-    RWPATH("tasks"                      , any.tasks          ),
-    RWPATH("memory.limit_in_bytes"      , memory.limit       ),
-    RWPATH("memory.soft_limit_in_bytes" , memory.soft_limit  ),
-    RWPATH("memory.memsw.limit_in_bytes", memory.memsw_limit ),
-    ROPATH("memory.memsw.usage_in_bytes", memory.memsw_usage ),
-    RWPATH("memory.swappiness"          , memory.swappiness  ),
-    { NULL, 0, 0 },
+/*
+ * a cgroup control descriptor
+ */
+
+typedef enum {
+    CONTROL_FLAG_NOTTOP = 0x01,          /* absent in controller root */
+    CONTROL_FLAG_RDONLY = 0x02,          /* read-only control */
+    CONTROL_FLAG_IGNORE = 0x04,          /* don't try to open this */
+} control_flag_t;
+
+typedef struct {
+    const char *alias;                   /* user-friendlier Lua alias */
+    const char *path;                    /* relative path under mount point */
+    off_t       offs;                    /* fd offset within control struct */
+    int         flags;                   /* control-specific flags */
+} control_descr_t;
+
+
+#define SHARED  CONTROL_FLAG_SHARED
+#define IGNORE  CONTROL_FLAG_IGNORE
+#define MEMORY  (1 << CGROUP_TYPE_MEMORY )
+#define CPUACCT (1 << CGROUP_TYPE_CPUACCT)
+#define CPU     (1 << CGROUP_TYPE_CPU    )
+#define FREEZER (1 << CGROUP_TYPE_FREEZER)
+#define BLKIO   (1 << CGROUP_TYPE_BLKIO  )
+#define NETCLS  (1 << CGROUP_TYPE_NETCLS )
+#define DEVICES (1 << CGROUP_TYPE_DEVICES)
+
+
+/*
+ * common cgroup controller/filesytem entries
+ */
+
+#define RO(_alias, _path, _field) \
+    { _alias, _path, MRP_OFFSET(control_t, any._field), CONTROL_FLAG_RDONLY }
+#define RW(_alias, _path, _field) \
+    { _alias, _path, MRP_OFFSET(control_t, any._field), 0 }
+
+static control_descr_t common_controls[] = {
+    RW("Tasks"    , "tasks"       , tasks),
+    RW("Processes", "cgroup.procs", procs),
+    { NULL, NULL, -1, 0 }
 };
 
-static control_path_t cpuacct_controls[] = {
-    RWPATH("tasks"                      , any.tasks          ),
-    ROPATH("cpuacct.usage_percpu"      , cpuacct.usage_percpu),
-    { NULL, 0, 0 },
+#undef RO
+#undef RW
+
+
+/*
+ * 'memory' cgroup controller/filesystem entries
+ */
+
+#define RO(_alias, _path, _field)                                         \
+    { _alias, "memory."#_path, MRP_OFFSET(control_t, memory._field),      \
+            CONTROL_FLAG_RDONLY }
+#define RW(_alias, _path, _field)                                         \
+    { _alias, "memory."#_path, MRP_OFFSET(control_t, memory._field), 0 }
+
+static control_descr_t memory_controls[] = {
+    RW("Limit"          , limit_in_bytes          , limit          ),
+    RW("SoftLimit"      , soft_limit_in_bytes     , soft_limit     ),
+    RO("Usage"          , usage_in_bytes          , usage          ),
+    RO("MaxUsage"       , max_usage_in_bytes      , max_usage      ),
+    RW("MemSwapLimit"   , memsw.limit_in_bytes    , memsw_limit    ),
+    RO("MemSwapUsage"   , memsw.usage_in_bytes    , memsw_usage    ),
+    RO("MemSwapMaxUsage", memsw.max_usage_in_bytes, memsw_max_usage),
+    RW("Swappiness"     , swappiness              , swappiness     ),
+    { NULL, NULL, -1, 0 }
 };
 
-static control_path_t cpu_controls[] = {
-    RWPATH("tasks"                      , any.tasks          ),
-    RWPATH("cfs_period_us"              , cpu.cfs_period     ),
-    RWPATH("cfs_quota_us"               , cpu.cfs_quota      ),
-    RWPATH("rt_period_us"               , cpu.rt_period      ),
-    RWPATH("rt_runtime_us"              , cpu.rt_runtime     ),
-    { NULL, 0, 0 },
+#undef RO
+#undef RW
+
+
+/*
+ * 'cpuacct' cgroup controller/filesystem entries
+ */
+
+#define RO(_alias, _path, _field)                                         \
+    { _alias, "cpuacct."#_path, MRP_OFFSET(control_t, cpuacct._field),    \
+            CONTROL_FLAG_RDONLY }
+#define RW(_alias, _path, _field)                                         \
+    { _alias, "cpuacct."#_path, MRP_OFFSET(control_t, cpuacct._field), 0 }
+
+static control_descr_t cpuacct_controls[] = {
+    RO("Usage", usage_percpu, usage_percpu),
+    { NULL, NULL, -1, 0 }
 };
 
-static control_path_t *controls[] = {
+#undef RO
+#undef RW
+
+
+/*
+ * 'cpu' cgroup controller/filesystem entries
+ */
+
+#define RO(_alias, _path, _field)                                         \
+    { _alias, "cpu."#_path, MRP_OFFSET(control_t, cpu._field),            \
+            CONTROL_FLAG_RDONLY }
+#define RW(_alias, _path, _field)                                         \
+    { _alias, "cpu."#_path, MRP_OFFSET(control_t, cpu._field), 0 }
+
+static control_descr_t cpu_controls[] = {
+    RW("Shares"   , shares        , shares    ),
+    RW("CFSPeriod", cfs_period_us , cfs_period),
+    RW("CFSQuota" , cfs_quota_us  , cfs_quota ),
+    RW("RTPeriod" , rt_period_us  , rt_period ),
+    RW("RTRuntime", rt_runtime_us , rt_runtime),
+    { NULL, NULL, -1, 0 }
+};
+
+#undef RO
+#undef RW
+
+
+/*
+ * 'freezer' cgroup controller/filesystem entries
+ */
+
+#define RO(_alias, _path, _field)                                         \
+    { _alias, "freezer."#_path, MRP_OFFSET(control_t, freezer._field),    \
+            CONTROL_FLAG_RDONLY }
+#define RW(_alias, _path, _field)                                         \
+    { _alias, "freezer."#_path, MRP_OFFSET(control_t, freezer._field), 0 }
+
+static control_descr_t freezer_controls[] = {
+    RW("State", state, state),
+    { NULL, NULL, -1, 0 }
+};
+
+#undef RO
+#undef RW
+
+
+/*
+ * per controller filesystem entries
+ */
+
+static control_descr_t *controls[] = {
     [CGROUP_TYPE_MEMORY ] = memory_controls,
     [CGROUP_TYPE_CPU    ] = cpu_controls,
     [CGROUP_TYPE_CPUACCT] = cpuacct_controls,
+    [CGROUP_TYPE_FREEZER] = freezer_controls,
 };
 
 
@@ -158,8 +276,20 @@ static const char *type_names[] = {
     [CGROUP_TYPE_BLKIO  ] = "blkio",
     [CGROUP_TYPE_NETCLS ] = "net_cls",
     [CGROUP_TYPE_DEVICES] = "devices",
+    NULL
 };
 
+
+static inline cgroup_type_t cgroup_type(const char *type_name)
+{
+    cgroup_type_t type;
+
+    for (type = 0; type_names[type] != NULL; type++)
+        if (!strcmp(type_names[type], type_name))
+            return type;
+
+    return CGROUP_TYPE_UNKNOWN;
+}
 
 
 static const char *find_mount_point(cgroup_type_t type)
@@ -256,56 +386,69 @@ static const char *find_mount_point(cgroup_type_t type)
 
 static void close_controls(cgroup_t *cgrp)
 {
-    control_path_t *paths;
-    int            *fdp, i;
+    control_descr_t *ctrl;
+    int             *fdp, type;
 
-    paths = controls[cgrp->type];
+    for (type = -1; type < CGROUP_TYPE_MAX; type++) {
+        if (type >= 0) {
+            if (!(cgrp->type & (1 << type)))
+                continue;
 
-    if (paths == NULL)
-        return;
+            if ((ctrl = controls[type]) == NULL)
+                continue;
+        }
+        else
+            ctrl = common_controls;
 
-    for (i = 0; paths[i].path != NULL; i++) {
-        fdp = (int *)((void *)&cgrp->ctrl + paths[i].offs);
+        while (ctrl->path != NULL) {
+            fdp = (int *)((void *)&cgrp->ctrl + ctrl->offs);
 
-        if (*fdp >= 0) {
-            close(*fdp);
-            *fdp = 0;
+            if (*fdp >= 0) {
+                close(*fdp);
+                *fdp = 0;
+            }
+
+            ctrl++;
         }
     }
 }
 
 
-static int open_controls(cgroup_t *cgrp, int flags)
+static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int flags)
 {
-    control_path_t *paths;
-    int            *fdp, i;
-    char            path[PATH_MAX];
+    control_descr_t *ctrl;
+    int             *fdp;
+    char             path[PATH_MAX];
 
-    paths = controls[cgrp->type];
-
-    if (paths == NULL) {
-        errno = EINVAL;
-        return -1;
+    if (type >= 0) {
+        if ((ctrl = controls[type]) == NULL) {
+            errno = EINVAL;
+            return -1;
+        }
     }
+    else
+        ctrl = common_controls;
 
-    for (i = 0; paths[i].path != NULL; i++) {
-        if (flags == O_RDONLY && paths[i].rdwr)
+    while (ctrl->path != NULL) {
+        if (flags == O_RDONLY && !(ctrl->flags & CONTROL_FLAG_RDONLY))
             continue;
         else
-            fdp = (int *)((void *)&cgrp->ctrl + paths[i].offs);
+            fdp = (int *)((void *)&cgrp->ctrl + ctrl->offs);
 
         if (*fdp >= 0)
             continue;
 
         if (snprintf(path, sizeof(path), "%s/%s",
-                     cgrp->path, paths[i].path) >= (int)sizeof(path))
-            goto fail;
-
-        if ((*fdp = open(path, flags)) < 0) {
-        fail:
-            close_controls(cgrp);
+                     cgrp->path, ctrl->path) >= (int)sizeof(path))
             return -1;
-        }
+
+        mrp_debug("attempting to open '%s' (%s mode)",
+                  path, flags & O_RDWR ? "read-write" : "read-only");
+
+        if ((*fdp = open(path, flags)) < 0)
+            return -1;
+
+        ctrl++;
     }
 
     if (cgrp->dev == 0 && cgrp->ino == 0) {
@@ -316,6 +459,8 @@ static int open_controls(cgroup_t *cgrp, int flags)
             cgrp->ino = st.st_ino;
         }
     }
+
+    cgrp->type |= (1 << type);
 
     return 0;
 }
@@ -349,7 +494,19 @@ cgroup_t *cgroup_ref(cgroup_t *cgrp)
 
 int cgroup_unref(cgroup_t *cgrp)
 {
-    return mrp_unref_obj(cgrp, refcnt);
+    if (mrp_unref_obj(cgrp, refcnt)) {
+        mrp_list_delete(&cgrp->hook);
+
+        mrp_free(cgrp->name);
+        mrp_free(cgrp->path);
+        close_controls(cgrp);
+
+        mrp_free(cgrp);
+
+        return TRUE;
+    }
+    else
+        return FALSE;
 }
 
 
@@ -367,14 +524,25 @@ cgroup_t *cgroup_open(cgroup_type_t type, const char *name, int flags)
     if ((root = find_mount_point(type)) == NULL) {
         mrp_log_error("Couldn't find mount point for cgroup type %s.",
                       type_names[type]);
+        errno = ENOENT;
         return NULL;
     }
 
-    if (snprintf(path, sizeof(path), "%s/%s", root, name) >= (int)sizeof(path))
-        goto fail;
+    if (snprintf(path, sizeof(path), "%s/%s", root, name) >= (int)sizeof(path)){
+        errno = EOVERFLOW;
+        return NULL;
+    }
+
+    if (flags & O_CREAT) {
+        if (mkdir(path, 0755) != 0 && errno != EEXIST) {
+            mrp_log_error("Couldn't create cgroup '%s' (%d: %s).",
+                          path, errno, strerror(errno));
+            return NULL;
+        }
+    }
 
     if ((cgrp = find_cgroup(path)) != NULL) {
-        if (open_controls(cgrp, flags) == 0)
+        if (open_controls(cgrp, type, flags) == 0)
             return cgroup_ref(cgrp);
         else
             return NULL;
@@ -387,14 +555,14 @@ cgroup_t *cgroup_open(cgroup_type_t type, const char *name, int flags)
     mrp_refcnt_init(&cgrp->refcnt);
     memset(&cgrp->ctrl, -1, sizeof(cgrp->ctrl));
 
-    cgrp->type = type;
     cgrp->name = mrp_strdup(name);
     cgrp->path = mrp_strdup(path);
 
     if (cgrp->name == NULL || cgrp->path == NULL)
         goto fail;
 
-    if (open_controls(cgrp, flags) != 0)
+    if (open_controls(cgrp, -1  , flags) != 0 ||
+        open_controls(cgrp, type, flags) != 0)
         goto fail;
 
     mrp_list_append(&groups, &cgrp->hook);
@@ -402,9 +570,7 @@ cgroup_t *cgroup_open(cgroup_type_t type, const char *name, int flags)
     return cgrp;
 
  fail:
-    mrp_free(cgrp->name);
-    mrp_free(cgrp->path);
-    mrp_free(cgrp);
+    cgroup_unref(cgrp);
 
     return NULL;
 }
@@ -427,7 +593,7 @@ int cgroup_get_cpu_usage(cgroup_t *cgrp, uint64_t *usgbuf, size_t n)
     char buf[512], *p;
     int  len, fd, i;
 
-    if (cgrp->type != CGROUP_TYPE_CPUACCT)
+    if (!(cgrp->type & (1 << CGROUP_TYPE_CPUACCT)))
         return -1;
 
     fd = cgrp->ctrl.cpuacct.usage_percpu;
@@ -444,7 +610,7 @@ int cgroup_get_cpu_usage(cgroup_t *cgrp, uint64_t *usgbuf, size_t n)
     i = 1;
     usgbuf[0] = 0;
     while (i < (int)n && *p) {
-        usgbuf[0] += (usgbuf[i]  = strtoull(p, &p, 10));
+        usgbuf[0] += (usgbuf[i] = strtoull(p, &p, 10));
         if (*p) {
             if (*p != ' ')
                 return -1;
@@ -455,5 +621,450 @@ int cgroup_get_cpu_usage(cgroup_t *cgrp, uint64_t *usgbuf, size_t n)
         i++;
     }
 
-    return i;
+    return (i == (int)n ? 0 : -1);
 }
+
+
+/*
+ * CGroup object
+ */
+
+#define CGROUP_LUA_CLASS MRP_LUA_CLASS(cgroup, lua)
+#define RO               MRP_LUA_CLASS_READONLY
+#define NOINIT           MRP_LUA_CLASS_NOINIT
+#define NOFLAGS          MRP_LUA_CLASS_NOFLAGS
+#define setmember        cgroup_lua_setmember
+#define getmember        cgroup_lua_getmember
+
+typedef struct {
+    cgroup_type_t  type;                 /* cgroup type */
+    const char    *name;                 /* group name */
+    int            flags;                /* opening flags */
+} cgroup_setup_t;
+
+
+typedef struct {
+    cgroup_setup_t *setup;               /* collected parameters for setup */
+    cgroup_t       *cg;                  /* actual cgroup */
+} cgroup_lua_t;
+
+
+static int cgroup_lua_no_constructor(lua_State *L);
+static void cgroup_lua_destroy(void *data);
+static void cgroup_lua_changed(void *data, lua_State *L, int member);
+static ssize_t cgroup_lua_tostring(mrp_lua_tostr_mode_t mode, char *buf,
+                                   size_t size, lua_State *L, void *data);
+static int cgroup_lua_setmember(void *data, lua_State *L, int member,
+                                mrp_lua_value_t *v);
+static int cgroup_lua_getmember(void *data, lua_State *L, int member,
+                                mrp_lua_value_t *v);
+static int cgroup_lua_setfield(lua_State *L);
+static int cgroup_lua_getfield(lua_State *L);
+static int cgroup_lua_open(lua_State *L);
+static int cgroup_lua_close(lua_State *L);
+static int cgroup_lua_addtask(lua_State *L);
+static int cgroup_lua_addproc(lua_State *L);
+static int cgroup_lua_setparam(lua_State *L);
+
+MRP_LUA_METHOD_LIST_TABLE(cgroup_lua_methods,
+    MRP_LUA_METHOD_CONSTRUCTOR(cgroup_lua_no_constructor)
+    MRP_LUA_METHOD(close      , cgroup_lua_close   )
+    MRP_LUA_METHOD(add_task   , cgroup_lua_addtask )
+    MRP_LUA_METHOD(add_process, cgroup_lua_addproc )
+    MRP_LUA_METHOD(set_param  , cgroup_lua_setparam));
+
+MRP_LUA_METHOD_LIST_TABLE(cgroup_lua_overrides,
+    MRP_LUA_OVERRIDE_CALL(cgroup_lua_no_constructor)
+    MRP_LUA_OVERRIDE_SETFIELD(cgroup_lua_setfield)
+    MRP_LUA_OVERRIDE_GETFIELD(cgroup_lua_getfield));
+
+MRP_LUA_MEMBER_LIST_TABLE(cgroup_lua_members,
+    MRP_LUA_CLASS_STRING ("type", 0, setmember, getmember, RO)
+    MRP_LUA_CLASS_STRING ("name", 0, setmember, getmember, RO)
+    MRP_LUA_CLASS_STRING ("mode", 0, setmember, getmember, RO));
+
+MRP_LUA_DEFINE_CLASS(cgroup, lua, cgroup_lua_t, cgroup_lua_destroy,
+    cgroup_lua_methods, cgroup_lua_overrides, cgroup_lua_members, NULL,
+    cgroup_lua_changed, cgroup_lua_tostring , NULL,
+                     MRP_LUA_CLASS_EXTENSIBLE | MRP_LUA_CLASS_PRIVREFS);
+
+MRP_LUA_CLASS_CHECKER(cgroup_lua_t, cgroup_lua, CGROUP_LUA_CLASS);
+
+typedef enum {
+    CGROUP_MEMBER_TYPE,
+    CGROUP_MEMBER_NAME,
+    CGROUP_MEMBER_MODE,
+} cgroup_member_t;
+
+
+static int cgroup_lua_no_constructor(lua_State *L)
+{
+    return luaL_error(L, "can't create CGroup via constructor, "
+                      "use create or open instead");
+}
+
+
+static void cgroup_lua_destroy(void *data)
+{
+    MRP_UNUSED(data);
+}
+
+
+static int cgroup_lua_open(lua_State *L)
+{
+    cgroup_lua_t   *cgrp;
+    cgroup_t       *cg;
+    cgroup_setup_t  setup;
+    int             narg;
+    char            e[256];
+
+    if ((narg = lua_gettop(L)) != 2)
+        luaL_error(L, "expecting 1 argument, got %d", narg);
+
+    luaL_checktype(L, 2, LUA_TTABLE);
+
+    cgrp = (cgroup_lua_t *)mrp_lua_create_object(L, CGROUP_LUA_CLASS, NULL, 0);
+
+    mrp_clear(&setup);
+    setup.type = CGROUP_TYPE_UNKNOWN;
+    cgrp->setup = &setup;
+
+    if (mrp_lua_init_members(cgrp, L, 2, e, sizeof(e)) != 1) {
+        luaL_error(L, "failed to initialize CGroup (error: %s)",
+                   *e ? e : "<unknown error>");
+        lua_pop(L, 1);
+        return 0;
+    }
+
+    if (setup.type >= 0 && setup.name != NULL)
+        cg = cgroup_open(setup.type, setup.name, setup.flags);
+    else
+        cg = NULL;
+
+    if (cg == NULL) {
+        lua_pushnil(L);
+        return 1;
+    }
+    cgrp->cg = cg;
+
+    return 1;
+}
+
+
+static int cgroup_lua_close(lua_State *L)
+{
+    cgroup_lua_t *cgrp = cgroup_lua_check(L, 1);
+
+    cgroup_unref(cgrp->cg);
+    cgrp->cg = NULL;
+
+    return 0;
+}
+
+
+static void cgroup_lua_changed(void *data, lua_State *L, int member)
+{
+    MRP_UNUSED(data);
+    MRP_UNUSED(L);
+    MRP_UNUSED(member);
+}
+
+
+static ssize_t cgroup_lua_tostring(mrp_lua_tostr_mode_t mode, char *buf,
+                                   size_t size, lua_State *L, void *data)
+{
+    MRP_UNUSED(L);
+
+    switch (mode & MRP_LUA_TOSTR_MODEMASK) {
+    case MRP_LUA_TOSTR_LUA:
+    default:
+        return snprintf(buf, size, "{CGroup %p}", data);
+    }
+}
+
+
+static int cgroup_lua_setmember(void *data, lua_State *L, int member,
+                                mrp_lua_value_t *v)
+{
+    cgroup_lua_t *cgrp = (cgroup_lua_t *)data;
+
+    MRP_UNUSED(L);
+
+    mrp_debug("setting cgroup member #%d for %p", member, data);
+
+    if (cgrp->setup != NULL) {
+        switch (member) {
+        case CGROUP_MEMBER_TYPE:
+            cgrp->setup->type = cgroup_type(v->str);
+            return 1;
+        case CGROUP_MEMBER_NAME:
+            cgrp->setup->name = mrp_strdup(v->str);
+            return 1;
+        case CGROUP_MEMBER_MODE: {
+            const char *opt = v->str, *e;
+            int         len;
+
+            cgrp->setup->flags = O_RDWR;
+
+            while (opt && *opt) {
+                if ((e = strchr(opt, ',')) != NULL)
+                    len = e - opt;
+                else
+                    len = strlen(opt);
+
+                if (len == 8 && !strncmp(opt, "readonly", 8)) {
+                    cgrp->setup->flags &= ~O_RDWR;
+                    cgrp->setup->flags |= O_RDONLY;
+                }
+                else if (len == 9 && !strncmp(opt, "readwrite", 9))
+                    cgrp->setup->flags |= O_RDWR;
+                else if (len == 6 && !strncmp(opt, "create", 6))
+                    cgrp->setup->flags |= O_CREAT | O_RDWR;
+                else
+                    return -1;
+
+                opt = e && *e ? e + 1 : NULL;
+            }
+
+            return 1;
+        }
+
+        default:
+            return 0;
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
+
+static int cgroup_lua_getmember(void *data, lua_State *L, int member,
+                                mrp_lua_value_t *v)
+{
+    MRP_UNUSED(data);
+    MRP_UNUSED(L);
+    MRP_UNUSED(member);
+    MRP_UNUSED(v);
+
+    printf("* %s called for member #%d...\n", __FUNCTION__, member);
+
+    switch (member) {
+    case CGROUP_MEMBER_MODE:
+        v->str = "mode forgotten a long long time ago";
+        break;
+    }
+
+    return 1;
+}
+
+
+static int get_control_fd(cgroup_t *cg, const char *name, int type)
+{
+    control_descr_t *ctrl;
+
+    if (type >= 0) {
+        if ((ctrl = controls[type]) == NULL)
+            return -1;
+    }
+    else
+        ctrl = common_controls;
+
+    while (ctrl->path != NULL) {
+        if (!strcmp(name, ctrl->alias) || !strcmp(name, ctrl->path))
+            return *(int *)((void *)&cg->ctrl + ctrl->offs);
+        else
+            ctrl++;
+    }
+
+    return -1;
+}
+
+
+static int get_cgroup_fd(cgroup_t *cg, const char *name)
+{
+    int type, fd;
+
+    if (cg == NULL || name == NULL)
+        return -1;
+
+    for (type = -1; type < CGROUP_TYPE_MAX; type++) {
+        if (type >= 0 && !(cg->type & (1 << type)))
+            continue;
+        if ((fd = get_control_fd(cg, name, type)) >= 0)
+            return fd;
+    }
+
+    return -1;
+}
+
+
+static int cgroup_lua_setfield(lua_State *L)
+{
+    cgroup_lua_t *cgrp = cgroup_lua_check(L, -3);
+    const char   *name, *val;
+    char          buf[512];
+    int           fd, len;
+
+    luaL_checktype(L, -2, LUA_TSTRING);
+    name = lua_tostring(L, -2);
+
+    mrp_debug("setting cgroup field '%s'", name);
+
+    if ((fd = get_cgroup_fd(cgrp->cg, name)) < 0)
+        return 0;
+
+    switch (lua_type(L, -1)) {
+    case LUA_TSTRING:
+        val = lua_tostring(L, -1);
+        len = strlen(val);
+        break;
+    case LUA_TNUMBER:
+        len = snprintf(buf, sizeof(buf), "%.0f", lua_tonumber(L, -1));
+        val = buf;
+        break;
+    default:
+        return luaL_error(L, "expecting string or integer value");
+    }
+
+    if (write(fd, val, len) == len)
+        return 1;
+    else
+        return -1;
+}
+
+
+static int cgroup_lua_getfield(lua_State *L)
+{
+    cgroup_lua_t *cgrp = cgroup_lua_check(L, -2);
+    const char   *name;
+    char          buf[512];
+    int           fd, len;
+
+    luaL_checktype(L, -1, LUA_TSTRING);
+    name = lua_tostring(L, -1);
+
+    mrp_debug("getting field '%s'", name);
+
+    if ((fd = get_cgroup_fd(cgrp->cg, name)) < 0)
+        return 0;
+
+    mrp_debug("control fd for field '%s' is %d", name, fd);
+
+    len = read(fd, buf, sizeof(buf) - 1);
+    lseek(fd, 0, SEEK_SET);
+
+    if (len < 0)
+        lua_pushnil(L);
+    else{
+        buf[len] = '\0';
+        lua_pushstring(L, buf);
+    }
+
+    return 1;
+}
+
+
+static inline int write_pid(int fd, unsigned int pid)
+{
+    char buf[64];
+    int  len;
+
+    len = snprintf(buf, sizeof(buf), "%u", pid);
+
+    if (len <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (write(fd, buf, len) == len)
+        return 0;
+    else
+        return -1;
+}
+
+
+static int cgroup_lua_addpid(lua_State *L, int process)
+{
+    cgroup_lua_t *cgrp = cgroup_lua_check(L, 1);
+    int           type, fd, pid, i, status;
+    const char   *name;
+    size_t        idx;
+
+    if (lua_gettop(L) != 2)
+        return luaL_error(L, "expecting 1 argument, got %d", lua_gettop(L) - 1);
+
+    if ((type = lua_type(L, 2)) != LUA_TNUMBER && type != LUA_TTABLE)
+        return luaL_error(L, "expecting integer or table argument");
+
+    if (cgrp->cg == NULL)
+        return luaL_error(L, "given CGroup has no controls open");
+
+    fd = process ? cgrp->cg->ctrl.any.procs : cgrp->cg->ctrl.any.tasks;
+
+    if (fd < 0)
+        return luaL_error(L, "given CGroup has no task/process control open");
+
+    if (type == LUA_TNUMBER) {           /* a single PID */
+        pid = lua_tointeger(L, 2);
+
+        if (pid != lua_tonumber(L, 2))
+            return luaL_error(L, "non-integer number given as PID");
+
+        if (write_pid(fd, pid) != 0)
+            lua_pushinteger(L, -1);
+        else
+            lua_pushinteger(L, 0);
+        return 1;
+    }
+                                         /* a table of PIDs */
+    status = 1;
+    MRP_LUA_FOREACH_ALL(L, i, 2, type, name, idx) {
+        if (type != LUA_TNUMBER)
+            return luaL_error(L, "expecting pure table of integer PIDs");
+
+        if (lua_type(L, -1) != LUA_TNUMBER)
+            return luaL_error(L, "expecting table of integer PIDs");
+
+        pid = lua_tointeger(L, -1);
+
+        if (pid != lua_tonumber(L, -1))
+            return luaL_error(L, "non-integer number given as PID");
+
+        if (write_pid(fd, pid) != 0)
+            if (status > 0)
+                status = -(i + 1);
+    }
+
+    lua_pushinteger(L, status);
+    return 1;
+}
+
+
+static int cgroup_lua_addtask(lua_State *L)
+{
+    return cgroup_lua_addpid(L, FALSE);
+}
+
+
+static int cgroup_lua_addproc(lua_State *L)
+{
+    return cgroup_lua_addpid(L, TRUE);
+}
+
+
+static int cgroup_lua_getparam(lua_State *L)
+{
+    return cgroup_lua_getfield(L);
+}
+
+
+static int cgroup_lua_setparam(lua_State *L)
+{
+    return cgroup_lua_setfield(L);
+}
+
+
+MURPHY_REGISTER_LUA_BINDINGS(murphy, CGROUP_LUA_CLASS,
+                             { "CGroupOpen", cgroup_lua_open });
