@@ -114,6 +114,7 @@ struct audio_resource_s {
 
 struct disable_iterator_s {
     uint32_t zoneid;
+    const char *appclass;
     bool disable;
     mrp_resmgr_disable_t type;
     uint32_t mask;
@@ -224,44 +225,53 @@ static int audio_disable_cb(void *key, void *object, void *user_data)
     audio_resource_t *ar = (audio_resource_t *)object;
     disable_iterator_t *it = (disable_iterator_t *)user_data;
     const char *appid;
+    const char *appclass;
     uint32_t disable;
 
     MRP_UNUSED(key);
 
     MRP_ASSERT(ar && it, "invalid argument");
 
-    if (it->zoneid == ANY_ZONE || ar->zoneid == it->zoneid) {
-        switch (it->type) {
+    if ((appclass = mrp_resource_get_application_class(ar->res))) {
+        if ((  it->zoneid == ANY_ZONE    ||     ar->zoneid == it->zoneid   ) &&
+            (!strcmp(it->appclass, "*")  || !strcmp(appclass, it->appclass))  )
+        {
+            switch (it->type) {
 
-        case MRP_RESMGR_DISABLE_REQUISITE:
-            if (it->req && (it->req & ar->requisite) == it->req)
-                goto disable;
-            break;
-
-        case MRP_RESMGR_DISABLE_APPID:
-            if ((appid = get_appid_for_resource(ar->res)) &&
-                it->appid && !strcmp(it->appid, appid))
-                goto disable;
-            break;
-
-        disable:
-            disable = ar->disable & it->mask;
-            if (it->disable) {
-                if (disable)
+            case MRP_RESMGR_DISABLE_REQUISITE:
+                if (it->req && (it->req & ar->requisite) == it->req)
+                    goto disable;
+                break;
+                
+            case MRP_RESMGR_DISABLE_APPID:
+                if (it->appid) {
+                    if (!strcmp(it->appid, "*"))
+                        goto disable;
+                    appid = get_appid_for_resource(ar->res);
+                    if (appid && !strcmp(it->appid, appid))
+                        goto disable;
+                }
+                break;
+                
+            disable:
+                disable = ar->disable & it->mask;
+                if (it->disable) {
+                    if (disable)
+                        break;
+                    ar->disable |= it->mask;
+                }
+                else {
+                    if (!disable)
                     break;
-                ar->disable |= it->mask;
+                    ar->disable &= ~it->mask;
+                }
+                it->counter++;
+                it->zones |= (((uint32_t)1) << ar->zoneid);
+                break;
+                
+            default:
+                return MRP_HTBL_ITER_STOP;
             }
-            else {
-                if (!disable)
-                    break;
-                ar->disable &= ~it->mask;
-            }
-            it->counter++;
-            it->zones |= (((uint32_t)1) << ar->zoneid);
-            break;
-
-        default:
-            return MRP_HTBL_ITER_STOP;
         }
     }
     
@@ -270,9 +280,11 @@ static int audio_disable_cb(void *key, void *object, void *user_data)
 
 int mrp_resmgr_audio_disable(mrp_resmgr_audio_t *audio,
                              const char *zone_name,
+                             const char *application_class,
                              bool disable,
                              mrp_resmgr_disable_t type,
-                             void *data)
+                             void *data,
+                             bool recalc_owner)
 {
     const char *zone_names[MRP_ZONE_MAX + 1];
     disable_iterator_t it;
@@ -281,12 +293,15 @@ int mrp_resmgr_audio_disable(mrp_resmgr_audio_t *audio,
     uint32_t mask;
     uint32_t z;
 
-    MRP_ASSERT(audio && data && zone_name, "invalid argument");
+    MRP_ASSERT(audio && data && zone_name && application_class,
+               "invalid argument");
 
-    mrp_debug("zone_name='%s' %s, type=0x%02x data=%p",
+    mrp_debug("zone_name='%s' application_class='%s' %s type=0x%02x data=%p"
+              "recalc_owner=%s",
               zone_name ? zone_name : "<any zone>",
+              application_class ? application_class : "<any class>",
               disable ? "disable" : "enable",
-              type, data);
+              type, data, recalc_owner ? "true" : "false");
 
     if (zone_name && strcmp(zone_name, "*")) {
         if (mrp_zone_get_all_names(MRP_ZONE_MAX + 1, zone_names)) {
@@ -304,9 +319,9 @@ int mrp_resmgr_audio_disable(mrp_resmgr_audio_t *audio,
         }
     }
 
-
     memset(&it, 0, sizeof(it));
     it.zoneid = zone_id;
+    it.appclass = application_class;
     it.disable = disable;
     it.type = type;
     it.mask = BIT(type - 1);
@@ -331,12 +346,14 @@ int mrp_resmgr_audio_disable(mrp_resmgr_audio_t *audio,
 
     mrp_htbl_foreach(audio->resources, audio_disable_cb, &it);
 
-    for (z = 0;   it.zones && z < MRP_ZONE_MAX;   z++) {
-        mask = (((uint32_t)1) << z);
-
-        if ((mask & it.zones)) {
-            it.zones &= ~mask;
-            mrp_resource_owner_recalc(z);
+    if (recalc_owner) {
+        for (z = 0;   it.zones && z < MRP_ZONE_MAX;   z++) {
+            mask = (((uint32_t)1) << z);
+            
+            if ((mask & it.zones)) {
+                it.zones &= ~mask;
+                mrp_resource_owner_recalc(z);
+            }
         }
     }
 
@@ -620,17 +637,18 @@ static void audio_grant_resources(mrp_resmgr_audio_t *audio,
                                   mrp_zone_t *zone)
 {
     uint32_t zoneid;
-    uint32_t grantid;
     const char *zonename;
+    uint32_t grantid;
     mrp_list_hook_t *resources, *rentry , *rn;
     audio_resource_t *ar;
     const char *appid;
 
     zoneid = mrp_zone_get_id(zone);
+    zonename = mrp_zone_get_name(zone);
     resources = audio->zones + zoneid;
     grantid = ++(audio->grantids[zoneid]);
 
-    if (!(zonename = mrp_zone_get_name(zone)))
+    if (!zonename)
         zonename = "<unknown>";
 
     mrp_list_foreach_back(resources, rentry, rn) {
@@ -646,6 +664,11 @@ static void audio_grant_resources(mrp_resmgr_audio_t *audio,
                       appid, zonename);
 
             ar->grantid = grantid;
+
+            mrp_resmgr_notifier_queue_audio_event(audio->resmgr,
+                                                zoneid, zonename,
+                                                MRP_RESMGR_EVENTID_PREALLOCATE,
+                                                appid, ar->audioid);
 
             if (!mrp_resource_is_shared(ar->res))
                 break;
@@ -782,16 +805,25 @@ static void audio_notify(mrp_resource_event_t event,
 static void audio_init(mrp_zone_t *zone, void *userdata)
 {
     mrp_resmgr_audio_t *audio = (mrp_resmgr_audio_t *)userdata;
+    uint32_t zoneid;
     const char *zonename;
 
     MRP_ASSERT(zone && audio, "invalid argument");
 
-    if (!(zonename = mrp_zone_get_name(zone)))
+    zoneid   = mrp_zone_get_id(zone);
+    zonename = mrp_zone_get_name(zone);
+
+    if (!zonename)
         zonename = "<unknown>";
 
     mrp_debug("audio init in zone '%s'", zonename);
 
+    mrp_resmgr_notifier_queue_audio_event(audio->resmgr, zoneid, zonename,
+                                          MRP_RESMGR_EVENTID_INIT,
+                                          "<unknown>", -1);
     audio_grant_resources(audio, zone);
+
+    mrp_resmgr_notifier_flush_audio_events(audio->resmgr, zoneid);
 }
 
 static bool audio_allocate(mrp_zone_t *zone,
