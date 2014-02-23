@@ -50,9 +50,11 @@ void mrp_resmgr_audio_destroy(mrp_resmgr_audio_t *audio);
 
 int mrp_resmgr_audio_disable(mrp_resmgr_audio_t *audio,
                              const char *zone_name,
+                             const char *application_class,
                              bool disable,
                              mrp_resmgr_disable_t type,
-                             void *data);
+                             void *data,
+                             bool recalc_owner);
 
 int mrp_resmgr_audio_print(mrp_resmgr_audio_t *audio, uint32_t zoneid,
                             char *buf, int len);

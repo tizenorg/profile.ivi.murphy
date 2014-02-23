@@ -460,6 +460,7 @@ static bool disable_screen_bridge(lua_State *L,
     const char *output_name;
     const char *area_name;
     bool disable;
+    bool recalc_owner;
     int cnt;
 
     MRP_UNUSED(L);
@@ -469,8 +470,8 @@ static bool disable_screen_bridge(lua_State *L,
     *ret_type = MRP_FUNCBRIDGE_NO_DATA;
 
     if (!strcmp((const char *)data, "sur")) {
-        if (strcmp(signature, "ossdb")) {
-            mrp_log_error("bad signature: expected 'ossdb' got '%s'",
+        if (strcmp(signature, "ossdbb")) {
+            mrp_log_error("bad signature: expected 'ossdbb' got '%s'",
                           signature);
             return false;
         }
@@ -478,8 +479,8 @@ static bool disable_screen_bridge(lua_State *L,
         data = (void *)&args[3].integer;
     }
     else if (!strcmp((const char *)data, "app")) {
-        if (strcmp(signature, "osssb")) {
-            mrp_log_error("bad signature: expected 'osssb' got '%s'",
+        if (strcmp(signature, "osssbb")) {
+            mrp_log_error("bad signature: expected 'osssbb' got '%s'",
                           signature);
             return false;
         }
@@ -487,8 +488,8 @@ static bool disable_screen_bridge(lua_State *L,
         data = (void *)args[3].string;
     }
     else if (!strcmp((const char *)data, "req")) {
-        if (strcmp(signature, "ossob")) {
-            mrp_log_error("bad signature: expected 'ossob' got '%s'",
+        if (strcmp(signature, "ossobb")) {
+            mrp_log_error("bad signature: expected 'ossobb' got '%s'",
                           signature);
             return false;
         }
@@ -522,14 +523,16 @@ static bool disable_screen_bridge(lua_State *L,
     }
 
     disable = args[4].boolean;
+    recalc_owner = args[5].boolean;
 
     cnt = mrp_resmgr_screen_disable(resmgr->screen, output_name, area_name,
-                                    disable, type, data);
+                                    disable, type, data, recalc_owner);
     if (cnt < 0)
         return false;
 
-    mrp_debug("%s %d screen resource at output '%s' in area '%s'",
-              disable ? "disabled":"enabled", cnt, output_name, area_name);
+    mrp_debug("%s %d screen resource at output '%s' in area '%s' "
+              "(%srecalc owner)", disable ? "disabled":"enabled",
+              cnt, output_name, area_name, recalc_owner ? "" : "do not ");
 
     return true;
 }
@@ -545,7 +548,9 @@ static bool disable_audio_bridge(lua_State *L,
     mrp_resmgr_disable_t type;
     mrp_resmgr_t *resmgr;
     const char *zone_name;
+    const char *application_class;
     bool disable;
+    bool recalc_owner;
     int cnt;
 
     MRP_UNUSED(L);
@@ -555,25 +560,25 @@ static bool disable_audio_bridge(lua_State *L,
     *ret_type = MRP_FUNCBRIDGE_NO_DATA;
 
     if (!strcmp((const char *)data, "app")) {
-        if (strcmp(signature, "ossb")) {
-            mrp_log_error("bad signature: expected 'ossb' got '%s'",
+        if (strcmp(signature, "osssbb")) {
+            mrp_log_error("bad signature: expected 'osssbb' got '%s'",
                           signature);
             return false;
         }
         type = MRP_RESMGR_DISABLE_APPID;
-        data = (void *)args[2].string;
+        data = (void *)args[3].string;
     }
     else if (!strcmp((const char *)data, "req")) {
-        if (strcmp(signature, "osob")) {
-            mrp_log_error("bad signature: expected 'osob' got '%s'",
+        if (strcmp(signature, "ossobb")) {
+            mrp_log_error("bad signature: expected 'ossobb' got '%s'",
                           signature);
             return false;
         }
         type = MRP_RESMGR_DISABLE_REQUISITE;
-        data = (void *)mrp_application_scripting_req_unwrap(args[2].pointer);
+        data = (void *)mrp_application_scripting_req_unwrap(args[3].pointer);
 
         if (!data) {
-            mrp_log_error("argument 3 is not a requisite");
+            mrp_log_error("argument 4 is not a requisite");
             return false;
         }
     }
@@ -593,15 +598,22 @@ static bool disable_audio_bridge(lua_State *L,
         return false;
     }
 
-    disable = args[3].boolean;
+    if (!(application_class = args[2].string)) {
+        mrp_log_error("argument 3 is an invalid application class string");
+        return false;
+    }
 
-    cnt = mrp_resmgr_audio_disable(resmgr->audio, zone_name,
-                                   disable, type, data);
+    disable = args[4].boolean;
+    recalc_owner = args[5].boolean;
+
+    cnt = mrp_resmgr_audio_disable(resmgr->audio, zone_name, application_class,
+                                   disable, type, data, recalc_owner);
     if (cnt < 0)
         return false;
 
-    mrp_debug("%s %d audio resource in zone '%s'",
-              disable ? "disabled":"enabled", cnt, zone_name);
+    mrp_debug("%s %d audio resource in zone '%s' (%srecalc owner)",
+              disable ? "disabled":"enabled", cnt, zone_name,
+              recalc_owner ? "" : "do not ");
 
     return true;
 }
@@ -613,13 +625,13 @@ static bool register_methods(lua_State *L)
 #define FUNCBRIDGE_END      { NULL, NULL, NULL, NULL, NULL }
 
     static funcbridge_def_t funcbridge_defs[] = {
-        FUNCBRIDGE(area_create                , area_create   , "oos"  , NULL),
-        FUNCBRIDGE(window_raise               , window_raise  , "osdd" , NULL),
-        FUNCBRIDGE(disable_screen_by_surface  , disable_screen, "ossdb","sur"),
-        FUNCBRIDGE(disable_screen_by_appid    , disable_screen, "osssb","app"),
-        FUNCBRIDGE(disable_screen_by_requisite, disable_screen, "ossob","req"),
-        FUNCBRIDGE(disable_audio_by_appid     , disable_audio , "ossb" ,"app"),
-        FUNCBRIDGE(disable_audio_by_requisite , disable_audio , "osob" ,"req"),
+        FUNCBRIDGE(area_create                , area_create   ,"oos"   , NULL),
+        FUNCBRIDGE(window_raise               , window_raise  ,"osdd"  , NULL),
+        FUNCBRIDGE(disable_screen_by_surface  , disable_screen,"ossdbb","sur"),
+        FUNCBRIDGE(disable_screen_by_appid    , disable_screen,"osssbb","app"),
+        FUNCBRIDGE(disable_screen_by_requisite, disable_screen,"ossobb","req"),
+        FUNCBRIDGE(disable_audio_by_appid     , disable_audio ,"osssbb","app"),
+        FUNCBRIDGE(disable_audio_by_requisite , disable_audio ,"ossobb","req"),
         FUNCBRIDGE_END
     };
 
