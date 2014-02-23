@@ -518,11 +518,12 @@ function regulateApplications(t, regulation)
 
         if conf and conf.resource_class ~= "player" then
             -- override, don't disable
-            resmgr:disable_screen_by_appid("*", "*", v.appid, false)
+            resmgr:disable_screen_by_appid("*", "*", v.appid, false, false)
         else
-            resmgr:disable_screen_by_appid("*", "*", v.appid, regulation == 1)
+            resmgr:disable_screen_by_appid("*", "*", v.appid, regulation == 1, false)
         end
     end
+    resource.method.recalc("driver")
 end
 
 -- regulation (on), use "select_driving_mode"
@@ -551,7 +552,7 @@ sink.lua {
         --[[
         -- bulk handle the applications that need requisites
         r = requisite { driving = true }
-        resmgr:disable_screen_by_requisite("*", "*", r, data == 1)
+        resmgr:disable_screen_by_requisite("*", "*", r, data == 1, true)
         --]]
 
         regulateApplications(ft(mdb.select.entertainment_applications), data)
@@ -770,7 +771,18 @@ resmgr = resource_manager {
                              local event = ev.event
                              local surface = ev.surface
 
-                             if event == "grant" then
+                             if event == "init" then
+                                 if verbose > 0 then
+                                     print("*** init screen resource allocation -- disable all 'player'")
+                                 end
+                                 resmgr:disable_audio_by_appid("*", "player", "*", true, false)
+                             elseif event == "preallocate" then
+                                 if verbose > 0 then
+                                     print("*** preallocate screen resource "..
+                                           "for '" .. ev.appid .. "' -- enable 'player', if any")
+                                 end
+                                 resmgr:disable_audio_by_appid("*", "player", ev.appid, false, false)
+                             elseif event == "grant" then
                                  if verbose > 0 then
                                     print("*** make visible surface "..surface)
                                  end
@@ -779,7 +791,7 @@ resmgr = resource_manager {
                                                    visible = 1,
                                                    raise   = 1})
                                  wmgr:window_request(r,a,0)
-                                 elseif event == "revoke" then
+                             elseif event == "revoke" then
                                  if verbose > 0 then
                                     print("*** hide surface "..surface)
                                  end
@@ -835,7 +847,7 @@ resmgr = resource_manager {
                                             if verbose > 0 then
                                                 print("disabling screen for " .. ev.appid)
                                             end
-                                            resmgr:disable_screen_by_appid("*", "*", ev.appid, true)
+                                            resmgr:disable_screen_by_appid("*", "*", ev.appid, true, true)
                                         end
                                     end
                                 end
@@ -858,19 +870,19 @@ resmgr = resource_manager {
                              local audioid = ev.audioid
 
                              if event == "grant" then
-                                 if verbose > 0 or true then
+                                 if verbose > 0 then
                                     print("*** grant audio to "..appid..
                                           " ("..audioid..") in '" ..
                                           ev.zone .. "' zone")
                                  end
                              elseif event == "revoke" then
-                                 if verbose > 0 or true then
+                                 if verbose > 0 then
                                     print("*** revoke audio from "..appid..
                                           " ("..audioid..") in '" ..
                                           ev.zone .. "' zone")
                                  end
                              else
-                                 if verbose > 0 or true then
+                                 if verbose > 0 then
                                     print("*** audio resource event: " ..
                                           tostring(ev))
                                  end
