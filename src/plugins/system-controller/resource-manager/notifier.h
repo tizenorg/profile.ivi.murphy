@@ -47,14 +47,14 @@ enum mrp_resmgr_event_type_e {
 };
 
 enum mrp_resmgr_eventid_e {
-    MRP_RESMGR_EVENTID_UNKNOWN = 0,
-    MRP_RESMGR_EVENTID_CREATE,
-    MRP_RESMGR_EVENTID_DESTROY,
-    MRP_RESMGR_EVENTID_INIT,
-    MRP_RESMGR_EVENTID_PREALLOCATE,
-    MRP_RESMGR_EVENTID_GRANT,
-    MRP_RESMGR_EVENTID_REVOKE,
-    MRP_RESMGR_EVENTID_COMMIT,
+    MRP_RESMGR_EVENTID_UNKNOWN      =  0,
+    MRP_RESMGR_EVENTID_CREATE,      /* 1 */
+    MRP_RESMGR_EVENTID_DESTROY,     /* 2 */
+    MRP_RESMGR_EVENTID_INIT,        /* 3 */
+    MRP_RESMGR_EVENTID_PREALLOCATE, /* 4 */
+    MRP_RESMGR_EVENTID_GRANT,       /* 5 */
+    MRP_RESMGR_EVENTID_REVOKE,      /* 6 */
+    MRP_RESMGR_EVENTID_COMMIT,      /* 7 */
 };
 
 struct mrp_resmgr_notifier_zone_s {
@@ -77,6 +77,8 @@ struct mrp_resmgr_event_s {
     mrp_resmgr_event_type_t type;
     mrp_resmgr_eventid_t eventid;
     char *zone;
+
+    /* screen and audio specific fields */
     char *appid;
 
     union {

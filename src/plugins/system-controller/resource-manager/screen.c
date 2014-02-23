@@ -271,9 +271,13 @@ static int screen_disable_cb(void *key, void *object, void *user_data)
             break;
 
         case MRP_RESMGR_DISABLE_APPID:
-            if ((appid = get_appid_for_resource(sr->res)) &&
-                it->appid && !strcmp(it->appid, appid))
-                goto disable;
+            if (it->appid) {
+                if (!strcmp(it->appid, "*"))
+                    goto disable;
+                appid = get_appid_for_resource(sr->res);
+                if (appid && !strcmp(it->appid, appid))
+                    goto disable;
+            }
             break;
 
         case MRP_RESMGR_DISABLE_SURFACEID:
@@ -325,7 +329,8 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
                               const char *area_name,
                               bool disable,
                               mrp_resmgr_disable_t type,
-                              void *data)
+                              void *data,
+                              bool recalc_owner)
 {
     mrp_wayland_t *w;
     disable_iterator_t dit;
@@ -420,12 +425,14 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
         return -1;
     }
 
-    for (z = 0;   dit.zones && z < MRP_ZONE_MAX;   z++) {
-        mask = (((uint32_t)1) << z);
-        
-        if ((mask & dit.zones)) {
-            dit.zones &= ~mask;
-            mrp_resource_owner_recalc(z);
+    if (recalc_owner) {
+        for (z = 0;   dit.zones && z < MRP_ZONE_MAX;   z++) {
+            mask = (((uint32_t)1) << z);
+            
+            if ((mask & dit.zones)) {
+                dit.zones &= ~mask;
+                mrp_resource_owner_recalc(z);
+            }
         }
     }
 
@@ -1267,14 +1274,16 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
     mrp_resmgr_screen_area_t *area;
     screen_resource_t *sr;
     const char *appid;
+    int32_t surfaceid;
+    int32_t layerid;
 
-    zoneid  = mrp_zone_get_id(zone);
-    areas   = screen->zones + zoneid;
-    grantid = ++(screen->grantids[zoneid]);
+    zoneid   = mrp_zone_get_id(zone);
+    zonename = mrp_zone_get_name(zone);
+    areas    = screen->zones + zoneid;
+    grantid  = ++(screen->grantids[zoneid]);
 
-    if (!(zonename = mrp_zone_get_name(zone)))
+    if (!zonename)
         zonename = "<unknown>";
-
     
     mrp_list_foreach(areas, aentry, an) {
         area = mrp_list_entry(aentry, mrp_resmgr_screen_area_t, link);
@@ -1286,7 +1295,11 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
             MRP_ASSERT(sr->res, "confused with data structures");
 
             if (sr->acquire && !sr->disable) {
-                if (!(appid = get_appid_for_resource(sr->res)))
+                appid     = get_appid_for_resource(sr->res);
+                surfaceid = get_surfaceid_for_resource(sr->res);
+                layerid   = get_layerid_for_resource(sr->res);
+
+                if (!appid)
                     appid = "<unknown>";
 
                 mrp_debug("preallocate screen resource in '%s' area for '%s' "
@@ -1294,6 +1307,11 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
 
                 sr->grantid = grantid;
 
+                mrp_resmgr_notifier_queue_screen_event(screen->resmgr,
+                                                zoneid, zonename,
+                                                MRP_RESMGR_EVENTID_PREALLOCATE,
+                                                appid, surfaceid, layerid,
+                                                area->name);
                 break;
             }
         }
@@ -1445,16 +1463,26 @@ static void screen_notify(mrp_resource_event_t event,
 static void screen_init(mrp_zone_t *zone, void *userdata)
 {
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
+    uint32_t zoneid;
     const char *zonename;
 
     MRP_ASSERT(zone && screen, "invalid argument");
 
-    if (!(zonename = mrp_zone_get_name(zone)))
+    zoneid   = mrp_zone_get_id(zone);
+    zonename = mrp_zone_get_name(zone);
+
+    if (!zonename)
         zonename = "<unknown>";
 
     mrp_debug("screen init in zone '%s'", zonename);
 
+    mrp_resmgr_notifier_queue_screen_event(screen->resmgr,
+                                           zoneid,zonename,
+                                           MRP_RESMGR_EVENTID_INIT,
+                                           "<unknown>", -1, -1, "<unknown>");
     screen_grant_resources(screen, zone);
+
+    mrp_resmgr_notifier_flush_screen_events(screen->resmgr, zoneid);
 }
 
 static bool screen_allocate(mrp_zone_t *zone,

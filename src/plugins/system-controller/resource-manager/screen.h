@@ -68,7 +68,8 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
                               const char *area_name,
                               bool disable,
                               mrp_resmgr_disable_t type,
-                              void *data);
+                              void *data,
+                              bool recalc_owner);
 
 int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen, uint32_t areaid,
                             char *buf, int len);
