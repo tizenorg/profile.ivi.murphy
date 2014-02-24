@@ -589,9 +589,9 @@ static void audio_resource_destroy(mrp_resmgr_audio_t *audio,
         mrp_htbl_remove(audio->resources, NULL + ar->audioid, false);
 
         mrp_list_delete(&ar->link);
-        mrp_free(ar);
 
         mrp_resmgr_notifier_flush_audio_events(audio->resmgr, ar->zoneid);
+        mrp_free(ar);
     }
 }
 
