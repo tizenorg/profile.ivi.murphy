@@ -637,13 +637,11 @@ element.lua {
     end
 }
 
--- load the telephony plugin
-m:try_load_plugin('telephony')
-
-
 -- system controller test setup
 
 if not with_system_controller then
+   -- ok, we should have 'audio_playback' defined by now
+   m:try_load_plugin('telephony')
    return
 end
 
@@ -1953,3 +1951,6 @@ if sc then
         end
     end
 end
+
+-- we should have 'audio_playback' defined by now
+m:try_load_plugin('telephony')
