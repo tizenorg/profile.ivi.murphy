@@ -95,6 +95,7 @@ struct request_def_s {
 
 static int  window_manager_create(lua_State *);
 static int  window_manager_connect(lua_State *);
+static int  window_manager_disconnect(lua_State *L);
 static int  window_manager_canonical_name(lua_State *);
 static int  window_manager_getfield(lua_State *);
 static int  window_manager_setfield(lua_State *);
@@ -153,6 +154,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     MRP_LUA_METHOD_LIST (          /* methods */
        MRP_LUA_METHOD_CONSTRUCTOR    (window_manager_create)
        MRP_LUA_METHOD(connect,        window_manager_connect)
+       MRP_LUA_METHOD(disconnect,     window_manager_disconnect)
        MRP_LUA_METHOD(canonical_name, window_manager_canonical_name)
     ),
     MRP_LUA_METHOD_LIST (          /* overrides */
@@ -341,6 +343,26 @@ static int window_manager_connect(lua_State *L)
         success = mrp_wayland_connect(wmgr->wl);
     else
         success = false;
+
+    lua_pushboolean(L, success);
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int window_manager_disconnect(lua_State *L)
+{
+    scripting_winmgr_t *wmgr;
+    bool success = false;
+
+    MRP_LUA_ENTER;
+
+    wmgr = window_manager_check(L, 1);
+
+    /* destroy all screen and input resources */
+
+    /* disconnect wayland */
+
+    success = mrp_wayland_disconnect(wmgr->wl);
 
     lua_pushboolean(L, success);
 
@@ -767,7 +789,7 @@ static bool window_request_bridge(lua_State *L,
         return false;
     }
 
-        
+
     memset(&u, 0, sizeof(u));
     u.mask = copy_json_fields(wl, json, fields, &u);
 
@@ -847,7 +869,7 @@ static bool output_request_bridge(lua_State *L,
 #undef FIELD
 #undef MASK
 #undef TYPE
-    
+
     mrp_wayland_t *wl;
     mrp_wayland_output_update_t u;
     mrp_json_t *json;
