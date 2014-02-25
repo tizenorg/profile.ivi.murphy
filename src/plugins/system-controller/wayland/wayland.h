@@ -32,7 +32,7 @@
 
 #include <wayland-client.h>
 
-#include <murphy/common/hashtbl.h>
+#include <murphy/common.h>
 
 #include "data-types.h"
 
@@ -228,6 +228,7 @@ mrp_wayland_t *mrp_wayland_iterate(void **cursor);
 
 bool mrp_wayland_connect(mrp_wayland_t *wl);
 void mrp_wayland_flush(mrp_wayland_t *wl);
+bool mrp_wayland_disconnect(mrp_wayland_t *wl);
 
 void mrp_wayland_register_window_manager(mrp_wayland_t *wl,
                                          mrp_wayland_window_manager_t *wm);
