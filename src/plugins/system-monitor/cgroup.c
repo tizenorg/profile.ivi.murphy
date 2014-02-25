@@ -70,6 +70,7 @@ typedef struct {
         int memsw_usage;                 /*     memsw_usage_in_bytes */
         int memsw_max_usage;             /*     memsw_usage_in_bytes */
         int swappiness;                  /*     swappiness */
+        int stat;                        /*     stat */
     } memory;
     struct {                             /* cpuacct-specific controls */
         int usage_percpu;                /*     usage_percpu */
@@ -104,26 +105,25 @@ struct cgroup_s {
 
 
 /*
- * a group-specific control path
- */
-
-typedef struct {
-    const char *path;                    /* relative path within group */
-    off_t       offs;                    /* offset within control_t */
-    int         rdwr;                    /* whether read-write */
-} control_path_t;
-
-
-
-/*
  * a cgroup control descriptor
  */
 
 typedef enum {
-    CONTROL_FLAG_NOTTOP = 0x01,          /* absent in controller root */
-    CONTROL_FLAG_RDONLY = 0x02,          /* read-only control */
-    CONTROL_FLAG_WRONLY = 0x04,          /* write-only control */
-    CONTROL_FLAG_IGNORE = 0x08,          /* don't try to open this */
+    CONTROL_FORMAT_NONE    = 0x00,
+    CONTROL_FORMAT_INTEGER = 0x01,       /* reads integer */
+    CONTROL_FORMAT_STRING  = 0x02,       /* reads string */
+    CONTROL_FORMAT_INTARR  = 0x03,       /* reads array of integers */
+    CONTROL_FORMAT_STRARR  = 0x04,       /* reads array of strings */
+    CONTROL_FORMAT_INTTBL  = 0x05,       /* reads table with integer values */
+    CONTROL_FORMAT_STRTBL  = 0x06,       /* reads table with string values */
+} control_format_t;
+
+typedef enum {
+    CONTROL_FLAG_NONE    = 0x00,
+    CONTROL_FLAG_NOTTOP  = 0x01,         /* absent in controller root */
+    CONTROL_FLAG_RDONLY  = 0x02,         /* read-only control */
+    CONTROL_FLAG_WRONLY  = 0x04,         /* write-only control */
+    CONTROL_FLAG_IGNORE  = 0x08,         /* don't try to open this */
 } control_flag_t;
 
 typedef struct {
@@ -131,6 +131,7 @@ typedef struct {
     const char *path;                    /* relative path under mount point */
     off_t       offs;                    /* fd offset within control struct */
     int         flags;                   /* control-specific flags */
+    int         format;                  /* format of data read from fd */
 } control_descr_t;
 
 
@@ -149,15 +150,20 @@ typedef struct {
  * common cgroup controller/filesytem entries
  */
 
-#define RO(_alias, _path, _field) \
-    { _alias, _path, MRP_OFFSET(control_t, any._field), CONTROL_FLAG_RDONLY }
-#define RW(_alias, _path, _field) \
-    { _alias, _path, MRP_OFFSET(control_t, any._field), 0 }
+#define ROCTRL(_alias, _path, _type, _field, _fmt)          \
+    { _alias, #_path, MRP_OFFSET(control_t, _type._field),  \
+            CONTROL_FLAG_RDONLY, CONTROL_FORMAT_##_fmt   }
+#define RWCTRL(_alias, _path, _type, _field, _fmt)          \
+    { _alias, #_path, MRP_OFFSET(control_t, _type._field),  \
+            CONTROL_FLAG_NONE, CONTROL_FORMAT_##_fmt     }
+
+#define RO(_a, _path, _fld, _fmt) ROCTRL(_a, _path, any, _fld, _fmt)
+#define RW(_a, _path, _fld, _fmt) RWCTRL(_a, _path, any, _fld, _fmt)
 
 static control_descr_t common_controls[] = {
-    RW("Tasks"    , "tasks"       , tasks),
-    RW("Processes", "cgroup.procs", procs),
-    { NULL, NULL, -1, 0 }
+    RW("Tasks"    , tasks       , tasks, INTARR),
+    RW("Processes", cgroup.procs, procs, INTARR),
+    { NULL, NULL, -1, 0, 0 }
 };
 
 #undef RO
@@ -168,22 +174,22 @@ static control_descr_t common_controls[] = {
  * 'memory' cgroup controller/filesystem entries
  */
 
-#define RO(_alias, _path, _field)                                         \
-    { _alias, "memory."#_path, MRP_OFFSET(control_t, memory._field),      \
-            CONTROL_FLAG_RDONLY }
-#define RW(_alias, _path, _field)                                         \
-    { _alias, "memory."#_path, MRP_OFFSET(control_t, memory._field), 0 }
+#define RO(_a, _path, _fld, _fmt) \
+    ROCTRL(_a, memory._path, memory, _fld, _fmt)
+#define RW(_a, _path, _fld, _fmt) \
+    RWCTRL(_a, memory._path, memory, _fld, _fmt)
 
 static control_descr_t memory_controls[] = {
-    RW("Limit"          , limit_in_bytes          , limit          ),
-    RW("SoftLimit"      , soft_limit_in_bytes     , soft_limit     ),
-    RO("Usage"          , usage_in_bytes          , usage          ),
-    RO("MaxUsage"       , max_usage_in_bytes      , max_usage      ),
-    RW("MemSwapLimit"   , memsw.limit_in_bytes    , memsw_limit    ),
-    RO("MemSwapUsage"   , memsw.usage_in_bytes    , memsw_usage    ),
-    RO("MemSwapMaxUsage", memsw.max_usage_in_bytes, memsw_max_usage),
-    RW("Swappiness"     , swappiness              , swappiness     ),
-    { NULL, NULL, -1, 0 }
+    RW("Limit"          , limit_in_bytes          , limit          , INTEGER),
+    RW("SoftLimit"      , soft_limit_in_bytes     , soft_limit     , INTEGER),
+    RO("Usage"          , usage_in_bytes          , usage          , INTEGER),
+    RO("MaxUsage"       , max_usage_in_bytes      , max_usage      , INTEGER),
+    RW("MemSwapLimit"   , memsw.limit_in_bytes    , memsw_limit    , INTEGER),
+    RO("MemSwapUsage"   , memsw.usage_in_bytes    , memsw_usage    , INTEGER),
+    RO("MemSwapMaxUsage", memsw.max_usage_in_bytes, memsw_max_usage, INTEGER),
+    RW("Swappiness"     , swappiness              , swappiness     , INTEGER),
+    RO("Stat"           , stat                    , stat           , INTTBL),
+    { NULL, NULL, -1, 0, 0 }
 };
 
 #undef RO
@@ -194,15 +200,14 @@ static control_descr_t memory_controls[] = {
  * 'cpuacct' cgroup controller/filesystem entries
  */
 
-#define RO(_alias, _path, _field)                                         \
-    { _alias, "cpuacct."#_path, MRP_OFFSET(control_t, cpuacct._field),    \
-            CONTROL_FLAG_RDONLY }
-#define RW(_alias, _path, _field)                                         \
-    { _alias, "cpuacct."#_path, MRP_OFFSET(control_t, cpuacct._field), 0 }
+#define RO(_a, _path, _fld, _fmt) \
+    ROCTRL(_a, cpuacct._path, cpuacct, _fld, _fmt)
+#define RW(_a, _path, _fld, _fmt) \
+    RWCTRL(_a, cpuacct._path, cpuacct, _fld, _fmt)
 
 static control_descr_t cpuacct_controls[] = {
-    RO("Usage", usage_percpu, usage_percpu),
-    { NULL, NULL, -1, 0 }
+    RO("Usage", usage_percpu, usage_percpu, NONE),
+    { NULL, NULL, -1, 0, 0 }
 };
 
 #undef RO
@@ -213,19 +218,18 @@ static control_descr_t cpuacct_controls[] = {
  * 'cpu' cgroup controller/filesystem entries
  */
 
-#define RO(_alias, _path, _field)                                         \
-    { _alias, "cpu."#_path, MRP_OFFSET(control_t, cpu._field),            \
-            CONTROL_FLAG_RDONLY }
-#define RW(_alias, _path, _field)                                         \
-    { _alias, "cpu."#_path, MRP_OFFSET(control_t, cpu._field), 0 }
+#define RO(_a, _path, _fld, _fmt) \
+    ROCTRL(_a, cpu._path, cpu, _fld, _fmt)
+#define RW(_a, _path, _fld, _fmt) \
+    RWCTRL(_a, cpu._path, cpu, _fld, _fmt)
 
 static control_descr_t cpu_controls[] = {
-    RW("Shares"   , shares        , shares    ),
-    RW("CFSPeriod", cfs_period_us , cfs_period),
-    RW("CFSQuota" , cfs_quota_us  , cfs_quota ),
-    RW("RTPeriod" , rt_period_us  , rt_period ),
-    RW("RTRuntime", rt_runtime_us , rt_runtime),
-    { NULL, NULL, -1, 0 }
+    RW("Shares"   , shares        , shares    , INTEGER),
+    RW("CFSPeriod", cfs_period_us , cfs_period, INTEGER),
+    RW("CFSQuota" , cfs_quota_us  , cfs_quota , INTEGER),
+    RW("RTPeriod" , rt_period_us  , rt_period , INTEGER),
+    RW("RTRuntime", rt_runtime_us , rt_runtime, INTEGER),
+    { NULL, NULL, -1, 0, 0 }
 };
 
 #undef RO
@@ -236,15 +240,14 @@ static control_descr_t cpu_controls[] = {
  * 'freezer' cgroup controller/filesystem entries
  */
 
-#define RO(_alias, _path, _field)                                         \
-    { _alias, "freezer."#_path, MRP_OFFSET(control_t, freezer._field),    \
-            CONTROL_FLAG_RDONLY }
-#define RW(_alias, _path, _field)                                         \
-    { _alias, "freezer."#_path, MRP_OFFSET(control_t, freezer._field), 0 }
+#define RO(_a, _path, _fld, _fmt)                       \
+    ROCTRL(_a, freezer._path, freezer, _fld, _fmt)
+#define RW(_a, _path, _fld, _fmt)                       \
+    RWCTRL(_a, freezer._path, freezer, _fld, _fmt)
 
 static control_descr_t freezer_controls[] = {
-    RW("State", state, state),
-    { NULL, NULL, -1, 0 }
+    RW("State", state, state, STRING),
+    { NULL, NULL, -1, 0, 0 }
 };
 
 #undef RO
@@ -446,7 +449,7 @@ static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int grpflags)
                   flags == O_RDONLY ? "read-only" : "read-write");
 
         if ((*fdp = open(path, flags)) < 0) {
-            if (errno != EPERM)
+            if (errno != EACCES)
                 return -1;
             if (flags == O_RDONLY)
                 return -1;
@@ -674,6 +677,7 @@ static int cgroup_lua_close(lua_State *L);
 static int cgroup_lua_addtask(lua_State *L);
 static int cgroup_lua_addproc(lua_State *L);
 static int cgroup_lua_setparam(lua_State *L);
+static int push_formatted(lua_State *L, int fmt, char *data);
 
 MRP_LUA_METHOD_LIST_TABLE(cgroup_lua_methods,
     MRP_LUA_METHOD_CONSTRUCTOR(cgroup_lua_no_constructor)
@@ -889,7 +893,7 @@ static int cgroup_lua_getmember(void *data, lua_State *L, int member,
 }
 
 
-static int get_control_fd(cgroup_t *cg, const char *name, int type)
+static int get_control_fd(cgroup_t *cg, const char *name, int type, int *fmtp)
 {
     control_descr_t *ctrl;
 
@@ -901,8 +905,11 @@ static int get_control_fd(cgroup_t *cg, const char *name, int type)
         ctrl = common_controls;
 
     while (ctrl->path != NULL) {
-        if (!strcmp(name, ctrl->alias) || !strcmp(name, ctrl->path))
+        if (!strcmp(name, ctrl->alias) || !strcmp(name, ctrl->path)) {
+            if (fmtp != NULL)
+                *fmtp = ctrl->format;
             return *(int *)((void *)&cg->ctrl + ctrl->offs);
+        }
         else
             ctrl++;
     }
@@ -911,7 +918,7 @@ static int get_control_fd(cgroup_t *cg, const char *name, int type)
 }
 
 
-static int get_cgroup_fd(cgroup_t *cg, const char *name)
+static int get_cgroup_fd(cgroup_t *cg, const char *name, int *fmtp)
 {
     int type, fd;
 
@@ -921,7 +928,7 @@ static int get_cgroup_fd(cgroup_t *cg, const char *name)
     for (type = -1; type < CGROUP_TYPE_MAX; type++) {
         if (type >= 0 && !(cg->type & (1 << type)))
             continue;
-        if ((fd = get_control_fd(cg, name, type)) >= 0)
+        if ((fd = get_control_fd(cg, name, type, fmtp)) >= 0)
             return fd;
     }
 
@@ -941,7 +948,7 @@ static int cgroup_lua_setfield(lua_State *L)
 
     mrp_debug("setting cgroup field '%s'", name);
 
-    if ((fd = get_cgroup_fd(cgrp->cg, name)) < 0)
+    if ((fd = get_cgroup_fd(cgrp->cg, name, NULL)) < 0)
         return 0;
 
     switch (lua_type(L, -1)) {
@@ -968,15 +975,15 @@ static int cgroup_lua_getfield(lua_State *L)
 {
     cgroup_lua_t *cgrp = cgroup_lua_check(L, -2);
     const char   *name;
-    char          buf[512];
-    int           fd, len;
+    char          buf[4096];
+    int           fd, len, fmt;
 
     luaL_checktype(L, -1, LUA_TSTRING);
     name = lua_tostring(L, -1);
 
     mrp_debug("getting cgroup field '%s'", name);
 
-    if ((fd = get_cgroup_fd(cgrp->cg, name)) < 0)
+    if ((fd = get_cgroup_fd(cgrp->cg, name, &fmt)) < 0)
         return 0;
 
     mrp_debug("control fd for field '%s' is %d", name, fd);
@@ -984,14 +991,14 @@ static int cgroup_lua_getfield(lua_State *L)
     len = read(fd, buf, sizeof(buf) - 1);
     lseek(fd, 0, SEEK_SET);
 
-    if (len < 0)
+    if (len < 0) {
         lua_pushnil(L);
-    else{
-        buf[len] = '\0';
-        lua_pushstring(L, buf);
+        return 1;
     }
-
-    return 1;
+    else {
+        buf[len] = '\0';
+        return push_formatted(L, fmt, buf);
+    }
 }
 
 
@@ -1092,6 +1099,175 @@ static int cgroup_lua_getparam(lua_State *L)
 static int cgroup_lua_setparam(lua_State *L)
 {
     return cgroup_lua_setfield(L);
+}
+
+
+static inline int push_string(lua_State *L, char *data)
+{
+    lua_pushstring(L, data);
+    return 1;
+}
+
+
+static inline int push_integer(lua_State *L, char *data)
+{
+    double  dbl;
+    char   *e;
+
+    dbl = strtod(data, &e);
+
+    if (e && !*e) {
+        lua_pushnumber(L, dbl);
+        return 1;
+    }
+    else
+        return -1;
+}
+
+
+static int push_intarr(lua_State *L, char *data)
+{
+    char   *p, *e;
+    double  dbl;
+    int     i;
+
+    lua_newtable(L);
+
+    p = data;
+    i = 1;
+    while (p && *p) {
+        dbl = strtod(p, &e);
+
+        if (e && *e != ' ' && *e != '\n' && *e != '\0') {
+            lua_pop(L, 1);
+            return -1;
+        }
+
+        lua_pushnumber(L, dbl);
+        lua_rawseti(L, -2, i);
+        i++;
+
+        p = (e && *e) ? e + 1 : NULL;
+    }
+
+    return 1;
+}
+
+
+static int push_strarr(lua_State *L, char *data)
+{
+    char   *p, *e;
+    int     i;
+    size_t  l;
+
+    lua_newtable(L);
+
+    p = data;
+    i = 1;
+    while (p && *p) {
+        e = strchr(p, ' ');
+
+        if (e && *e != ' ' && *e != '\n') {
+            lua_pop(L, 1);
+            return -1;
+        }
+
+        l = e ? (size_t)(e - p) : strlen(p);
+        lua_pushlstring(L, p, l);
+        lua_rawseti(L, -2, i);
+        i++;
+
+        p = e ? e + 1 : NULL;
+    }
+
+    return 1;
+}
+
+
+static int push_inttbl(lua_State *L, char *data)
+{
+    char   *p, *e;
+    char   *key;
+    double  val;
+
+    lua_newtable(L);
+
+    p = data;
+
+    while (p && *p) {
+        key = p;
+        e   = strchr(p, ' ');
+
+        if (e == NULL) {
+            lua_pop(L, 1);
+            return -1;
+        }
+
+        lua_pushlstring(L, key, e - key);
+
+        val = strtod(e + 1, &e);
+
+        if (e && *e != '\n' && *e != '\0') {
+            lua_pop(L, 2);
+            return -1;
+        }
+
+        lua_pushnumber(L, val);
+        lua_rawset(L, -3);
+
+        p = (e && *e) ? e + 1 : NULL;
+    }
+
+    return 1;
+}
+
+
+static int push_strtbl(lua_State *L, char *data)
+{
+    char   *p, *e;
+    char   *key, *val;
+    size_t  l;
+
+    lua_newtable(L);
+
+    p = data;
+
+    while (p && *p) {
+        key = p;
+        e   = strchr(p, ' ');
+
+        if (e == NULL) {
+            lua_pop(L, 1);
+            return -1;
+        }
+
+        lua_pushlstring(L, key, e - key);
+
+        val = e + 1;
+        e   = strchr(val, '\n');
+        l   = e ? (size_t)(e - val) : strlen(val);
+
+        lua_pushlstring(L, val, l);
+        lua_rawset(L, -3);
+
+        p = (e && *e) ? e + 1 : NULL;
+    }
+
+    return 1;
+}
+
+
+static int push_formatted(lua_State *L, int fmt, char *data)
+{
+    switch ((control_format_t)fmt) {
+    default:
+    case CONTROL_FORMAT_INTEGER: return push_integer(L, data);
+    case CONTROL_FORMAT_STRING:  return push_string (L, data);
+    case CONTROL_FORMAT_INTARR:  return push_intarr (L, data);
+    case CONTROL_FORMAT_STRARR:  return push_strarr (L, data);
+    case CONTROL_FORMAT_INTTBL:  return push_inttbl (L, data);
+    case CONTROL_FORMAT_STRTBL:  return push_strtbl (L, data);
+    }
 }
 
 
