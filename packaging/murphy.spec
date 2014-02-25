@@ -27,7 +27,7 @@
 
 Summary: Murphy policy framework
 Name: murphy
-Version: 0.0.47
+Version: 0.0.48
 Release: 1
 License: BSD-3-Clause
 Group: System/Service
@@ -216,6 +216,7 @@ Group: System/Service
 %package system-controller
 Summary: Murphy IVI System Controller plugin
 Group: System/Service
+Requires: ico-uxf-homescreen
 Conflicts: murphy-ivi-resource-manager
 %endif
 
@@ -507,12 +508,16 @@ ldconfig
 # prevent system controller from starting
 rm -f %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
 # instead launch just ico-homescreen
-ln -s %{systemddir}/user/murphy-wait-for-launchpad-ready.path %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
-
+rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
+ln -s %{systemddir}/user/murphy-wait-for-launchpad-ready.path \
+    %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
 
 %postun system-controller
 rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
-ln -s %{systemddir}/user/ico-uxf-wait-launchpad-ready.path %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+if [ -f %{systemddir}/user/ico-uxf-wait-launchpad-ready.path ]; then
+    ln -sf %{systemddir}/user/ico-uxf-wait-launchpad-ready.path \
+        %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+fi
 %endif
 
 %if %{?_with_squashpkg:1}%{!?_with_squashpkg:0}
