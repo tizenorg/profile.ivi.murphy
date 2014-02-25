@@ -122,7 +122,8 @@ typedef struct {
 typedef enum {
     CONTROL_FLAG_NOTTOP = 0x01,          /* absent in controller root */
     CONTROL_FLAG_RDONLY = 0x02,          /* read-only control */
-    CONTROL_FLAG_IGNORE = 0x04,          /* don't try to open this */
+    CONTROL_FLAG_WRONLY = 0x04,          /* write-only control */
+    CONTROL_FLAG_IGNORE = 0x08,          /* don't try to open this */
 } control_flag_t;
 
 typedef struct {
@@ -414,10 +415,10 @@ static void close_controls(cgroup_t *cgrp)
 }
 
 
-static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int flags)
+static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int grpflags)
 {
     control_descr_t *ctrl;
-    int             *fdp;
+    int             *fdp, flags;
     char             path[PATH_MAX];
 
     if (type >= 0) {
@@ -430,10 +431,8 @@ static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int flags)
         ctrl = common_controls;
 
     while (ctrl->path != NULL) {
-        if (flags == O_RDONLY && !(ctrl->flags & CONTROL_FLAG_RDONLY))
-            continue;
-        else
-            fdp = (int *)((void *)&cgrp->ctrl + ctrl->offs);
+        fdp   = (int *)((void *)&cgrp->ctrl + ctrl->offs);
+        flags = (ctrl->flags & CONTROL_FLAG_RDONLY) ? O_RDONLY : O_RDWR;
 
         if (*fdp >= 0)
             continue;
@@ -442,11 +441,20 @@ static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int flags)
                      cgrp->path, ctrl->path) >= (int)sizeof(path))
             return -1;
 
-        mrp_debug("attempting to open '%s' (%s mode)",
-                  path, flags & O_RDWR ? "read-write" : "read-only");
+    retry:
+        mrp_debug("attempting to open '%s' (in %s mode)", path,
+                  flags == O_RDONLY ? "read-only" : "read-write");
 
-        if ((*fdp = open(path, flags)) < 0)
-            return -1;
+        if ((*fdp = open(path, flags)) < 0) {
+            if (errno != EPERM)
+                return -1;
+            if (flags == O_RDONLY)
+                return -1;
+            if (grpflags & O_RDWR)
+                return -1;
+            flags = O_RDONLY;
+            goto retry;
+        }
 
         ctrl++;
     }
@@ -626,7 +634,7 @@ int cgroup_get_cpu_usage(cgroup_t *cgrp, uint64_t *usgbuf, size_t n)
 
 
 /*
- * CGroup object
+ * CGroup Lua object
  */
 
 #define CGROUP_LUA_CLASS MRP_LUA_CLASS(cgroup, lua)
@@ -636,16 +644,17 @@ int cgroup_get_cpu_usage(cgroup_t *cgrp, uint64_t *usgbuf, size_t n)
 #define setmember        cgroup_lua_setmember
 #define getmember        cgroup_lua_getmember
 
-typedef struct {
-    cgroup_type_t  type;                 /* cgroup type */
-    const char    *name;                 /* group name */
-    int            flags;                /* opening flags */
-} cgroup_setup_t;
+typedef enum {
+    CGROUP_MEMBER_TYPE,
+    CGROUP_MEMBER_NAME,
+    CGROUP_MEMBER_MODE,
+} cgroup_member_t;
 
-
 typedef struct {
-    cgroup_setup_t *setup;               /* collected parameters for setup */
-    cgroup_t       *cg;                  /* actual cgroup */
+    char     *type;                      /* cgroup type */
+    char     *name;                      /* cgroup name */
+    char     *mode;                      /* mode flags */
+    cgroup_t *cg;                        /* actual cgroup */
 } cgroup_lua_t;
 
 
@@ -690,13 +699,6 @@ MRP_LUA_DEFINE_CLASS(cgroup, lua, cgroup_lua_t, cgroup_lua_destroy,
 
 MRP_LUA_CLASS_CHECKER(cgroup_lua_t, cgroup_lua, CGROUP_LUA_CLASS);
 
-typedef enum {
-    CGROUP_MEMBER_TYPE,
-    CGROUP_MEMBER_NAME,
-    CGROUP_MEMBER_MODE,
-} cgroup_member_t;
-
-
 static int cgroup_lua_no_constructor(lua_State *L)
 {
     return luaL_error(L, "can't create CGroup via constructor, "
@@ -706,28 +708,104 @@ static int cgroup_lua_no_constructor(lua_State *L)
 
 static void cgroup_lua_destroy(void *data)
 {
-    MRP_UNUSED(data);
+    cgroup_lua_t *cgrp = (cgroup_lua_t *)data;
+
+    mrp_free(cgrp->type);
+    mrp_free(cgrp->name);
+    mrp_free(cgrp->mode);
+
+    cgrp->type = cgrp->name = cgrp->mode = NULL;
+}
+
+
+static int parse_mode(const char *mode)
+{
+#define MATCHES(_key) (len == sizeof(_key) - 1 && !strncmp(opt, _key, len))
+    const char *opt, *e;
+    int         len, flags;
+
+    opt   = mode;
+    flags = O_RDWR;
+
+    while (opt && *opt) {
+        if ((e = strchr(opt, ',')) != NULL)
+            len = e - opt;
+        else
+            len = strlen(opt);
+
+        if (MATCHES("readonly") || MATCHES("ro")) {
+            flags &= ~O_RDWR;
+            flags |= O_RDONLY;
+        }
+        else if (MATCHES("readwrite") || MATCHES("rw"))
+            flags |= O_RDWR;
+        else if (MATCHES("create"))
+            flags |= O_CREAT | O_RDWR;
+        else
+            return -1;
+
+        opt = e && *e ? e + 1 : NULL;
+    }
+
+    return flags;
+#undef MATCHES
 }
 
 
 static int cgroup_lua_open(lua_State *L)
 {
-    cgroup_lua_t   *cgrp;
-    cgroup_t       *cg;
-    cgroup_setup_t  setup;
-    int             narg;
-    char            e[256];
+    cgroup_lua_t *cgrp;
+    const char   *type, *name, *mode;
+    int           narg, flags;
+    char          e[256];
 
     if ((narg = lua_gettop(L)) != 2)
-        luaL_error(L, "expecting 1 argument, got %d", narg);
+        return luaL_error(L, "expecting 1 argument");
 
     luaL_checktype(L, 2, LUA_TTABLE);
 
+    lua_pushstring(L, "type");
+    lua_gettable(L, 2);
+
+    if (lua_type(L, -1) != LUA_TSTRING)
+        return luaL_error(L, "field 'type' not specified for CGroup.");
+
+    type = lua_tostring(L, -1);
+    lua_pop(L, 1);
+
+    lua_pushstring(L, "name");
+    lua_gettable(L, 2);
+
+    if (lua_type(L, -1) != LUA_TSTRING)
+        return luaL_error(L, "field 'name' not specified for CGroup.");
+
+    name = lua_tostring(L, -1);
+    lua_pop(L, 1);
+
+    lua_pushstring(L, "mode");
+    lua_gettable(L, 2);
+
+    if (lua_type(L, -1) != LUA_TSTRING)
+        return luaL_error(L, "field 'mode' not specified for CGroup.");
+
+    mode = lua_tostring(L, -1);
+    lua_pop(L, 1);
+
+    if ((flags = parse_mode(mode)) < 0)
+        return luaL_error(L, "invalid mode '%s'", mode);
+
     cgrp = (cgroup_lua_t *)mrp_lua_create_object(L, CGROUP_LUA_CLASS, NULL, 0);
 
-    mrp_clear(&setup);
-    setup.type = CGROUP_TYPE_UNKNOWN;
-    cgrp->setup = &setup;
+    cgrp->cg = cgroup_open(cgroup_type(type), name, flags);
+
+    if (cgrp->cg == NULL) {
+        lua_pop(L, 1);
+        return 0;
+    }
+
+    cgrp->type = mrp_strdup(type);
+    cgrp->name = mrp_strdup(name);
+    cgrp->mode = mrp_strdup(mode);
 
     if (mrp_lua_init_members(cgrp, L, 2, e, sizeof(e)) != 1) {
         luaL_error(L, "failed to initialize CGroup (error: %s)",
@@ -735,19 +813,8 @@ static int cgroup_lua_open(lua_State *L)
         lua_pop(L, 1);
         return 0;
     }
-
-    if (setup.type >= 0 && setup.name != NULL)
-        cg = cgroup_open(setup.type, setup.name, setup.flags);
     else
-        cg = NULL;
-
-    if (cg == NULL) {
-        lua_pushnil(L);
         return 1;
-    }
-    cgrp->cg = cg;
-
-    return 1;
 }
 
 
@@ -773,12 +840,16 @@ static void cgroup_lua_changed(void *data, lua_State *L, int member)
 static ssize_t cgroup_lua_tostring(mrp_lua_tostr_mode_t mode, char *buf,
                                    size_t size, lua_State *L, void *data)
 {
+    cgroup_lua_t *cgrp = (cgroup_lua_t *)data;
+
     MRP_UNUSED(L);
 
     switch (mode & MRP_LUA_TOSTR_MODEMASK) {
     case MRP_LUA_TOSTR_LUA:
     default:
-        return snprintf(buf, size, "{CGroup %p}", data);
+        return snprintf(buf, size, "{CGroup %s/%s (%s), %p}",
+                        cgrp->type, cgrp->name,
+                        cgrp->cg ? cgrp->cg->path : "<unknown>", cgrp);
     }
 }
 
@@ -788,75 +859,33 @@ static int cgroup_lua_setmember(void *data, lua_State *L, int member,
 {
     cgroup_lua_t *cgrp = (cgroup_lua_t *)data;
 
+    mrp_debug("fake setting cgroup member #%d", member);
+
     MRP_UNUSED(L);
+    MRP_UNUSED(member);
+    MRP_UNUSED(v);
+    MRP_UNUSED(cgrp);
 
-    mrp_debug("setting cgroup member #%d for %p", member, data);
-
-    if (cgrp->setup != NULL) {
-        switch (member) {
-        case CGROUP_MEMBER_TYPE:
-            cgrp->setup->type = cgroup_type(v->str);
-            return 1;
-        case CGROUP_MEMBER_NAME:
-            cgrp->setup->name = mrp_strdup(v->str);
-            return 1;
-        case CGROUP_MEMBER_MODE: {
-            const char *opt = v->str, *e;
-            int         len;
-
-            cgrp->setup->flags = O_RDWR;
-
-            while (opt && *opt) {
-                if ((e = strchr(opt, ',')) != NULL)
-                    len = e - opt;
-                else
-                    len = strlen(opt);
-
-                if (len == 8 && !strncmp(opt, "readonly", 8)) {
-                    cgrp->setup->flags &= ~O_RDWR;
-                    cgrp->setup->flags |= O_RDONLY;
-                }
-                else if (len == 9 && !strncmp(opt, "readwrite", 9))
-                    cgrp->setup->flags |= O_RDWR;
-                else if (len == 6 && !strncmp(opt, "create", 6))
-                    cgrp->setup->flags |= O_CREAT | O_RDWR;
-                else
-                    return -1;
-
-                opt = e && *e ? e + 1 : NULL;
-            }
-
-            return 1;
-        }
-
-        default:
-            return 0;
-        }
-
-        return 1;
-    }
-
-    return 0;
+    return 1;
 }
 
 
 static int cgroup_lua_getmember(void *data, lua_State *L, int member,
                                 mrp_lua_value_t *v)
 {
-    MRP_UNUSED(data);
-    MRP_UNUSED(L);
-    MRP_UNUSED(member);
-    MRP_UNUSED(v);
+    cgroup_lua_t *cgrp = (cgroup_lua_t *)data;
 
-    printf("* %s called for member #%d...\n", __FUNCTION__, member);
+    MRP_UNUSED(L);
+
+    mrp_debug("getting cgroup member #%d", member);
 
     switch (member) {
-    case CGROUP_MEMBER_MODE:
-        v->str = "mode forgotten a long long time ago";
-        break;
+    case CGROUP_MEMBER_TYPE: v->str = cgrp->type; return 1;
+    case CGROUP_MEMBER_NAME: v->str = cgrp->name; return 1;
+    case CGROUP_MEMBER_MODE: v->str = cgrp->mode; return 1;
     }
 
-    return 1;
+    return 0;
 }
 
 
@@ -945,7 +974,7 @@ static int cgroup_lua_getfield(lua_State *L)
     luaL_checktype(L, -1, LUA_TSTRING);
     name = lua_tostring(L, -1);
 
-    mrp_debug("getting field '%s'", name);
+    mrp_debug("getting cgroup field '%s'", name);
 
     if ((fd = get_cgroup_fd(cgrp->cg, name)) < 0)
         return 0;
