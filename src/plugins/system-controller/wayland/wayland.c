@@ -178,6 +178,33 @@ mrp_wayland_t *mrp_wayland_iterate(void **cursor)
     return NULL;
 }
 
+bool mrp_wayland_disconnect(mrp_wayland_t *wl)
+{
+    if (!wl)
+        return FALSE;
+
+    /* destroy resource */
+    if (wl->registry) {
+        wl_registry_destroy(wl->registry);
+        wl->registry = NULL;
+    }
+
+    /* disconnect from display */
+    if (wl->display) {
+        wl_display_disconnect(wl->display);
+        wl->display = NULL;
+    }
+
+    /* io watch */
+
+    if (wl->iow) {
+        mrp_del_io_watch(wl->iow);
+        wl->iow = NULL;
+    }
+
+    return TRUE;
+}
+
 bool mrp_wayland_connect(mrp_wayland_t *wl)
 {
 #define IO_EVENTS MRP_IO_EVENT_IN | MRP_IO_EVENT_ERR | MRP_IO_EVENT_HUP
