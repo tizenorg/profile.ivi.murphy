@@ -303,7 +303,7 @@ static int screen_disable_cb(void *key, void *object, void *user_data)
             return MRP_HTBL_ITER_STOP;
         }
     }
-    
+
     return MRP_HTBL_ITER_MORE;
 }
 
@@ -357,7 +357,7 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
     if (output_name && strcmp(output_name, "*")) {
         memset(&oit, 0, sizeof(oit));
         oit.name = output_name;
-        
+
         mrp_wayland_foreach(w, i) {
             mrp_htbl_foreach(w->outputs, output_find_cb, &oit);
 
@@ -392,7 +392,7 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
     dit.type = type;
     dit.zones = 0;
     dit.counter = 0;
-        
+
     switch (type) {
 
     case MRP_RESMGR_DISABLE_REQUISITE:
@@ -400,7 +400,7 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
         dit.req = *(mrp_application_requisite_t *)data;
         mrp_htbl_foreach(screen->resources, screen_disable_cb, &dit);
         break;
-        
+
     case MRP_RESMGR_DISABLE_APPID:
         dit.mask = BIT(MRP_RESMGR_DISABLE_APPID - 1);
         dit.appid = (const char *)data;
@@ -428,7 +428,7 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
     if (recalc_owner) {
         for (z = 0;   dit.zones && z < MRP_ZONE_MAX;   z++) {
             mask = (((uint32_t)1) << z);
-            
+
             if ((mask & dit.zones)) {
                 dit.zones &= ~mask;
                 mrp_resource_owner_recalc(z);
@@ -466,7 +466,7 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
 
     e = (p = buf) + len;
     *p = 0;
-    
+
     if (zoneid < MRP_ZONE_MAX) {
         areas = screen->zones + zoneid;
         grantid = screen->grantids[zoneid];
@@ -528,7 +528,7 @@ int mrp_resmgr_screen_print(mrp_resmgr_screen_t *screen,
 
 static int area_resolution_cb(void *key, void *object, void *user_data)
 {
-    
+
     screen_resource_t  *sr = (screen_resource_t *)object;
     area_iterator_t *ait = (area_iterator_t *)user_data;
     const char *areaname;
@@ -548,7 +548,7 @@ static int area_resolution_cb(void *key, void *object, void *user_data)
             appid = get_appid_for_resource(sr->res);
             surfaceid = get_surfaceid_for_resource(sr->res);
             layerid = -1;
-            
+
             mrp_debug("  resolving screen resource for '%s'",
                       appid ? appid : "<unknown appid>");
 
@@ -669,7 +669,7 @@ void mrp_resmgr_screen_area_create(mrp_resmgr_screen_t *screen,
 
         for (z = 0;   ait.zone.mask && z < MRP_ZONE_MAX;   z++) {
             mask = (((uint32_t)1) << z);
-            
+
             if ((mask & ait.zone.mask)) {
                 ait.zone.mask &= ~mask;
                 mrp_resource_owner_recalc(z);
@@ -726,7 +726,9 @@ void mrp_screen_resource_raise(mrp_resmgr_screen_t *screen,
         zmin = MRP_ZONE_MAX-1;
 
         for (i = cnt = 0;  i < screen->narea;  i++) {
-            area = screen->areas[i];
+            if (!(area = screen->areas[i]))
+                continue;
+
             resources = &area->resources;
 
             mrp_list_foreach(resources, entry, n) {
@@ -1051,7 +1053,7 @@ static screen_resource_t *screen_resource_create(mrp_resmgr_screen_t *screen,
                       "can't find app");
         return NULL;
     }
-            
+
     layerid = get_layerid_for_resource(sr->res);
 
     if ((id = get_area_for_resource(res)) >= 0 &&
@@ -1125,7 +1127,7 @@ static void screen_resource_destroy(mrp_resmgr_screen_t *screen,
 
     MRP_ASSERT(res && screen && screen->resources, "invalid argument");
     MRP_ASSERT(screen->resmgr, "confused with data structures");
-    
+
     if ((sr = mrp_resmgr_remove_resource(screen->resmgr, zone, res))) {
         zonename  = mrp_zone_get_name(zone);
         appid     = get_appid_for_resource(res);
@@ -1188,7 +1190,7 @@ static void screen_resource_raise_to_top(mrp_resmgr_screen_t *screen,
     else {
         sr->key &= ~(ZORDER_MASK << ZORDER_POSITION);
         sr->key |= zorder_new_top_value(area);
-    
+
         area_insert_resource(area, sr);
     }
 
@@ -1284,7 +1286,7 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
 
     if (!zonename)
         zonename = "<unknown>";
-    
+
     mrp_list_foreach(areas, aentry, an) {
         area = mrp_list_entry(aentry, mrp_resmgr_screen_area_t, link);
         resources = &area->resources;
@@ -1336,7 +1338,7 @@ static void screen_queue_events(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
     zonename = mrp_zone_get_name(zone);
     areas    = screen->zones + zoneid;
     grantid  = screen->grantids[zoneid];
-    
+
     mrp_list_foreach(areas, aentry, an) {
         area = mrp_list_entry(aentry, mrp_resmgr_screen_area_t, link);
         resources = &area->resources;
