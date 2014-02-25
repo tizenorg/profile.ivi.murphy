@@ -1140,10 +1140,12 @@ wmgr = window_manager {
                                                                "driver",
                                                                win.appid,
                                                                win.surface)
+                                  special_screen_sets[win.surface] = true
                               end
                           end
                       elseif oper == 2 then -- destroy
                           resclnt:resource_set_destroy("screen", win.surface)
+                          special_screen_sets[win.surface] = nil
                       elseif oper == 6 then -- active
                           if win.active then
                               local i = input_layer[win.layertype]
@@ -1292,6 +1294,11 @@ sc = m:get_system_controller()
 -- resource sets
 sets = {}
 
+-- special screen resource sets
+-- TODO: just rewrite screen resource handling to use regular resource API
+
+special_screen_sets = {}
+
 -- user manager
 um = m:UserManager()
 
@@ -1402,11 +1409,18 @@ if sc then
 
         if command == 0xFFFF then
             if verbose > 1 then
-                print('client ' .. cid .. ' disconnected')
+                print('client ' .. cid .. ' (' .. msg.appid .. ') disconnected')
             end
             if msg.appid == homescreen then
+                if verbose > 1 then
+                end
                 connected = false
                 homescreen = ""
+                wmgr:disconnect()
+                for i,v in pairs(special_screen_sets) do
+                    resource_set_destroy("screen", i)
+                    special_screen_sets[i] = nil
+                end
             end
             return
         end
