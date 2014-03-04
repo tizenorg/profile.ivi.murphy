@@ -425,16 +425,29 @@ static int window_manager_getfield(lua_State *L)
             mrp_funcbridge_push(L, wmgr->window_update);
             break;
 
-        case PASSTHROUGH_REQUEST:
-            mask = (wl->wm ? wl->wm->passthrough.request : 0);
-            goto push_mask;
+        case PASSTHROUGH_WINDOW_REQUEST:
+            mask = (wl->wm ? wl->wm->passthrough.window_request : 0);
+            goto push_window_mask;
 
-        case PASSTHROUGH_UPDATE:
-            mask = (wl->wm ? wl->wm->passthrough.update : 0);
-            goto push_mask;
+        case PASSTHROUGH_WINDOW_UPDATE:
+            mask = (wl->wm ? wl->wm->passthrough.window_update : 0);
+            goto push_window_mask;
 
-        push_mask:
+        case PASSTHROUGH_LAYER_REQUEST:
+            mask = (wl->wm ? wl->wm->passthrough.layer_request : 0);
+            goto push_layer_mask;
+
+        case PASSTHROUGH_LAYER_UPDATE:
+            mask = (wl->wm ? wl->wm->passthrough.layer_update : 0);
+            goto push_layer_mask;
+
+        push_window_mask:
             if (!mrp_wayland_scripting_window_mask_create_from_c(L, mask))
+                lua_pushnil(L);
+            break;
+
+        push_layer_mask:
+            if (!mrp_wayland_scripting_layer_mask_create_from_c(L, mask))
                 lua_pushnil(L);
             break;
 
@@ -596,21 +609,39 @@ static bool manager_request_bridge(lua_State *L,
     mrp_json_foreach_member(json, key,val, it) {
         switch (mrp_wayland_scripting_field_name_to_type(key, -1)) {
 
-        case PASSTHROUGH_REQUEST:
+        case PASSTHROUGH_WINDOW_REQUEST:
             if (!mrp_wayland_json_integer_copy(wl, &mask, val, 1))
                 mrp_debug("'%s' field has invalid value", key);
             else {
-                mrp_debug("set passthrough.request to 0x%x", mask);
-                wm->passthrough.request = mask;
+                mrp_debug("set passthrough.window_request to 0x%x", mask);
+                wm->passthrough.window_request = mask;
             }
             break;
 
-        case PASSTHROUGH_UPDATE:
+        case PASSTHROUGH_WINDOW_UPDATE:
             if (!mrp_wayland_json_integer_copy(wl, &mask, val, 1))
                 mrp_debug("'%s' field has invalid value", key);
             else {
-                mrp_debug("set passthrough.update to 0x%x", mask);
-                wm->passthrough.update = mask;
+                mrp_debug("set passthrough.window_update to 0x%x", mask);
+                wm->passthrough.window_update = mask;
+            }
+            break;
+
+        case PASSTHROUGH_LAYER_REQUEST:
+            if (!mrp_wayland_json_integer_copy(wl, &mask, val, 1))
+                mrp_debug("'%s' field has invalid value", key);
+            else {
+                mrp_debug("set passthrough.layer_request to 0x%x", mask);
+                wm->passthrough.layer_request = mask;
+            }
+            break;
+
+        case PASSTHROUGH_LAYER_UPDATE:
+            if (!mrp_wayland_json_integer_copy(wl, &mask, val, 1))
+                mrp_debug("'%s' field has invalid value", key);
+            else {
+                mrp_debug("set passthrough.layer_update to 0x%x", mask);
+                wm->passthrough.layer_update = mask;
             }
             break;
 
