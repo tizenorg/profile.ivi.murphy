@@ -663,14 +663,29 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             return MANAGER_REQUEST;
         break;
 
-    case 18:
-        if (!strcmp(name, "passthrough_update"))
-            return PASSTHROUGH_UPDATE;
+    case 24:
+        if (!strcmp(name, "passthrough_layer_update"))
+            return PASSTHROUGH_LAYER_UPDATE;
         break;
 
-    case 19:
-        if (!strcmp(name, "passthrough_request"))
-            return PASSTHROUGH_REQUEST;
+    case 25:
+        switch (name[12]) {
+        case 'l':
+            if (!strcmp(name, "passthrough_layer_request"))
+                return PASSTHROUGH_LAYER_REQUEST;
+            break;
+        case 'w':
+            if (!strcmp(name, "passthrough_window_update"))
+                return PASSTHROUGH_WINDOW_UPDATE;
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case 26:
+        if (!strcmp(name, "passthrough_window_request"))
+            return PASSTHROUGH_WINDOW_REQUEST;
         break;
 
     default:
