@@ -428,7 +428,7 @@ static void layer_visible_callback(void *data,
     mrp_debug("layerid=%u visible=%d", layerid, visible);
 
     memset(&u, 0, sizeof(u));
-    u.mask = MRP_WAYLAND_WINDOW_VISIBLE_MASK;
+    u.mask = MRP_WAYLAND_LAYER_VISIBLE_MASK;
     u.visible = visible;
 
     if (!(layer = mrp_wayland_layer_find(wl, layerid))) {
@@ -489,6 +489,7 @@ static void map_surface_callback(void *data,
 }
 
 static void set_layer_visible(mrp_wayland_layer_t *layer,
+                              mrp_wayland_layer_update_mask_t passthrough,
                               mrp_wayland_layer_update_t *u)
 {
     struct ico_window_mgr *ico_window_mgr;
@@ -501,7 +502,9 @@ static void set_layer_visible(mrp_wayland_layer_t *layer,
 
     need_visibility_change = false;
     if (!(mask & MRP_WAYLAND_LAYER_VISIBLE_MASK) ||
-        (u->visible && layer->visible) || (!u->visible && !layer->visible))
+        ((( u->visible &&  layer->visible) ||
+          (!u->visible && !layer->visible)  ) &&
+         !(passthrough & MRP_WAYLAND_LAYER_VISIBLE_MASK)))
     {
         visible = ICO_WINDOW_MGR_V_NOCHANGE;
     }
@@ -526,14 +529,18 @@ static void layer_request(mrp_wayland_layer_t *layer,
                           mrp_wayland_layer_update_t *u)
 {
     mrp_wayland_t *wl;
+    mrp_wayland_window_manager_t *wm;
     mrp_wayland_layer_update_mask_t mask;
+    mrp_wayland_layer_update_mask_t passthrough;
     char buf[2048];
 
     MRP_ASSERT(layer && layer->wm && layer->wm->proxy &&
                layer->wm->interface && layer->wm->interface->wl,
                "invalid argument");
 
-    wl = layer->wm->interface->wl;
+    wm = layer->wm;
+    wl = wm->interface->wl;
+    passthrough = wm->passthrough.layer_request;
     mask = u->mask;
 
     mrp_wayland_layer_request_print(u, buf, sizeof(buf));
@@ -541,7 +548,7 @@ static void layer_request(mrp_wayland_layer_t *layer,
 
     while (mask) {
         if ((mask & MRP_WAYLAND_LAYER_VISIBLE_MASK)) {
-            set_layer_visible(layer, u);
+            set_layer_visible(layer, passthrough, u);
             mask &= ~MRP_WAYLAND_LAYER_VISIBLE_MASK;
         }
         else {
@@ -1021,7 +1028,7 @@ static void window_request(mrp_wayland_window_t *win,
 
     wm = win->wm;
     wl = wm->interface->wl;
-    passthrough = wm->passthrough.request;
+    passthrough = wm->passthrough.window_request;
     mask = u->mask;
 
     mrp_wayland_window_request_print(u, wbuf, sizeof(wbuf));

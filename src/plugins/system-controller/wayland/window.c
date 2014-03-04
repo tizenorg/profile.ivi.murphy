@@ -443,7 +443,9 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
                                                mrp_wayland_window_update_t *u)
 {
     mrp_wayland_window_update_mask_t mask = 0;
-    mrp_wayland_window_update_mask_t passthrough = win->wm->passthrough.update;
+    mrp_wayland_window_update_mask_t passthrough;
+
+    passthrough = win->wm->passthrough.window_update;
 
     if ((u->mask & MRP_WAYLAND_WINDOW_NAME_MASK)) {
         if (!win->name || strcmp(u->name, win->name) ||
