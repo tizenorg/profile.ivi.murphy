@@ -50,8 +50,11 @@ enum mrp_wayland_window_manager_operation_e {
                            mrp_wayland_animation_t *,                   \
                            uint32_t);                                   \
     struct {                                                            \
-        mrp_wayland_window_update_mask_t request;                       \
-        mrp_wayland_window_update_mask_t update;                        \
+        mrp_wayland_window_update_mask_t window_request;                \
+        mrp_wayland_window_update_mask_t window_update;                 \
+                                                                        \
+        mrp_wayland_layer_update_mask_t layer_request;                  \
+        mrp_wayland_layer_update_mask_t layer_update;                   \
     } passthrough
 
 

@@ -75,6 +75,7 @@ static int  layer_mask_create_from_lua(lua_State *);
 static int  layer_mask_getfield(lua_State *);
 static int  layer_mask_setfield(lua_State *);
 static int  layer_mask_stringify(lua_State *);
+static int  layer_mask_tointeger(lua_State *);
 static void layer_mask_destroy(void *);
 
 static scripting_layer_mask_t *layer_mask_check(lua_State *, int);
@@ -103,6 +104,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     layer_mask_destroy,         /* userdata destructor */
     MRP_LUA_METHOD_LIST (       /* methods */
        MRP_LUA_METHOD_CONSTRUCTOR (layer_mask_create_from_lua)
+       MRP_LUA_METHOD(tointeger,   layer_mask_tointeger)
     ),
     MRP_LUA_METHOD_LIST (       /* overrides */
        MRP_LUA_OVERRIDE_CALL      (layer_mask_create_from_lua)
@@ -450,6 +452,18 @@ static int layer_mask_stringify(lua_State *L)
     }
 
     lua_pushstring(L, (p > buf) ? buf : "<empty>");
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int layer_mask_tointeger(lua_State *L)
+{
+    scripting_layer_mask_t *um;
+
+    MRP_LUA_ENTER;
+
+    um = layer_mask_check(L, 1);
+    lua_pushinteger(L, um->mask);
 
     MRP_LUA_LEAVE(1);
 }
