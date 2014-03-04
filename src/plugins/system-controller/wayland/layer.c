@@ -274,9 +274,16 @@ static mrp_wayland_layer_update_mask_t update(mrp_wayland_layer_t *layer,
                                               mrp_wayland_layer_update_t *u)
 {
     mrp_wayland_layer_update_mask_t mask = 0;
+    mrp_wayland_layer_update_mask_t passthrough = 0;
+    mrp_wayland_window_manager_t *wm;
+
+    if ((wm = layer->wm))
+        passthrough = wm->passthrough.layer_update;
 
     if ((u->mask & MRP_WAYLAND_LAYER_NAME_MASK)) {
-        if (!layer->name || strcmp(u->name, layer->name)) {
+        if (!layer->name || strcmp(u->name, layer->name) ||
+            (passthrough & MRP_WAYLAND_LAYER_NAME_MASK))
+        {
             mask |= MRP_WAYLAND_LAYER_NAME_MASK;
             mrp_free(layer->name);
             layer->name = mrp_strdup(u->name);
@@ -284,14 +291,19 @@ static mrp_wayland_layer_update_mask_t update(mrp_wayland_layer_t *layer,
     }
 
     if ((u->mask & MRP_WAYLAND_LAYER_TYPE_MASK)) {
-        if (u->type != layer->type) {
+        if (u->type != layer->type ||
+            (passthrough & MRP_WAYLAND_LAYER_TYPE_MASK))
+        {
             mask |= MRP_WAYLAND_LAYER_TYPE_MASK;
             layer->type = u->type;
         }
     }
 
     if ((u->mask & MRP_WAYLAND_LAYER_VISIBLE_MASK)) {
-        if ((u->visible && !layer->visible)||(!u->visible && layer->visible)) {
+        if (( u->visible && !layer->visible) ||
+            (!u->visible &&  layer->visible) ||
+            (passthrough & MRP_WAYLAND_LAYER_VISIBLE_MASK))
+        {
             mask |= MRP_WAYLAND_LAYER_VISIBLE_MASK;
             layer->visible = u->visible;
         }

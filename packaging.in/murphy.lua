@@ -1046,13 +1046,17 @@ wmgr = window_manager {
                                  window_manager_operation_name(oper))
                        end
                        if oper == 1 then
-                           local umask = window_mask { raise   = true,
-                                                       visible = true,
-                                                       active  = true }
-                           local rmask = window_mask { active  = true }
+                           local wumask = window_mask { raise   = true,
+                                                        visible = true,
+                                                        active  = true }
+                           local wrmask = window_mask { active  = true }
+                           local lumask = layer_mask  { visible = true }
+                           local lrmask = layer_mask  { visible = true }
                            local req = m:JSON({
-                                       passthrough_update  = umask:tointeger(),
-                                       passthrough_request = rmask:tointeger()
+                               passthrough_window_update  = wumask:tointeger(),
+                               passthrough_window_request = wrmask:tointeger(),
+                               passthrough_layer_update   = lumask:tointeger(),
+                               passthrough_layer_request  = lrmask:tointeger()
                            })
                            self:manager_request(req)
                        end
@@ -1335,6 +1339,14 @@ application {
     appid           = "org.tizen.ico.statusbar",
     area            = "Center.Status",
     privileges      = { screen = "system", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 20
+}
+
+application {
+    appid           = "org.tizen.ico.onscreen",
+    area            = "Center.Full",
+    privileges      = { screen = "system", audio = "system" },
     resource_class  = "player",
     screen_priority = 20
 }
