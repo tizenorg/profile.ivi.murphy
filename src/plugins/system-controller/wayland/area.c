@@ -289,12 +289,21 @@ static int set_area_for_applications(void *key, void *object, void *ud)
 {
     mrp_application_t *app = (mrp_application_t *)object;
     mrp_wayland_area_t *area = (mrp_wayland_area_t *)ud;
+    mrp_application_window_t *w;
 
     MRP_UNUSED(key);
 
     if (!strcmp(app->area_name, area->fullname)) {
-        mrp_debug("set area '%s' for app '%s'", area->name, app->appid);
+        mrp_debug("set area '%s' for app '%s'", area->fullname, app->appid);
         app->area = area;
+    }
+
+    for (w = app->windows;   w && w->area_name;    w++) {
+        if (!strcmp(area->fullname, w->area_name)) {
+            mrp_debug("set area '%s' for window '%s'",
+                      area->fullname, w->window_name);
+            w->area = area;
+        }
     }
 
     return MRP_HTBL_ITER_MORE;

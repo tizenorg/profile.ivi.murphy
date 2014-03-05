@@ -611,7 +611,7 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
 
     memset(&u2, 0, sizeof(u2));
 
-    if (!(u2.area = win->application->area)) {
+    if (!(u2.area = mrp_application_area_find(win->application, win->name))) {
         mrp_log_error("system-controller: no area for application '%s'",
                       win->application->appid);
         return mask;
