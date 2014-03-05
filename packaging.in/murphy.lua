@@ -372,22 +372,12 @@ sink.lua {
     name = "nightmode_homescreen",
     inputs = { owner = mdb.select.select_night_mode },
     initiate = function(self)
-        -- data = mdb.select.select_night_mode.single_value
-        return true
-    end,
+                   -- data = mdb.select.select_night_mode.single_value
+                   return true
+               end,
     update = function(self)
-        data = mdb.select.select_night_mode.single_value
-
-        if verbose > 1 then
-            print("Night mode updated: " .. tostring(data))
-        end
-
-        if sc then
-            -- tell homescreen that night mode was updated
-            sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=2,state=data})}))
-        end
-        return true
-    end
+                 send_night_mode_to_home_screen()
+             end
 }
 
 -- Driving mode processing chain
@@ -547,13 +537,7 @@ sink.lua {
         end
 
         -- tell homescreen that driving mode was updated
-        sc:send_message(homescreen, m:JSON({command=0x60001,arg=m:JSON({stateid=1,state=data})}))
-
-        --[[
-        -- bulk handle the applications that need requisites
-        r = requisite { driving = true }
-        resmgr:disable_screen_by_requisite("*", "*", r, data == 1, true)
-        --]]
+        send_driving_mode_to_home_screen()
 
         regulateApplications(ft(mdb.select.entertainment_applications), data)
         regulateApplications(ft(mdb.select.undefined_applications), data)
@@ -1313,6 +1297,7 @@ um = m:UserManager()
 
 connected = false
 homescreen = ""
+onscreen = ""
 
 -- these shoud be before wmgr:connect() is called
 if verbose > 0 then
@@ -1404,6 +1389,7 @@ application {
 if sc then
     sc.client_handler = function (self, cid, msg)
         local command = msg.command
+        local appid = msg.appid
         if verbose > 0 then
             print('### ==> client handler:')
             if verbose > 1 then
@@ -1427,17 +1413,19 @@ if sc then
 
         -- handle the connection
 
-        if not connected then
-            print('Setting homescreen='..msg.appid)
-            homescreen = msg.appid
-            if command and command == 1 then
-                send_driving_mode_to_home_screen()
-                send_night_mode_to_home_screen()
+        if not connected and appid then
+            if appid == "org.tizen.ico.homescreen" then
+                print('Setting homescreen='..appid)
+                homescreen = appid
+                if command and command == 1 then
+                    send_driving_mode_to_home_screen()
+                    send_night_mode_to_home_screen()
+                end
+                print('Trying to connect to wayland...')
+                connected = wmgr:connect()
+            elseif appid == "org.tizen.ico.onscreen" then
+                onscreen = appid
             end
-            print('Trying to connect to wayland...')
-            connected = wmgr:connect()
-        end
-        if connected and command then
         end
     end
 
@@ -1944,6 +1932,10 @@ if sc then
 end
 
 function send_driving_mode_to_home_screen()
+    if homescreen == "" then
+        return
+    end
+
     local driving_mode = mdb.select.select_driving_mode.single_value
 
     if not driving_mode then driving_mode = 0 end
@@ -1965,6 +1957,10 @@ function send_driving_mode_to_home_screen()
 end
 
 function send_night_mode_to_home_screen()
+    if homescreen == "" then
+        return
+    end
+
     local night_mode = mdb.select.select_night_mode.single_value
 
     if not night_mode then night_mode = 0 end
