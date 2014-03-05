@@ -101,6 +101,9 @@ static int reqs_push(lua_State *, mrp_application_requisites_t *);
 
 static int reqs_entry_check(lua_State *, int);
 
+static mrp_application_window_def_t *windows_check(lua_State *, int);
+static void windows_free(mrp_application_window_def_t *);
+
 
 static field_t field_check(lua_State *, int, const char **);
 static field_t field_name_to_type(const char *, ssize_t);
@@ -241,6 +244,7 @@ static int app_create_from_lua(lua_State *L)
     int32_t spri = 0;
     mrp_application_privileges_t *privs = NULL;
     mrp_application_requisites_t *reqs = NULL;
+    mrp_application_window_def_t *windows = NULL;
     char *id;
     char buf[4096];
 
@@ -252,12 +256,13 @@ static int app_create_from_lua(lua_State *L)
     MRP_LUA_FOREACH_FIELD(L, 2, fldnam, fldnamlen) {
         switch (field_name_to_type(fldnam, fldnamlen)) {
 
-        case APPID:           appid = luaL_checkstring(L, -1);           break;
-        case AREA:            arnam = luaL_checkstring(L, -1);           break;
-        case PRIVILEGES:      privs = priv_check(L, -1);                 break;
-        case REQUISITES:      reqs  = reqs_check(L, -1);                 break;
-        case RESOURCE_CLASS:  class = luaL_checkstring(L, -1);           break;
-        case SCREEN_PRIORITY: spri  = luaL_checkinteger(L, -1);          break;
+        case APPID:           appid   = luaL_checkstring(L, -1);         break;
+        case AREA:            arnam   = luaL_checkstring(L, -1);         break;
+        case WINDOWS:         windows = windows_check(L, -1);            break;
+        case PRIVILEGES:      privs   = priv_check(L, -1);               break;
+        case REQUISITES:      reqs    = reqs_check(L, -1);               break;
+        case RESOURCE_CLASS:  class   = luaL_checkstring(L, -1);         break;
+        case SCREEN_PRIORITY: spri    = luaL_checkinteger(L, -1);        break;
         default:              luaL_error(L, "bad field '%s'", fldnam);   break;
         }
     }
@@ -298,6 +303,10 @@ static int app_create_from_lua(lua_State *L)
         reqs_free(reqs);
     }
 
+    if (windows) {
+        u.mask |= MRP_APPLICATION_WINDOWS_MASK;
+        u.windows = windows;
+    }
 
     if ((app = mrp_application_create(&u, a))) {
         a->app = app;
@@ -308,6 +317,8 @@ static int app_create_from_lua(lua_State *L)
         mrp_lua_destroy_object(L, id,0, a);
         lua_pushnil(L);
     }
+
+    windows_free(windows);
 
     MRP_LUA_LEAVE(1);
 }
@@ -916,10 +927,75 @@ static int reqs_entry_check(lua_State *L, int idx)
         case BLINKER_RIGHT: r = MRP_APPLICATION_REQUISITE_BLINKER_RIGHT; break;
         default:            luaL_error(L,"invalid requisite '%s'",name); break;
         }
+
+        if (type == LUA_TTABLE)
+            lua_pop(L, 1);
     }
 
     return r;
 }
+
+static mrp_application_window_def_t *windows_check(lua_State *L, int idx)
+{
+    mrp_application_window_def_t *windows, *w;
+    int i, j, m, n;
+    const char *val;
+
+    idx = mrp_lua_absidx(L, idx);
+
+    luaL_checktype(L, idx, LUA_TTABLE);
+
+    n = lua_objlen(L, idx);
+    windows = mrp_allocz(sizeof(mrp_application_window_def_t) * (n + 1));
+
+    for (i = 0;   i < n;   i++) {
+        w = windows + i;
+
+        lua_pushinteger(L, i+1);
+        lua_gettable(L, idx);
+
+        luaL_checktype(L, -1, LUA_TTABLE);
+
+        if ((m = lua_objlen(L, -1)) != 2)
+            luaL_error(L, "invalid application window specification");
+
+        for (j = 0;  j < m;  j++) {
+            lua_pushinteger(L, j+1);
+            lua_gettable(L, -2);
+
+            if (!lua_isstring(L, -1))
+                luaL_error(L, "window specifcation: string expected");
+
+            val = mrp_strdup(lua_tostring(L, -1));
+
+            switch (j) {
+            case 0:      w->window_name = val;    break;
+            case 1:      w->area_name   = val;    break;
+            default:                              break;
+            }
+
+            lua_pop(L, 1);
+        }
+        
+        lua_pop(L, 1);
+    }
+
+    return windows;
+}
+
+static void windows_free(mrp_application_window_def_t *windows)
+{
+    mrp_application_window_def_t *w;
+
+    if (windows) {
+        for (w = windows;  w->window_name;   w++) {
+            mrp_free((void *)w->window_name);
+            mrp_free((void *)w->area_name);
+        }
+        mrp_free((void *)windows);
+    }
+}
+
 
 static field_t field_check(lua_State *L, int idx, const char **ret_fldnam)
 {
@@ -989,8 +1065,18 @@ static field_t field_name_to_type(const char *name, ssize_t len)
         break;
 
     case 7:
-        if (!strcmp(name, "driving"))
-            return DRIVING;
+        switch(name[0]) {
+        case 'd':
+            if (!strcmp(name, "driving"))
+                return DRIVING;
+            break;
+        case 'w':
+            if (!strcmp(name, "windows"))
+                return WINDOWS;
+            break;
+        default:
+            break;
+        }
         break;
 
     case 8:
