@@ -41,6 +41,7 @@
 
 static void init_applications(void);
 static mrp_wayland_area_t *area_find(const char *);
+static mrp_application_window_t *windows_dup(mrp_application_window_def_t *);
 
 mrp_htbl_t *applications;
 
@@ -112,6 +113,8 @@ mrp_application_t *mrp_application_create(mrp_application_update_t *u,
         app->requisites.screen = u->requisites.screen;
     IF_PRESENT(u, AUDIO_REQUISITES)
         app->requisites.audio = u->requisites.audio;
+    IF_PRESENT(u, WINDOWS)
+        app->windows = windows_dup(u->windows);
 
     if (!scripting_data)
         scripting_data = mrp_application_scripting_app_create_from_c(app);
@@ -138,6 +141,7 @@ mrp_application_t *mrp_application_create(mrp_application_update_t *u,
 void mrp_application_destroy(mrp_application_t *app)
 {
     mrp_wayland_t *wl;
+    mrp_application_window_t *w;
     void *it;
 
     if (app && app->appid) {
@@ -160,6 +164,14 @@ void mrp_application_destroy(mrp_application_t *app)
 
         mrp_free(app->appid);
 
+        if (app->windows) {
+            for (w = app->windows;  w->window_name;   w++) {
+                mrp_free((void *)w->window_name);
+                mrp_free((void *)w->area_name);
+            }
+            mrp_free((void *)app->windows);
+        }
+
         free(app);
     }
 }
@@ -173,6 +185,23 @@ mrp_application_t *mrp_application_find(const char *appid)
     return (mrp_application_t *)mrp_htbl_lookup(applications, (void *)appid);
 }
 
+mrp_wayland_area_t *mrp_application_area_find(mrp_application_t *app,
+                                              const char *window_name)
+{
+    mrp_application_window_t *w;
+
+    if (app) {
+        if (window_name && app->windows) {
+            for (w = app->windows;   w->window_name;   w++) {
+                if (!strcmp(window_name, w->window_name))
+                    return w->area;
+            }
+        }
+        return app->area;
+    }
+
+    return NULL;
+}
 
 size_t mrp_application_print(mrp_application_t *app,
                              mrp_application_update_mask_t mask,
@@ -185,6 +214,7 @@ size_t mrp_application_print(mrp_application_t *app,
     char *p, *e;
     char sbuf[1024];
     char abuf[1024];
+    char wbuf[4096];
 
     e = (p = buf) + len;
 
@@ -216,6 +246,10 @@ size_t mrp_application_print(mrp_application_t *app,
         mrp_application_requisite_print(app->requisites.audio,
                                         abuf,sizeof(abuf));
         PRINT("requisites: screen=%s, audio=%s", sbuf, abuf);
+    }
+    if ((mask & MRP_APPLICATION_WINDOWS_MASK)) {
+        mrp_application_windows_print(app->windows, wbuf,sizeof(wbuf));
+        PRINT("windows: %s", wbuf);
     }
 
     return p - buf;
@@ -285,6 +319,38 @@ size_t mrp_application_requisite_print(mrp_application_requisite_t rqs,
 }
 
 
+size_t mrp_application_windows_print(mrp_application_window_t *wins,
+                                     char *buf, size_t len)
+{
+#define PRINT(w)                                                        \
+    do {                                                                \
+        if (p < e && w->window_name && w->area_name) {                  \
+            p += snprintf(p, e-p, "%s%s:%s",                            \
+                          p == buf ? "":", ",                           \
+                          w->window_name,                               \
+                          w->area ? w->area->name : w->area_name);      \
+        }                                                               \
+    } while(0)
+
+    mrp_application_window_t *w;
+    char *p, *e;
+
+    e = (p = buf) + len;
+
+    *p = 0;
+
+    for (w = wins;   w && w->window_name;    w++)
+        PRINT(w);
+
+    if (p == buf)
+        p += snprintf(p, e-p, "none");
+
+    return p - buf;
+
+#undef PRINT
+}
+
+
 static void init_applications(void)
 {
     mrp_htbl_config_t cfg;
@@ -312,4 +378,30 @@ static mrp_wayland_area_t *area_find(const char *fullname)
     }
 
     return NULL;
+}
+
+static
+mrp_application_window_t *windows_dup(mrp_application_window_def_t *defs)
+{
+    mrp_application_window_t *dup = NULL;
+    const char *area_name;
+    int i, n;
+
+    if (defs) {
+
+        for (n = 0;   defs[n].window_name;   n++)
+            ;
+
+        if ((dup = mrp_allocz(sizeof(mrp_application_window_t) * (n + 1)))) {
+            for (i = 0;  i < n;  i++) {
+                if ((area_name = defs[i].area_name)) {
+                    dup[i].window_name = mrp_strdup(defs[i].window_name);
+                    dup[i].area_name = mrp_strdup(area_name);
+                    dup[i].area = area_find(area_name);
+                }
+            }
+        }
+    }
+
+    return dup;
 }
