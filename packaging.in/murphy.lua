@@ -1017,6 +1017,13 @@ wmgr = window_manager {
                               width  = function(w,h) return w/2-181 end,
                               height = function(w,h) return h-64-128 end
                            },
+                           Control = {
+                              id     = 11,
+                              pos_x  = 0,
+                              pos_y  = function(w,h) return h-128 end,
+                              width  = function(w,h) return w end,
+                              height = 128
+                           },
                         }
               }
   },
@@ -1330,6 +1337,7 @@ application {
 application {
     appid           = "org.tizen.ico.homescreen",
     area            = "Center.Full",
+    windows         = { {'ico_hs_controlbarwindow', 'Center.Control'} },
     privileges      = { screen = "system", audio = "system" },
     resource_class  = "player",
     screen_priority = 20
@@ -1422,43 +1430,14 @@ if sc then
         if not connected then
             print('Setting homescreen='..msg.appid)
             homescreen = msg.appid
+            if command and command == 1 then
+                send_driving_mode_to_home_screen()
+                send_night_mode_to_home_screen()
+            end
             print('Trying to connect to wayland...')
             connected = wmgr:connect()
         end
         if connected and command then
-            if command == 1 then -- send_appid
-                local driving_mode = mdb.select.select_driving_mode.single_value
-                local night_mode = mdb.select.select_night_mode.single_value
-
-                if not driving_mode then driving_mode = 0 end
-                if not night_mode then night_mode = 0 end
-
-                local reply = m:JSON({ command = 0x60001,
-                                       arg     = m:JSON({ stateid = 1,
-                                                          state   = driving_mode})
-                                     })
-                 if verbose > 0 then
-                     print("### <== sending " ..
-                           command_name(command) .. " message")
-                     if verbose > 1 then
-                         print(reply)
-                     end
-                 end
-                 sc:send_message(homescreen, reply)
-
-                 reply = m:JSON({ command = 0x60001,
-                                  arg     = m:JSON({ stateid = 2,
-                                                     state   = night_mode})
-                                })
-                 if verbose > 0 then
-                     print("### <== sending " ..
-                           command_name(command) .. " message")
-                     if verbose > 1 then
-                         print(reply)
-                     end
-                 end
-                 sc:send_message(homescreen, reply)
-            end
         end
     end
 
@@ -1962,6 +1941,48 @@ if sc then
             end
         end
     end
+end
+
+function send_driving_mode_to_home_screen()
+    local driving_mode = mdb.select.select_driving_mode.single_value
+
+    if not driving_mode then driving_mode = 0 end
+
+    local reply = m:JSON({ command = 0x60001,
+                           arg     = m:JSON({ stateid = 1,
+                                              state   = driving_mode
+                                     })
+                  })
+
+    if verbose > 0 then
+        print("### <== sending " .. command_name(reply.command) .. " message")
+        if verbose > 1 then
+            print(reply)
+        end
+    end
+
+    sc:send_message(homescreen, reply)
+end
+
+function send_night_mode_to_home_screen()
+    local night_mode = mdb.select.select_night_mode.single_value
+
+    if not night_mode then night_mode = 0 end
+
+    local reply = m:JSON({ command = 0x60001,
+                           arg     = m:JSON({ stateid = 2,
+                                              state   = night_mode
+                                     })
+                  })
+
+    if verbose > 0 then
+        print("### <== sending " .. command_name(reply.command) .. " message")
+        if verbose > 1 then
+            print(reply)
+        end
+     end
+
+     sc:send_message(homescreen, reply)
 end
 
 -- we should have 'audio_playback' defined by now
