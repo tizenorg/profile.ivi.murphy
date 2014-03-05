@@ -33,6 +33,7 @@
 #include <sys/types.h>
 
 #include "data-types.h"
+#include "wayland/area.h"
 
 #ifndef __MURPHY_WAYLAND_H__
 #error "do not include directly application.h; include wayland/wayland.h"
@@ -50,6 +51,8 @@ typedef struct mrp_application_s              mrp_application_t;
 typedef struct mrp_application_update_s       mrp_application_update_t;
 typedef struct mrp_application_privileges_s   mrp_application_privileges_t;
 typedef struct mrp_application_requisites_s   mrp_application_requisites_t;
+typedef struct mrp_application_window_s       mrp_application_window_t;
+typedef struct mrp_application_window_def_s   mrp_application_window_def_t;
 
 enum mrp_application_operation_e {
     MRP_APPLICATION_OPERATION_NONE = 0,
@@ -88,6 +91,12 @@ struct mrp_application_requisites_s {
     mrp_application_privilege_t audio;
 };
 
+struct mrp_application_window_s {
+    const char *window_name;
+    const char *area_name;
+    mrp_wayland_area_t *area;
+};
+
 struct mrp_application_s {
     char *appid;
     char *area_name;
@@ -97,6 +106,7 @@ struct mrp_application_s {
     const char *resource_class;
     int32_t screen_priority;
     mrp_application_requisites_t requisites;
+    mrp_application_window_t *windows;
 
     void *scripting_data;
 };
@@ -113,8 +123,14 @@ enum mrp_application_update_mask_e {
     MRP_APPLICATION_SCREEN_REQUISITES_MASK = 0x080,
     MRP_APPLICATION_AUDIO_REQUISITES_MASK  = 0x100,
     MRP_APPLICATION_REQUISITES_MASK        = 0x180,
+    MRP_APPLICATION_WINDOWS_MASK    = 0x200,
 
-    MRP_APPLICATION_END_MASK = 0x200
+    MRP_APPLICATION_END_MASK = 0x400
+};
+
+struct mrp_application_window_def_s {
+    const char *window_name;
+    const char *area_name;
 };
 
 struct mrp_application_update_s {
@@ -125,6 +141,7 @@ struct mrp_application_update_s {
     mrp_application_privileges_t privileges;
     int32_t screen_priority;
     mrp_application_requisites_t requisites;
+    mrp_application_window_def_t *windows;
 };
 
 mrp_application_t *mrp_application_create(mrp_application_update_t *u,
@@ -132,6 +149,8 @@ mrp_application_t *mrp_application_create(mrp_application_update_t *u,
 void mrp_application_destroy(mrp_application_t *app);
 
 mrp_application_t *mrp_application_find(const char *appid);
+mrp_wayland_area_t *mrp_application_area_find(mrp_application_t *app,
+                                              const char *window_name);
 
 size_t mrp_application_print(mrp_application_t *app,
                              mrp_application_update_mask_t mask,
@@ -145,5 +164,8 @@ const char *mrp_application_privilege_str(mrp_application_privilege_t priv);
 
 size_t mrp_application_requisite_print(mrp_application_requisite_t rqs,
                                        char *buf, size_t len);
+
+size_t mrp_application_windows_print(mrp_application_window_t *wins,
+                                     char *buf, size_t len);
 
 #endif /* __MURPHY_APPLICATION_H__ */
