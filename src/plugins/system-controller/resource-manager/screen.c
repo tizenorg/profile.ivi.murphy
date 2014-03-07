@@ -805,7 +805,9 @@ void mrp_screen_resource_lower(mrp_resmgr_screen_t *screen,
         zmin = MRP_ZONE_MAX-1;
 
         for (i = cnt = 0;  i < screen->narea;  i++) {
-            area = screen->areas[i];
+            if (!(area = screen->areas[i]))
+                continue;
+
             resources = &area->resources;
 
             mrp_list_foreach_back(resources, entry, n) {
