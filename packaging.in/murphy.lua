@@ -1414,22 +1414,18 @@ if sc then
                 print('client ' .. cid .. ' (' .. msg.appid .. ') disconnected')
             end
             if msg.appid == homescreen then
-                if verbose > 1 then
-                end
-                connected = false
                 homescreen = ""
-                wmgr:disconnect()
                 for i,v in pairs(special_screen_sets) do
-                    resource_set_destroy("screen", i)
+                    resclnt:resource_set_destroy("screen", i)
                     special_screen_sets[i] = nil
                 end
             end
             return
         end
 
-        -- handle the connection
+        -- handle the connection to weston
 
-        if not connected and appid then
+        if appid then
             if appid == "org.tizen.ico.homescreen" then
                 print('Setting homescreen='..appid)
                 homescreen = appid
@@ -1437,10 +1433,13 @@ if sc then
                     send_driving_mode_to_home_screen()
                     send_night_mode_to_home_screen()
                 end
-                print('Trying to connect to wayland...')
-                connected = wmgr:connect()
             elseif appid == "org.tizen.ico.onscreen" then
                 onscreen = appid
+            end
+
+	    if not connected and appid == "org.tizen.ico.homescreen" then
+                print('Trying to connect to weston...')
+                connected = wmgr:connect()
             end
         end
     end
