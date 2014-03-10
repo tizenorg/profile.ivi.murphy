@@ -243,14 +243,11 @@ static int terminate_app(const aul_app_info *ai, void *user_data)
 
     mrp_log_info("terminate %s", ai->appid ? ai->appid : "unknown application");
 
-    /* keyboard, org.tizen.ico.homescreen, org.tizen.ico.statusbar */
+    /* org.tizen.ico.homescreen, org.tizen.ico.statusbar, others */
 
-    if (ai->appid && strcmp("keyboard", ai->appid) != 0) {
-        ret = aul_terminate_pid(ai->pid);
-        mrp_log_info("termination %s",
-                ret < 0 ? "not successful" : "successful");
-    }
-
+    ret = aul_terminate_pid(ai->pid);
+    mrp_log_info("termination %s",
+            ret < 0 ? "not successful" : "successful");
 
     return 0;
 }
@@ -261,8 +258,11 @@ static int iter_aul_app_info(const aul_app_info *ai, void *user_data)
 
     MRP_UNUSED(user_data);
 
+    if (!ai || !ai->appid)
+        return 0;
+
     mrp_log_info("ai: pid %i, appid: %s, pkg_name %s", ai->pid, ai->appid,
-            ai->pkg_name);
+            ai->pkg_name ? ai->pkg_name : "NULL");
 
     if (current_user && strcmp(current_user->homescreen, ai->appid) == 0) {
         *hs_pid = ai->pid;
@@ -403,7 +403,7 @@ static bool change_user(const char *user, const char *passwd)
             /* get the current homescreen pid */
 
             if (ctx->current_hs_pid > 0) {
-                /* terminate the current homescreen */
+                /* terminate the current homescreen and other applications */
                 aul_app_get_running_app_info(terminate_app, ctx);
                 ctx->current_hs_pid = -1;
             }
