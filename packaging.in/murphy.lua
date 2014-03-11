@@ -650,7 +650,8 @@ window_operation_names = {
     [3] = "name_change",
     [4] = "visible",
     [5] = "configure",
-    [6] = "active"
+    [6] = "active",
+    [7] = "map"
 }
 
 function window_operation_name(oper)
@@ -1098,6 +1099,22 @@ wmgr = window_manager {
                       elseif oper == 6 then -- active
                            command     = 0x10006
                            arg.active  = win.active
+                      elseif oper == 7 then -- map
+                           local map = win.map
+                           if not map then
+                               return
+                           end
+                           if win.mapped then
+                               command = 0x10011
+                           else
+                               command = 0x10012
+                           end
+                           arg.attr = map.type
+                           arg.name = map.target
+                           arg.width = map.width
+                           arg.height = map.height
+                           arg.stride = map.stride
+                           arg.format = map.format
                       else
                            if verbose > 0 then
                                print("### nothing to do")
@@ -1579,7 +1596,7 @@ if sc then
             if not framerate or framerate < 0 then
                 framerate = 0
             end
-            msg.arg.map = 1
+            msg.arg.mapped = 1
             if verbose > 2 then
                 print('### ==> MAP_THUMB REQUEST')
                 print(msg.arg)
@@ -1587,7 +1604,7 @@ if sc then
             end
             wmgr:window_request(msg.arg, a, framerate)
         elseif msg.command == 0x10012 then   -- ico UNMAP_THUMB
-            msg.arg.map = 0
+            msg.arg.mapped = 0
             if verbose > 2 then
                 print('### ==> UNMAP_THUMB REQUEST')
                 print(msg.arg)
