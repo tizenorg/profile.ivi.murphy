@@ -278,6 +278,7 @@ int mrp_wayland_json_align_copy(mrp_wayland_t *wl, void *uval,
     return mask;
 }
 
+
 mrp_wayland_scripting_field_t
 mrp_wayland_scripting_field_check(lua_State *L,int idx,const char **ret_fldnam)
 {
@@ -311,6 +312,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
 
     case 3:
         switch (name[0]) {
+        case 'm':
+            if (!strcmp(name, "map"))
+                return MAP;
+            break;
         case 'p':
             if (!strcmp(name, "pid"))
                 return PID;
@@ -438,6 +443,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
             if (!strcmp(name, "bottom"))
                 return BOTTOM;
             break;
+        case 'f':
+            if (!strcmp(name, "format"))
+                return FORMAT;
+            break;
         case 'h':
             if (!strcmp(name, "height"))
                 return HEIGHT;
@@ -471,6 +480,12 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
         case 's':
             if (!strcmp(name, "switch"))
                 return SWITCH;
+            if (!strcmp(name, "stride"))
+                return STRIDE;
+            break;
+        case 't':
+            if (!strcmp(name, "target"))
+                return TARGET;
             break;
         default:
             break;
