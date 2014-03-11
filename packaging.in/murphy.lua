@@ -368,17 +368,19 @@ end
 
 -- Night mode general handlers
 
-sink.lua {
-    name = "nightmode_homescreen",
-    inputs = { owner = mdb.select.select_night_mode },
-    initiate = function(self)
-                   -- data = mdb.select.select_night_mode.single_value
-                   return true
-               end,
-    update = function(self)
-                 send_night_mode_to_home_screen()
-             end
-}
+if with_system_controller then
+    sink.lua {
+        name = "nightmode_homescreen",
+        inputs = { owner = mdb.select.select_night_mode },
+        initiate = function(self)
+                -- data = mdb.select.select_night_mode.single_value
+                return true
+            end,
+        update = function(self)
+                send_night_mode_to_home_screen()
+            end
+    }
+end
 
 -- Driving mode processing chain
 
