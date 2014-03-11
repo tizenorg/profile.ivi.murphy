@@ -50,9 +50,11 @@
 
 #define WINDOW_CLASS       MRP_LUA_CLASS_SIMPLE(window)
 #define WINDOW_MASK_CLASS  MRP_LUA_CLASS_SIMPLE(window_mask)
+#define WINDOW_MAP_CLASS   MRP_LUA_CLASS_SIMPLE(window_map)
 
 typedef struct scripting_window_s  scripting_window_t;
 typedef struct scripting_window_mask_s  scripting_window_mask_t;
+typedef struct scripting_window_map_s  scripting_window_map_t;
 
 struct scripting_window_s {
     mrp_wayland_window_t *win;
@@ -60,6 +62,10 @@ struct scripting_window_s {
 
 struct scripting_window_mask_s {
     uint32_t mask;
+};
+
+struct scripting_window_map_s {
+    mrp_wayland_window_map_t *map;
 };
 
 static int  window_create_from_lua(lua_State *);
@@ -80,6 +86,16 @@ static void window_mask_destroy(void *);
 static scripting_window_mask_t *window_mask_check(lua_State *, int);
 
 static uint32_t get_window_mask(mrp_wayland_scripting_field_t);
+
+static int  window_map_create_from_lua(lua_State *);
+static int  window_map_getfield(lua_State *);
+static int  window_map_setfield(lua_State *);
+static int  window_map_stringify(lua_State *);
+static void window_map_destroy(void *);
+
+static scripting_window_map_t *window_map_check(lua_State *, int);
+static int window_map_push(lua_State *, mrp_wayland_window_map_t *);
+
 
 
 MRP_LUA_CLASS_DEF_SIMPLE (
@@ -113,6 +129,21 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
+MRP_LUA_CLASS_DEF_SIMPLE (
+    window_map,                 /* class name */
+    scripting_window_map_t,     /* userdata type */
+    window_map_destroy,         /* userdata destructor */
+    MRP_LUA_METHOD_LIST (       /* methods */
+       MRP_LUA_METHOD_CONSTRUCTOR (window_map_create_from_lua)
+    ),
+    MRP_LUA_METHOD_LIST (       /* overrides */
+       MRP_LUA_OVERRIDE_CALL      (window_map_create_from_lua)
+       MRP_LUA_OVERRIDE_GETFIELD  (window_map_getfield)
+       MRP_LUA_OVERRIDE_SETFIELD  (window_map_setfield)
+       MRP_LUA_OVERRIDE_STRINGIFY (window_map_stringify)
+    )
+);
+
 
 
 void mrp_wayland_scripting_window_init(lua_State *L)
@@ -121,6 +152,7 @@ void mrp_wayland_scripting_window_init(lua_State *L)
 
     mrp_lua_create_object_class(L, WINDOW_CLASS);
     mrp_lua_create_object_class(L, WINDOW_MASK_CLASS);
+    mrp_lua_create_object_class(L, WINDOW_MAP_CLASS);
 }
 
 mrp_wayland_window_t *mrp_wayland_scripting_window_check(lua_State *L, int idx)
@@ -178,6 +210,7 @@ void mrp_wayland_scripting_window_destroy_from_c(lua_State *L,
                                                  mrp_wayland_window_t *win)
 {
     scripting_window_t *w;
+    mrp_wayland_window_map_t *map;
 
     MRP_ASSERT(win, "invalid argument");
 
@@ -191,11 +224,14 @@ void mrp_wayland_scripting_window_destroy_from_c(lua_State *L,
     if ((w = win->scripting_data)) {
         mrp_debug("destroy scripting window %d", win->surfaceid);
 
-         w->win = NULL;
+        if ((map = win->map))
+            mrp_wayland_scripting_window_map_destroy_from_c(L, map);
 
-         mrp_lua_destroy_object(L, NULL,win->surfaceid+1, win->scripting_data);
+        w->win = NULL;
 
-         win->scripting_data = NULL;
+        mrp_lua_destroy_object(L, NULL,win->surfaceid+1, win->scripting_data);
+
+        win->scripting_data = NULL;
     }
 }
 
@@ -241,6 +277,7 @@ static int window_getfield(lua_State *L)
         case VISIBLE:   lua_pushinteger(L, win->visible ? 1 : 0);        break;
         case RAISE:     lua_pushinteger(L, win->raise ? 1 : 0);          break;
         case MAPPED:    lua_pushinteger(L, win->mapped ? 1 : 0);         break;
+        case MAP:       window_map_push(L, win->map);                    break;
         case ACTIVE:    lua_pushinteger(L, win->active);                 break;
         case LAYERTYPE: lua_pushinteger(L, win->layertype);              break;
         case AREA:      lua_pushstring(L, win->area && win->area->fullname ?
@@ -509,8 +546,184 @@ static uint32_t get_window_mask(mrp_wayland_scripting_field_t fld)
     case VISIBLE:   return MRP_WAYLAND_WINDOW_VISIBLE_MASK;
     case RAISE:     return MRP_WAYLAND_WINDOW_RAISE_MASK;
     case ACTIVE:    return MRP_WAYLAND_WINDOW_ACTIVE_MASK;
+    case MAPPED:    return MRP_WAYLAND_WINDOW_MAPPED_MASK;
+    case MAP:       return MRP_WAYLAND_WINDOW_MAP_MASK;
     case LAYERTYPE: return MRP_WAYLAND_WINDOW_LAYERTYPE_MASK;
     case AREA:      return MRP_WAYLAND_WINDOW_AREA_MASK;
     default:        return 0;
     }
+}
+
+
+mrp_wayland_window_map_t *mrp_wayland_scripting_window_map_check(lua_State *L,
+                                                                 int idx)
+{
+    scripting_window_map_t *swm = window_map_check(L, idx);
+
+    return swm ? swm->map : NULL;
+}
+
+mrp_wayland_window_map_t *mrp_wayland_scripting_window_map_unwrap(void *void_m)
+{
+    scripting_window_map_t *swm = (scripting_window_map_t *)void_m;
+
+    return swm ? swm->map : NULL;
+}
+
+
+void *mrp_wayland_scripting_window_map_create_from_c(lua_State *L,
+                                                 mrp_wayland_window_map_t *map)
+{
+    scripting_window_map_t *swm;
+
+    if (!L && !(L = mrp_lua_get_lua_state())) {
+        mrp_log_error("can't create scripting window map: "
+                      "LUA is not initialized");
+        return NULL;
+    }
+
+    swm = (scripting_window_map_t *)mrp_lua_create_object(L, WINDOW_MAP_CLASS,
+                                                          NULL, 0);
+    if (!swm)
+        mrp_log_error("can't create window_map");
+    else {
+        swm->map = map;
+        map->scripting_data = swm;
+    }
+
+    return swm;
+}
+
+void mrp_wayland_scripting_window_map_destroy_from_c(lua_State *L,
+                                                 mrp_wayland_window_map_t *map)
+{
+    scripting_window_map_t *swm;
+
+    MRP_ASSERT(map, "invalid argument");
+
+    if (!L && !(L = mrp_lua_get_lua_state())) {
+        mrp_log_error("can't destroy scripting window map: "
+                      "LUA is not initialized");
+        map->scripting_data = NULL;
+        return;
+    }
+
+    if ((swm = map->scripting_data)) {
+        mrp_debug("destroy scripting window map");
+
+        swm->map = NULL;
+        
+        mrp_lua_destroy_object(L, NULL,0, swm);
+        
+        map->scripting_data = NULL;
+    }
+}
+
+static int window_map_create_from_lua(lua_State *L)
+{
+    MRP_LUA_ENTER;
+
+    luaL_error(L, "window_map can't be created from LUA");
+
+    lua_pushnil(L);
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int window_map_getfield(lua_State *L)
+{
+    scripting_window_map_t *swm;
+    mrp_wayland_scripting_field_t fld;
+    mrp_wayland_window_map_t *map;
+
+    MRP_LUA_ENTER;
+
+    swm = window_map_check(L, 1);
+
+    if (!swm)
+        lua_pushnil(L);
+    else {
+        fld = mrp_wayland_scripting_field_check(L, 2, NULL);
+        map = swm->map;
+
+        lua_pop(L, 1);
+
+        switch (fld) {
+        case TYPE:    lua_pushinteger(L, map->type);               break;
+        case TARGET:  lua_pushinteger(L, map->target);             break;
+        case WIDTH:   lua_pushinteger(L, map->width);              break;
+        case HEIGHT:  lua_pushinteger(L, map->height);             break;
+        case STRIDE:  lua_pushinteger(L, map->stride);             break;
+        case FORMAT:  lua_pushinteger(L, map->format);             break;
+        default:      luaL_error(L, "invalid window_map field");   break;
+        }
+    }
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int window_map_setfield(lua_State *L)
+{
+    MRP_LUA_ENTER;
+
+    luaL_error(L, "attempt to modify readonly window_map object");
+
+    MRP_LUA_LEAVE(0);
+}
+
+static int window_map_stringify(lua_State *L)
+{
+    scripting_window_map_t *swm;
+    mrp_wayland_window_map_t *map;
+    char buf[4096];
+
+    MRP_LUA_ENTER;
+
+    swm = window_map_check(L, 1);
+    map = swm->map;
+
+    mrp_wayland_window_map_print(map, buf, sizeof(buf));
+
+    lua_pushstring(L, buf);
+
+    MRP_LUA_LEAVE(1);
+}
+
+static void window_map_destroy(void *data)
+{
+    scripting_window_map_t *swm = (scripting_window_map_t *)data;
+    mrp_wayland_window_map_t *map;
+
+    MRP_LUA_ENTER;
+
+    if (swm && (map = swm->map)) {
+        map->scripting_data = NULL;
+        swm->map = NULL;
+    }
+
+    MRP_LUA_LEAVE_NOARG;
+}
+
+
+static scripting_window_map_t *window_map_check(lua_State *L, int idx)
+{
+    return (scripting_window_map_t*)mrp_lua_check_object(L, WINDOW_MAP_CLASS,
+                                                         idx);
+}
+
+static int window_map_push(lua_State *L, mrp_wayland_window_map_t *map)
+{
+    scripting_window_map_t *swm;
+
+
+    if (!map)
+        lua_pushnil(L);
+    else {
+        if (!(swm = map->scripting_data))
+            mrp_wayland_scripting_window_map_create_from_c(L, map);
+        else
+            mrp_lua_push_object(L, swm);
+    }
+
+    return 1;
 }
