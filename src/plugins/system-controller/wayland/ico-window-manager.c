@@ -470,14 +470,9 @@ static void map_surface_callback(void *data,
                                  uint32_t format)
 {
     mrp_ico_window_manager_t *wm = (mrp_ico_window_manager_t *)data;
-
-    MRP_UNUSED(event);
-    MRP_UNUSED(type);
-    MRP_UNUSED(target);
-    MRP_UNUSED(width);
-    MRP_UNUSED(height);
-    MRP_UNUSED(stride);
-    MRP_UNUSED(format);
+    mrp_wayland_window_t *win;
+    mrp_wayland_window_update_t u;
+    mrp_wayland_window_map_t map;
 
     MRP_ASSERT(wm, "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)wm->proxy,
@@ -486,6 +481,41 @@ static void map_surface_callback(void *data,
     mrp_debug("event=%d surfaceid=%u type=%d target=%d size=%dx%d stride=%d "
               "format=%u", event, surfaceid, type, target, width,height,
               stride, format);
+
+    if (!(win = find_window(wm, surfaceid, "surface map update")))
+        return;
+
+    memset(&map, 0, sizeof(map));
+    map.type = type;
+    map.target = target;
+    map.width = width;
+    map.height = height;
+    map.stride = stride;
+    map.format = format;
+
+    memset(&u, 0, sizeof(u));
+    u.mask = MRP_WAYLAND_WINDOW_MAPPED_MASK | MRP_WAYLAND_WINDOW_MAP_MASK;
+    u.map  = &map;
+
+    switch (event)  {
+
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_CONTENTS:
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_RESIZE:
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_MAP:
+        u.mapped = true;
+        break;
+
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_UNMAP:
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_ERROR:
+        u.mapped = false;
+        break;
+
+    default:
+        mrp_debug("ignoring unknown event type %d event", event);
+        return;
+    }
+
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_MAP, &u);
 }
 
 static void set_layer_visible(mrp_wayland_layer_t *layer,
@@ -949,7 +979,7 @@ static void set_window_mapped(mrp_wayland_window_t *win,
     ico_window_mgr = (struct ico_window_mgr *)win->wm->proxy;
 
     if (((u->mapped && win->mapped) || (!u->mapped && !win->mapped)) &&
-        !(passthrough & MRP_WAYLAND_WINDOW_MAPPED_MASK))
+        !(passthrough & MRP_WAYLAND_WINDOW_MAP_MASK))
     {
         mrp_debug("nothing to do");
     }
