@@ -42,13 +42,14 @@ typedef enum mrp_sysctl_scripting_field_e  mrp_sysctl_scripting_field_t;
 
 enum mrp_sysctl_scripting_field_e {
     /*  2 */ ID = 1,
-    /*  3 */ PID, TOP,
+    /*  3 */ MAP, PID, TOP,
     /*  4 */ AREA, FLIP, HIDE, LEFT, MAKE, MASK, MOVE, NAME, NODE, NONE, SIZE,
              SHOW, TIME, TYPE, ZONE,
     /*  5 */ ALIGN, APPID, AUDIO, CODES, EVENT, INDEX, INPUT, LAYER, MODEL,
              POS_X, POS_Y, RAISE, RIGHT, STATE, TOUCH, WIDTH,
-    /*  6 */ ACTIVE, BOTTOM, HEIGHT, HAPTIC, INPUTS, LAYERS, MAPPED, MIDDLE,
-             OUTPUT, PARKED, RESIZE, ROTATE, SCREEN, SWITCH,
+    /*  6 */ ACTIVE, BOTTOM, FORMAT, HEIGHT, HAPTIC, INPUTS, LAYERS, MAPPED,
+             MIDDLE, OUTPUT, PARKED, RESIZE, ROTATE, SCREEN, SWITCH, STRIDE,
+             TARGET,
     /*  7 */ AUDIOID, CLASSES, DISPLAY, DRIVING, KEYCODE, PIXEL_X, PIXEL_Y,
              POINTER, SURFACE, VISIBLE, WINDOWS,
     /*  8 */ KEYBOARD, POSITION, REVERSES, SUBPIXEL, VERTICAL,
