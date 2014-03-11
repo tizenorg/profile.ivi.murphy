@@ -139,10 +139,10 @@ void mrp_wayland_window_destroy(mrp_wayland_window_t *win)
 
         mrp_wayland_scripting_window_destroy_from_c(NULL, win);
     }
-    
 
     mrp_free(win->name);
     mrp_free(win->appid);
+    mrp_free(win->map);
 
     if ((void *)win != mrp_htbl_remove(wl->windows, &win->surfaceid, false)) {
         mrp_log_error("system-controller: failed to destroy window %d: "
@@ -306,6 +306,7 @@ size_t mrp_wayland_window_print(mrp_wayland_window_t *win,
 
     char *p, *e;
     char as[256];
+    char ms[512];
 
     e = (p = buf) + len;
 
@@ -331,6 +332,8 @@ size_t mrp_wayland_window_print(mrp_wayland_window_t *win,
         PRINT("raise: %s", win->raise ? "yes" : "no");
     if ((mask & MRP_WAYLAND_WINDOW_MAPPED_MASK))
         PRINT("mapped: %s", win->mapped ? "yes" : "no");
+    if ((mask & MRP_WAYLAND_WINDOW_MAP_MASK))
+        PRINT("map: %s", mrp_wayland_window_map_print(win->map,ms,sizeof(ms)));
     if ((mask & MRP_WAYLAND_WINDOW_ACTIVE_MASK)) {
         PRINT("active: 0x%x =%s", win->active, active_str(win->active,
                                                           as, sizeof(as)));
@@ -361,6 +364,7 @@ size_t mrp_wayland_window_request_print(mrp_wayland_window_update_t *u,
     mrp_wayland_window_update_mask_t mask;
     char *p, *e;
     char as[256];
+    char ms[512];
 
     mask = u->mask;
     e = (p = buf) + len;
@@ -387,6 +391,8 @@ size_t mrp_wayland_window_request_print(mrp_wayland_window_update_t *u,
         PRINT("raise: %s", u->raise ? "yes" : "no");
     if ((mask & MRP_WAYLAND_WINDOW_MAPPED_MASK))
         PRINT("mapped: %s", u->mapped ? "yes" : "no");
+    if ((mask & MRP_WAYLAND_WINDOW_MAP_MASK))
+        PRINT("map: %s", mrp_wayland_window_map_print(u->map, ms, sizeof(ms)));
     if ((mask & MRP_WAYLAND_WINDOW_ACTIVE_MASK)) {
         PRINT("active: 0x%x =%s", u->active, active_str(u->active,
                                                         as, sizeof(as)));
@@ -424,9 +430,24 @@ mrp_wayland_window_update_mask_str(mrp_wayland_window_update_mask_t mask)
     case MRP_WAYLAND_WINDOW_LAYERTYPE_MASK: return "layertype";
     case MRP_WAYLAND_WINDOW_APP_MASK:       return "application";
     case MRP_WAYLAND_WINDOW_AREA_MASK:      return "area";
+    case MRP_WAYLAND_WINDOW_MAP_MASK:       return "map";
     default:                                return "<unknown>";
     }
 }
+
+char *mrp_wayland_window_map_print(mrp_wayland_window_map_t *m,
+                                   char *buf, size_t len)
+{
+    if (!m)
+        snprintf(buf, len,"<not mapped>");
+    else {
+        snprintf(buf, len,"type=%u target=%u size=%dx%d stride=%d format=%d",
+                 m->type, m->target, m->width,m->height, m->stride, m->format);
+    }
+
+    return buf;
+}
+
 
 void mrp_wayland_window_set_scripting_data(mrp_wayland_window_t *win,
                                            void *data)
@@ -444,6 +465,7 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
 {
     mrp_wayland_window_update_mask_t mask = 0;
     mrp_wayland_window_update_mask_t passthrough;
+    mrp_wayland_window_map_t *wmap, *umap;
 
     passthrough = win->wm->passthrough.window_update;
 
@@ -550,11 +572,39 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_MAPPED_MASK)) {
-        if ((u->mapped && !win->mapped) || (!u->mapped && win->mapped) ||
+        if ((u->mapped && !win->mapped) || (!u->mapped || win->mapped) ||
             (passthrough & MRP_WAYLAND_WINDOW_MAPPED_MASK))
         {
             mask |= MRP_WAYLAND_WINDOW_MAPPED_MASK;
             win->mapped = u->mapped;
+        }
+    }
+
+    if ((u->mask & MRP_WAYLAND_WINDOW_MAP_MASK)) {
+        if ((u->map && !win->map) || (!u->map && win->map) ||
+            (passthrough & MRP_WAYLAND_WINDOW_MAP_MASK))
+        {
+            mask |= MRP_WAYLAND_WINDOW_MAP_MASK;
+
+            if ((umap = u->map)) {
+                if (!(wmap = win->map)) {
+                    wmap = mrp_allocz(sizeof(mrp_wayland_window_map_t));
+                    win->map = wmap;
+                }
+
+                if (!wmap) {
+                    mrp_log_error("system-controller: can't allocate memory "
+                                  "for window map");
+                }
+                else {
+                    wmap->type   = umap->type;
+                    wmap->target = umap->target;
+                    wmap->width  = umap->width;
+                    wmap->height = umap->height;
+                    wmap->stride = umap->stride;
+                    wmap->format = umap->format;
+                }
+            }
         }
     }
 
