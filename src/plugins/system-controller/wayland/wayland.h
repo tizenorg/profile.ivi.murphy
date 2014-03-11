@@ -100,6 +100,7 @@ typedef struct mrp_wayland_output_update_s    mrp_wayland_output_update_t;
 typedef struct mrp_wayland_layer_s            mrp_wayland_layer_t;
 typedef struct mrp_wayland_layer_update_s     mrp_wayland_layer_update_t;
 typedef struct mrp_wayland_window_s           mrp_wayland_window_t;
+typedef struct mrp_wayland_window_map_s       mrp_wayland_window_map_t;
 typedef struct mrp_wayland_window_update_s    mrp_wayland_window_update_t;
 typedef struct mrp_wayland_area_s             mrp_wayland_area_t;
 typedef struct mrp_wayland_area_update_s      mrp_wayland_area_update_t;
@@ -153,7 +154,6 @@ typedef void (*mrp_wayland_code_update_callback_t)(mrp_wayland_t *,
                                         mrp_wayland_code_operation_t,
                                         mrp_wayland_code_update_mask_t,
                                         mrp_wayland_code_t *);
-
 
 struct mrp_wayland_s {
     const char *display_name;
