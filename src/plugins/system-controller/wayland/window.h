@@ -48,7 +48,8 @@ enum mrp_wayland_window_operation_e {
     MRP_WAYLAND_WINDOW_NAMECHANGE,   /* 3 */
     MRP_WAYLAND_WINDOW_VISIBLE,      /* 4 */
     MRP_WAYLAND_WINDOW_CONFIGURE,    /* 5 */
-    MRP_WAYLAND_WINDOW_ACTIVE        /* 6 */
+    MRP_WAYLAND_WINDOW_ACTIVE,       /* 6 */
+    MRP_WAYLAND_WINDOW_MAP,          /* 7 */
 };
 
 
@@ -72,6 +73,18 @@ struct mrp_wayland_window_s {
 
     mrp_application_t *application;
     mrp_wayland_area_t *area;
+    mrp_wayland_window_map_t *map;
+
+    void *scripting_data;
+};
+
+
+struct mrp_wayland_window_map_s {
+    uint32_t type;
+    uint32_t target;
+    int32_t width, height;
+    int32_t stride;
+    int32_t format;
 
     void *scripting_data;
 };
@@ -97,8 +110,9 @@ enum mrp_wayland_window_update_mask_e {
     MRP_WAYLAND_WINDOW_LAYERTYPE_MASK   = 0x04000,
     MRP_WAYLAND_WINDOW_APP_MASK         = 0x08000,
     MRP_WAYLAND_WINDOW_AREA_MASK        = 0x10000,
+    MRP_WAYLAND_WINDOW_MAP_MASK         = 0x20000,
 
-    MRP_WAYLAND_WINDOW_END_MASK         = 0x20000
+    MRP_WAYLAND_WINDOW_END_MASK         = 0x40000
 };
 
 
@@ -118,6 +132,7 @@ struct mrp_wayland_window_update_s {
     mrp_wayland_active_t active;
     mrp_wayland_layer_type_t layertype;
     mrp_wayland_area_t *area;
+    mrp_wayland_window_map_t *map;
 };
 
 mrp_wayland_window_t *
@@ -146,6 +161,9 @@ size_t mrp_wayland_window_request_print(mrp_wayland_window_update_t *u,
 
 const char *mrp_wayland_window_update_mask_str(
                                         mrp_wayland_window_update_mask_t mask);
+
+char *mrp_wayland_window_map_print(mrp_wayland_window_map_t *m,
+                                   char *buf, size_t len);
 
 void mrp_wayland_window_set_scripting_data(mrp_wayland_window_t *win,
                                            void *data);
