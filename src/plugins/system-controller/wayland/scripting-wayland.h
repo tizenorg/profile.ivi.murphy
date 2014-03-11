@@ -71,6 +71,15 @@ uint32_t mrp_wayland_scripting_window_mask_unwrap(void *void_um);
 void *mrp_wayland_scripting_window_mask_create_from_c(lua_State *L,
                                                       uint32_t mask);
 
+mrp_wayland_window_map_t *mrp_wayland_scripting_window_map_check(lua_State *L,
+                                                                 int idx);
+mrp_wayland_window_map_t *mrp_wayland_scripting_window_map_unwrap(void *void_m);
+void *mrp_wayland_scripting_window_map_create_from_c(lua_State *L,
+                                                mrp_wayland_window_map_t *map);
+void mrp_wayland_scripting_window_map_destroy_from_c(lua_State *L,
+                                                mrp_wayland_window_map_t *map);
+
+
 /* scripting-output.c */
 void mrp_wayland_scripting_output_init(lua_State *L);
 
