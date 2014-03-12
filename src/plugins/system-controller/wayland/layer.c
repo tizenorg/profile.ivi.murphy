@@ -255,6 +255,7 @@ const char *mrp_wayland_layer_type_str(mrp_wayland_layer_type_t type)
     case MRP_WAYLAND_LAYER_TOUCH:        return "touch";
     case MRP_WAYLAND_LAYER_CURSOR:       return "cursor";
     case MRP_WAYLAND_LAYER_STARTUP:      return "startup";
+    case MRP_WAYLAND_LAYER_FULLSCREEN:   return "fullscreen";
     default:                             return "<unknown>";
     }
 }
