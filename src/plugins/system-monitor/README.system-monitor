@@ -1,0 +1,276 @@
+0. System-monitor
+
+Along with system-controller a system-monitor plugin has been
+added to Murphy, for monitoring/adjusting usage/allocation of
+certain system resources (memory and CPU among others).
+
+1. Monitoring Interface
+
+Two new Murphy Lua objects have been introruced for resource
+usage monitoring, CpuWatch and MemWatch. These allow one to
+set up an arbitrary number of watches for CPU and memory usage
+that trigger events/callbacks when certain configrable conditions
+become true. This is the basic mechanism that allows one to detect
+significant changes in system resource usage and take corrective
+actions at will.
+
+1.1 CPU Monitoring
+
+The CPU monitoring interface allows one to monitor the amount of
+time (in precentages) the system spends in various states on the
+various CPUs. The full scale of CPUs and CPU states exposed by
+the kernel (in /proc/stat) is supported. The available CPUs are
+'cpu0' to 'cpuN', one for every of the N CPUs/cores in the system.
+Additionally, the virtual CPU 'cpu' represents the sum of all CPUs
+/ cores combined.
+
+Although the full range of CPU states exposed by the kernel is
+available for monitoring, in the vast majority of cases only subset
+of these makes sense in a ruleset. These are shortly described
+below, but for a better explanation you are free to consult the
+kernel documentation or manual page for proc(5).
+
+  - idle:       time spent in idle state
+  - iowait:     time spent waiting for I/O
+  - guest:      time spent running guest OSs
+  - load:       time the system was 'busy' (user + nice + system + I/O wait)
+  - user:       time in user mode (running user-space code)
+  - nice:       time spent in user mode with lowered (nice's) priority
+  - system:     time spent in system state (running the kernel)
+  - irq:        time spent serving interupts
+  - softirq:    time spent serving softirqs
+  - steal:      time spent running other virtualized OSs
+  - guest_nice: time spent running virtualized OSs with lowered priority
+  - interrupt:  irq + softirq
+  - guest_load: guest + guest_nice
+
+Additionally, the functionality of monitoring CPU usage (or idleness)
+of cgroups in the cpuacct hierarchy has been unified into and made
+available via CPU watches.
+
+A CPU watch Lua object has the following parameters/members:
+
+  - sample:  what entity to monitor, one of the above
+  - cpu:     which CPU the watch should monitor
+  - limits:  the set of thresholds to generate events/callbacks for
+  - window:  optional measurement estimation period (in milliseconds)
+  - alpha:   optional smoothing factor, alternative to specifying a window
+  - notify:  callback to call for threshold change events
+
+Of these, sample, cpu, and limits can only be written by passing them
+to the constructor. They can always be read. Window/alpha can always be
+read and written, and notify can only be written. For cgroup watches,
+only load or idle are allowed for sample, and cpu specifies both the
+path to the CPU accounting cgroup and the CPU to monitor. It has the
+format '/path/to/cgroup#cpu'. '#cpu' is the default and can be omitted.
+
+There are a few additional parameters/members available for use:
+
+  - value:    current estimate of the monitored entity
+  - raw:      the last sample collected from the monitored entity
+  - current:  currently active threshold label
+  - previous: previously active threshold label
+  - polling:  sample collection interval (in msecs)
+
+Of these value, raw, current, previous, and polling can only be read,
+while update can only be written.
+
+The default sample-collection algorithm uses an exponentially weighted
+moving average over the specified window or with the smoothing factor
+whichever was specified to calculate an estimate of the monitored entity.
+If no window/factor is given, it is set to of 0/1 which in practice
+disables the estimator altogether and uses the last collected sample as
+the estimate.
+
+If there is really a need for it, the default algorithm can be overridden
+by setting the update member to a function. This function will be called
+by the monitor to update its estimate. It is passed two arguments, the
+object itself and the latest sample. It should return true if the new
+estimate results in a change of active threshold, false otherwise.
+
+1.2 CPU Monitoring Example
+
+Here is an example of setting up a CPU monitor that will monitor
+how busy the system is:
+
+--
+-- get and configure system-monitor to poll once per second
+--
+sm = m:get_system_monitor()
+sm.polling = 1000                                 -- poll once per second
+
+--
+-- monitor overall CPU load (load of the virtual combined CPU)
+--
+sm:CpuWatch({
+         cpu    = 'cpu',                          -- virtual 'combined' CPU
+         sample = 'load',                         -- monitor 'load'
+         limits = {                               -- load threshold limits
+             [1] = { label = 'idle'    , limit =  5 },
+             [2] = { label = 'low'     , limit = 20 },
+             [3] = { label = 'moderate', limit = 40 },
+             [4] = { label = 'medium'  , limit = 50 },
+             [5] = { label = 'high'    , limit = 80 },
+             [6] = { label = 'critical'             }
+         },
+         window = 15000,                          -- use an EWMA of 15 secs
+         notify = function (w, prev, curr)        -- threshold change callback
+            print('CPU load change: ' .. prev .. ' -> ' .. curr)
+         end
+    })
+
+
+This first sets the system-monitor polling/data collection interval to
+1 second (1000 milliseconds), then creates a CPU watch for the virtual
+combined 'cpu' and monitor the virtual entity 'load', which if you recall
+was the time spent in user + nice + system + I/O wait states. The CPU
+watch smoothes the collected samples over a 15 seconds (15000 milli-
+seconds) period and has 5 limits specified yielding 6 thresholds to
+generate event callbacks about:
+
+   1. idle:        <  5 %
+   2. low:       5 - 20 %
+   3. moderate: 20 - 40 %
+   4. medium:   40 - 50 %
+   5. high:     50 - 80 %
+   6. critical:    > 80 %
+
+The event callback simply prints out the thresholds the system is
+transitioning from and to.
+
+Here is another one that configures the global polling interval to
+5 seconds and monitors the idle time of the CPU accounting group
+/foo, disabling smoothing and always using the last sample as the
+actual value.
+
+--
+-- get and configure system-monitor to poll every 5 seconds
+--
+sm = m:get_system_monitor()
+sm.polling = 5000
+
+--
+-- monitor idleness of '/foo' cgroup
+--
+sm:CpuWatch({
+         cpu    = '/foo',                         -- monitor /foo cgroup
+         sample = 'idle',                         -- monitor idleness
+         limits = {                               -- load threshold limits
+             [1] = { label = 'none'    , limit =  5 },
+             [2] = { label = 'minimal' , limit = 20 },
+             [3] = { label = 'medium'  , limit = 50 },
+             [4] = { label = 'high'    , limit = 80 },
+             [5] = { label = 'full'                 }
+         },
+         window = 0,                              -- disable EWMA
+         notify = function (w, prev, curr)        -- threshold change callback
+            print('/foo CPU idle change: ' .. prev .. ' -> ' .. curr ..
+                  '(value=' .. w.value .. ', sample=' .. w.raw .. ')')
+         end
+    })
+
+1.3 Monitoring Memory Usage
+
+The memory usage monitoring interface allows one to monitor how
+much memory is used or free for various things by the system.
+Currently the following measures can be monitored:
+
+  - MemFree:   amount of memory free
+  - SwapFree:  amount of swap space free
+  - Dirty:     amount of memory waiting to be written back to storage
+  - Writeback: amount of memory actively being written back to storage
+
+Note that support for monitoring memory usage of a particular cgroup
+via memory watches as not been fully implemented yet.
+
+A memory watch Lua object has the following parameters/members:
+
+  - sample:  what entitiy to monitor, one of the above
+  - limits:  the set of thresholds to generate events/callbacks for
+  - window:  optional measurement estimation period (in millisecsonds)
+  - alpha:   optional smoothing factor, alternative to specifying a window
+  - notify:  callback to call for threshold change events
+
+Of these sample and limits can only be written by passing them to the
+constructor. They can always be read. Window/alpha can always be read
+and written, and notify can only be written. Limits can be specified
+in bytes, kilobytes ('k' suffix), megabytes ('M' suffix), or in
+gigabytes ('G' suffix).
+
+There are a few additional parameters/members available for use:
+
+  - value:    current estimate of the monitored entity
+  - raw:      the last sample collected from the monitored entity
+  - current:  currently active threshold label
+  - previous: previously active threshold label
+  - polling:  sample collection interval (in msecs)
+
+Of these value, raw, current, previous, and polling can only be read,
+while update can only be written.
+
+The default sample-collection algorithm uses an exponentially weighted
+moving average over the specified window or with the smoothing factor
+whichever was specified to calculate an estimate of the monitored entity.
+If no window/factor is given, it is set to of 0/1 which in practice
+disables the estimator altogether and uses the last collected sample as
+the estimate.
+
+If there is really a need for it, the default algorithm can be overridden
+by setting the update member to a function. This function will be called
+by the monitor to update its estimate. It is passed two arguments, the
+object itself and the latest sample. It should return true if the new
+estimate results in a change of active threshold, false otherwise.
+
+1.4 Memory Usage Monitoring Example
+
+Here is a simple example of setting up memory monitors for
+the writeback queue and the amount of dirty memory. They are
+quite analoguous to setting up CPU watches. The two crucial
+differences are that
+  1) you cannot omit a limit for memory watches
+  2) an estimate beyond the largest threshold will not cause an event
+
+This can/should be considered a bug and it will be fixed in an
+upcoming release.
+
+--
+-- get and configure system-monitor to poll every 5 seconds
+--
+sm = m:get_system_monitor()
+sm.polling = 5000
+
+--
+-- monitor length of the writeback queue
+--
+sm:MemWatch({
+         sample = 'Writeback',
+         limits = {                               -- pressure thresholds
+             [1] = { label = 'none'    , limit = 1024   },
+             [2] = { label = 'light'   , limit = '128k' },
+             [3] = { label = 'medium'  , limit = '512k' },
+             [4] = { label = 'high'    , limit = '2M'   },
+             [5] = { label = 'critical', limit = '16M'  }
+         },
+         window = 0,                              -- don't average/integrate
+         notify = function (w, prev, curr)        -- threshold change callback
+            print(w.sample .. ' change: ' .. prev .. ' -> ' .. curr)
+         end
+     })
+
+--
+-- monitor the amount of dirty memory
+--
+sm:MemWatch({
+         sample = 'Dirty',
+         limits = {                               -- pressure thresholds
+             [1] = { label = 'none'    , limit =  1024 },
+             [2] = { label = 'low'     , limit =  8192 },
+             [3] = { label = 'medium'  , limit =  '1M' },
+             [4] = { label = 'high'    , limit =  '4M' },
+             [5] = { label = 'critical', limit = '16M' }
+         },
+         window = 10000,                           -- use an EWMA of 10 secs
+         notify = function (w, prev, curr)         -- threshold change callback
+            print(w.sample .. ' change: ' .. prev .. ' -> ' .. curr)
+         end
+     })
