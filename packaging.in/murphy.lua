@@ -1110,10 +1110,19 @@ wmgr = window_manager {
                            arg.height  = win.height
                            arg.raise   = win.raise
                            arg.visible = win.visible
-                           arg.active  = win.active
+                           if win.active == 0 then
+                               arg.active = 0
+                           else
+                               arg.active = 1
+                           end
                       elseif oper == 6 then -- active
-                           command     = 0x10006
-                           arg.active  = win.active
+                           if win.active == 0 then
+                               if verbose > 0 then
+                                   print("ignoring inactive event")
+                               end
+                               return
+                           end
+                           command = 0x10006
                       elseif oper == 7 then -- map
                            local map = win.map
                            if not map then
@@ -1617,14 +1626,14 @@ if sc then
                 print(msg.arg)
                 print('framerate: '..framerate)
             end
-            wmgr:window_request(msg.arg, a, framerate)
+            --wmgr:window_request(msg.arg, a, framerate)
         elseif msg.command == 0x10012 then   -- ico UNMAP_THUMB
             msg.arg.mapped = 0
             if verbose > 2 then
                 print('### ==> UNMAP_THUMB REQUEST')
                 print(msg.arg)
             end
-            wmgr:window_request(msg.arg, a, 0)
+            --wmgr:window_request(msg.arg, a, 0)
         elseif msg.command == 0x10020 then   -- ico SHOW_LAYER command
             msg.arg.visible = 1
             if verbose > 2 then
