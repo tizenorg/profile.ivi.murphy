@@ -1107,6 +1107,8 @@ static mrp_wayland_layer_type_t get_layer_type(uint32_t layertype)
         return MRP_WAYLAND_LAYER_BACKGROUND;
 
     case ICO_WINDOW_MGR_LAYERTYPE_FULLSCREEN:
+        return MRP_WAYLAND_LAYER_FULLSCREEN;
+
     case ICO_WINDOW_MGR_LAYERTYPE_NORMAL:
         return MRP_WAYLAND_LAYER_APPLICATION;
 
