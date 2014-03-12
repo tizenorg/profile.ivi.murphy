@@ -401,10 +401,12 @@ static void window_active_callback(void *data,
     if ((active & ICO_WINDOW_MGR_ACTIVE_SELECTED))
         u.active |= MRP_WAYLAND_WINDOW_ACTIVE_SELECTED;
 
+#if 0
     if ((win->active & u.active) == u.active) {
         mrp_debug("window %u already active: nothing to do", surfaceid);
         return;
     }
+#endif
     
     mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_ACTIVE, &u);
 }
@@ -936,6 +938,7 @@ static void set_window_visible(mrp_wayland_window_t *win,
 
     ico_window_mgr_set_visible(ico_window_mgr, win->surfaceid,
                                visible, raise, flags);
+
 }
 
 static void set_window_active(mrp_wayland_window_t *win,
