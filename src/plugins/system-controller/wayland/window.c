@@ -45,7 +45,7 @@
 
 typedef struct {
     mrp_wayland_window_t *win;
-    mrp_wayland_window_operation_t oper;
+    mrp_wayland_window_update_mask_t mask;
     int32_t state;
     bool raise;
 } update_others_t;
@@ -55,6 +55,8 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *,
 
 static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *,
                                                 mrp_wayland_window_update_t *);
+
+static int update_others(void *, void *, void *);
 
 static char *active_str(mrp_wayland_active_t, char *, size_t);
 
@@ -170,6 +172,8 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
 {
     mrp_wayland_window_t *win;
     mrp_wayland_window_manager_t *wm;
+    mrp_wayland_window_update_mask_t passthrough;
+    update_others_t uo;
     char buf[4096];
 
     MRP_ASSERT(wl && u, "invalid arguments");
@@ -188,42 +192,34 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
     mrp_debug("window %d%s", u->surfaceid, buf);
 
     wm->window_request(win, u, anims, framerate);
-}
 
-static int update_others(void *key, void *object, void *ud)
-{
-    mrp_wayland_window_t *win = (mrp_wayland_window_t *)object;
-    update_others_t *uo = (update_others_t *)ud;
+    passthrough = win->wm->passthrough.window_update;
 
-    MRP_UNUSED(key);
+    memset(&uo, 0, sizeof(uo));
+    uo.win = win;
 
-    if (win != uo->win) {        
-        switch (uo->oper) {
+    if ((passthrough & MRP_WAYLAND_WINDOW_ACTIVE_MASK) &&
+        (u->mask & MRP_WAYLAND_WINDOW_ACTIVE_MASK))
+    {
+        win->active = u->active;
 
-        case MRP_WAYLAND_WINDOW_ACTIVE:
-            if (uo->state == 0)
-                win->active = 0;
-            else
-                win->active &= ~uo->state;
+        uo.mask |= MRP_WAYLAND_WINDOW_ACTIVE_MASK;
+        uo.state = win->active;
+    }
 
-            mrp_debug("setting window %d 'active' to 0x%x",
-                      win->surfaceid, win->active);
-            break;
-
-        case MRP_WAYLAND_WINDOW_VISIBLE:
-            if (uo->raise)
-                win->raise = false;
-
-            mrp_debug("setting window %d 'raise' to %s",
-                      win->surfaceid, win->raise ? "true" : "false");
-            break;
-
-        default:
-            break;
+    if ((passthrough & MRP_WAYLAND_WINDOW_RAISE_MASK) &&
+        (u->mask & MRP_WAYLAND_WINDOW_RAISE_MASK))
+    {
+        win->raise = u->raise;
+        
+        if (win->raise) {
+            uo.mask |= MRP_WAYLAND_WINDOW_RAISE_MASK;
+            uo.raise = true;
         }
     }
 
-    return MRP_HTBL_ITER_MORE;
+    if (uo.mask)
+        mrp_htbl_foreach(wl->windows, update_others, &uo);
 }
 
 void mrp_wayland_window_update(mrp_wayland_window_t *win,
@@ -235,8 +231,9 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
     mrp_wayland_t *wl;
     int32_t surfaceid;
     mrp_wayland_window_update_mask_t mask;
-    char buf[2048];
+    mrp_wayland_window_update_mask_t passthrough;
     update_others_t uo;
+    char buf[2048];
 
     MRP_ASSERT(win && win->wm && win->wm->interface &&
                win->wm->interface->wl && u, "invalid argument");
@@ -269,21 +266,28 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
     if (win->scripting_data && wl->window_update_callback)
         wl->window_update_callback(wl, oper, mask, win);
 
+    passthrough = win->wm->passthrough.window_update;
 
     memset(&uo, 0, sizeof(uo));
     uo.win = win;
-    uo.oper = oper;
 
     switch (oper) {
 
     case MRP_WAYLAND_WINDOW_ACTIVE:
-        uo.state = win->active;
-        goto update_loop;
+        if (!(passthrough & MRP_WAYLAND_WINDOW_ACTIVE_MASK)) {
+            uo.mask = MRP_WAYLAND_WINDOW_ACTIVE_MASK;
+            uo.state = win->active;
+            goto update_loop;
+        }
+        break;
 
     case MRP_WAYLAND_WINDOW_VISIBLE:
-        if ((mask & MRP_WAYLAND_WINDOW_RAISE_MASK) && win->raise) {
-            uo.raise = true;
-            goto update_loop;
+        if (!(passthrough & MRP_WAYLAND_WINDOW_RAISE_MASK)) {
+            if ((mask & MRP_WAYLAND_WINDOW_RAISE_MASK) && win->raise) {
+                uo.mask = MRP_WAYLAND_WINDOW_RAISE_MASK;
+                uo.raise = true;
+                goto update_loop;
+            }
         }
         break;
 
@@ -715,6 +719,36 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
     return mask;
 }
 
+
+static int update_others(void *key, void *object, void *ud)
+{
+    mrp_wayland_window_t *win = (mrp_wayland_window_t *)object;
+    update_others_t *uo = (update_others_t *)ud;
+
+    MRP_UNUSED(key);
+
+    if (win != uo->win) {
+        if ((uo->mask & MRP_WAYLAND_WINDOW_ACTIVE_MASK)) {
+            if (uo->state == 0)
+                win->active = 0;
+            else
+                win->active &= ~uo->state;
+
+            mrp_debug("setting window %d 'active' to 0x%x",
+                      win->surfaceid, win->active);
+        }
+
+        if ((uo->mask & MRP_WAYLAND_WINDOW_RAISE_MASK)) {
+            if (uo->raise)
+                win->raise = false;
+
+            mrp_debug("setting window %d 'raise' to %s",
+                      win->surfaceid, win->raise ? "true" : "false");
+        }
+    }
+
+    return MRP_HTBL_ITER_MORE;
+}
 
 static char *active_str(mrp_wayland_active_t active, char *buf, size_t len)
 {
