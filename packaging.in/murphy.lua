@@ -751,6 +751,17 @@ input_layer = {
    [5] = true  -- cursor
 }
 
+-- some day this should be merged with wmgr.layers
+ico_layer_type = {
+   [1] = 0x1000, -- background
+   [2] = 0x2000, -- application
+   [3] = 0x4000, -- input
+   [4] = 0xa000, -- touch
+   [5] = 0xb000, -- cursor
+   [6] = 0xc000, -- startup
+   [7] = 0x3000  -- fullscreen
+}
+
 resmgr = resource_manager {
   screen_event_handler = function(self, ev)
                              local event = ev.event
@@ -1026,7 +1037,7 @@ wmgr = window_manager {
              {    103, "Startup"      , 6 },
              { 0x1000, "Background"   , 1 },
              { 0x2000, "Normal"       , 2 },
-             { 0x3000, "Fullscreen"   , 2 },
+             { 0x3000, "Fullscreen"   , 7 },
              { 0x4000, "InputPanel"   , 3 },
              { 0xA000, "Touch"        , 4 },
              { 0xB000, "Cursor"       , 5 },
@@ -1085,9 +1096,13 @@ wmgr = window_manager {
                       elseif oper == 3 then  -- namechange
                            command     = 0x10009
                       elseif oper == 4 or oper == 5 then --visible or configure
+                           local icolayer = ico_layer_type[win.layertype]
                            command     = 0x10008
                            arg.zone    = win.area
                            arg.node    = win.node
+                           if icolayer then
+                               arg.layertype = icolayer
+                           end
                            arg.layer   = win.layer
                            arg.pos_x   = win.pos_x
                            arg.pos_y   = win.pos_y
@@ -1104,10 +1119,10 @@ wmgr = window_manager {
                            if not map then
                                return
                            end
-                           if win.mapped then
-                               command = 0x10011
-                           else
+                           if win.mapped == 0 then
                                command = 0x10012
+                           else
+                               command = 0x10011
                            end
                            arg.attr = map.type
                            arg.name = map.target
