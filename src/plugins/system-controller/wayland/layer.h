@@ -42,6 +42,7 @@ enum mrp_wayland_layer_type_e {
     MRP_WAYLAND_LAYER_TOUCH,       /* 4 */
     MRP_WAYLAND_LAYER_CURSOR,      /* 5 */
     MRP_WAYLAND_LAYER_STARTUP,     /* 6 */
+    MRP_WAYLAND_LAYER_FULLSCREEN,  /* 7 */
 
     MRP_WAYLAND_LAYER_TYPE_MAX
 };
