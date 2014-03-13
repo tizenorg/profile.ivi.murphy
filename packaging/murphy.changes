@@ -1,3 +1,6 @@
+* Thu Mar 13 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.49.1
+- config: fix config to work without system controller plugin.
+
 * Wed Mar 05 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.49
 - system-controller: initial support for disconnecting homescreen clients.
 - system-controller: support for additional conenctions beside HS, eg. onscreen
