@@ -225,13 +225,7 @@ estimate results in a change of active threshold, false otherwise.
 
 Here is a simple example of setting up memory monitors for
 the writeback queue and the amount of dirty memory. They are
-quite analoguous to setting up CPU watches. The two crucial
-differences are that
-  1) you cannot omit a limit for memory watches
-  2) an estimate beyond the largest threshold will not cause an event
-
-This can/should be considered a bug and it will be fixed in an
-upcoming release.
+quite analoguous to setting up CPU watches.
 
 --
 -- get and configure system-monitor to poll every 5 seconds
