@@ -537,6 +537,9 @@ static int get_limit(lua_State *L, int idx, mem_limit_t *l)
                 goto invalid;
         }
         break;
+    case LUA_TNIL:
+        l->limit = (int64_t)(((uint64_t)-1) >> 1);
+        break;
     default:
     invalid:
         l->limit = -1;
