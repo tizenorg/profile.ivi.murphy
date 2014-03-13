@@ -404,6 +404,7 @@ sed 's#^./*#/#g' > $outdir/filelist.devel-includes && \
 popd >& /dev/null
 
 # Replace the default sample/test config files with the packaging ones.
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/murphy/*
 cp packaging.in/murphy-lua.conf $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.conf
 cp packaging.in/murphy.lua      $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.lua
 
