@@ -113,6 +113,9 @@ static bool manager_request_bridge(lua_State *, void *,
 static void manager_update_callback(mrp_wayland_t *,
                                     mrp_wayland_window_manager_operation_t,
                                     mrp_wayland_window_manager_t *);
+static void window_hint_callback(mrp_wayland_t *,
+                                 mrp_wayland_window_operation_t,
+                                 mrp_wayland_window_update_t *);
 
 static bool window_request_bridge(lua_State *, void *,
                                   const char *, mrp_funcbridge_value_t *,
@@ -301,6 +304,7 @@ static int window_manager_create(lua_State *L)
     mrp_wayland_register_output_update_callback(wl, output_update_callback);
     mrp_wayland_register_layer_update_callback(wl, layer_update_callback);
     mrp_wayland_register_window_update_callback(wl, window_update_callback);
+    mrp_wayland_register_window_hint_callback(wl, window_hint_callback);
 
     mrp_wayland_set_scripting_window_data(wl, winmgr);
 
@@ -838,6 +842,52 @@ static void window_update_callback(mrp_wayland_t *wl,
     args[2].pointer = win->scripting_data;
     args[3].pointer = mrp_wayland_scripting_window_mask_create_from_c(L, mask);
 
+    memset(&ret, 0, sizeof(ret));
+
+    success = mrp_funcbridge_call_from_c(L, winmgr->window_update, "odoo",
+                                         args, &t, &ret);
+    if (!success) {
+        mrp_log_error("failed to call window_manager.%s.window_update method "
+                      "(%s)", winmgr->name, ret.string ? ret.string : "NULL");
+        mrp_free((void *)ret.string);
+    }
+}
+
+static void window_hint_callback(mrp_wayland_t *wl,
+                                 mrp_wayland_window_operation_t oper,
+                                 mrp_wayland_window_update_t *hint)
+{
+    lua_State *L;
+    scripting_winmgr_t *winmgr;
+    void *wh;
+    mrp_funcbridge_value_t args[4], ret;
+    char t;
+    bool success;
+
+    MRP_ASSERT(wl && hint, "invalid argument");
+
+    if (!(L = mrp_lua_get_lua_state())) {
+        mrp_log_error("system-controller: can't hint window %u: "
+                      "LUA is not initialesed", hint->surfaceid);
+        return;
+    }
+
+    if (!(winmgr = (scripting_winmgr_t *)wl->scripting_window_data)) {
+        mrp_log_error("system-controller: window manager scripting is "
+                      "not initialized");
+        return;
+    }
+
+    MRP_ASSERT(wl == winmgr->wl, "confused with data structures");
+
+    if (!(wh = mrp_wayland_scripting_window_hint_create_from_c(L, hint)))
+        return;
+
+    args[0].pointer = winmgr;
+    args[1].integer = oper;
+    args[2].pointer = wh;
+    args[3].pointer = mrp_wayland_scripting_window_mask_create_from_c(L,
+                                                                   hint->mask);
     memset(&ret, 0, sizeof(ret));
 
     success = mrp_funcbridge_call_from_c(L, winmgr->window_update, "odoo",
