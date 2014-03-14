@@ -47,8 +47,10 @@
 static uint32_t oid_hash(const void *);
 static uint32_t wid_hash(const void *);
 static uint32_t lid_hash(const void *);
+static uint32_t ltype_hash(const void *);
 static uint32_t did_hash(const void *);
 static int id_compare(const void *, const void *);
+static int ltype_compare(const void *, const void *);
 
 static bool same_display_name(const char *name1, const char *name2);
 static const char *get_display_name(mrp_wayland_t *w);
@@ -65,7 +67,7 @@ static size_t ninstance;
 mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
 {
     mrp_wayland_t *wl;
-    mrp_htbl_config_t icfg, ocfg, wcfg, lcfg, acfg, dncfg, dicfg;
+    mrp_htbl_config_t icfg, ocfg, wcfg, licfg, ltcfg, acfg, dncfg, dicfg;
     size_t i;
 
     MRP_ASSERT(ml, "invalid argument");
@@ -98,11 +100,17 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
         wcfg.hash = wid_hash;
         wcfg.nbucket = MRP_WAYLAND_WINDOW_BUCKETS;
 
-        memset(&lcfg, 0, sizeof(lcfg));
-        lcfg.nentry = MRP_WAYLAND_LAYER_MAX + MRP_WAYLAND_LAYER_BUILTIN;
-        lcfg.comp = id_compare;
-        lcfg.hash = lid_hash;
-        lcfg.nbucket = MRP_WAYLAND_LAYER_BUCKETS;
+        memset(&licfg, 0, sizeof(licfg));
+        licfg.nentry = MRP_WAYLAND_LAYER_MAX + MRP_WAYLAND_LAYER_BUILTIN;
+        licfg.comp = id_compare;
+        licfg.hash = lid_hash;
+        licfg.nbucket = MRP_WAYLAND_LAYER_BUCKETS;
+
+        memset(&ltcfg, 0, sizeof(ltcfg));
+        ltcfg.nentry = MRP_WAYLAND_LAYER_MAX + MRP_WAYLAND_LAYER_BUILTIN;
+        ltcfg.comp = ltype_compare;
+        ltcfg.hash = ltype_hash;
+        ltcfg.nbucket = MRP_WAYLAND_LAYER_BUCKETS;
 
         memset(&acfg, 0, sizeof(acfg));
         acfg.nentry = MRP_WAYLAND_AREA_MAX;
@@ -131,11 +139,14 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
         wl->interfaces = mrp_htbl_create(&icfg);
         wl->outputs = mrp_htbl_create(&ocfg);
         wl->windows = mrp_htbl_create(&wcfg);
-        wl->layers = mrp_htbl_create(&lcfg);
         wl->areas = mrp_htbl_create(&acfg);
 
         wl->devices.by_name = mrp_htbl_create(&dncfg);
         wl->devices.by_id = mrp_htbl_create(&dicfg);
+
+        wl->layers.by_id = mrp_htbl_create(&licfg);
+        wl->layers.by_type = mrp_htbl_create(&ltcfg);
+
 
         instances = mrp_reallocz(instances, ninstance, ninstance + 2);
         instances[ninstance++] = wl;
@@ -304,7 +315,7 @@ void mrp_wayland_register_window_manager(mrp_wayland_t *wl,
 {
     wl->wm = wm;
 
-    mrp_htbl_foreach(wl->layers, update_layers, wm);
+    mrp_htbl_foreach(wl->layers.by_id, update_layers, wm);
 
     if (wl->window_manager_update_callback) {
         wl->window_manager_update_callback(wl,
@@ -411,6 +422,16 @@ void mrp_wayland_register_window_update_callback(mrp_wayland_t *wl,
     mrp_debug("registering window_update_callback");
 
     wl->window_update_callback = callback;
+}
+
+void mrp_wayland_register_window_hint_callback(mrp_wayland_t *wl,
+                               mrp_wayland_window_hint_callback_t callback)
+{
+    MRP_ASSERT(wl, "invalid aruments");
+
+    mrp_debug("registering window_hint_callback");
+
+    wl->window_hint_callback = callback;
 }
 
 void mrp_wayland_register_layer_update_callback(mrp_wayland_t *wl,
@@ -551,6 +572,16 @@ static uint32_t lid_hash(const void *pkey)
     return key % MRP_WAYLAND_LAYER_BUCKETS;
 }
 
+static uint32_t ltype_hash(const void *pkey)
+{
+    uint32_t type = (uint32_t)(*(mrp_wayland_layer_type_t *)pkey);
+    uint32_t key;
+
+    key  = (type & 0xff) + ((type / 10) & 0xff) + ((type & 0xfffff000) >> 8);
+
+    return key % MRP_WAYLAND_LAYER_BUCKETS;
+}
+
 static uint32_t did_hash(const void *pkey)
 {
     uint32_t key = *(uint32_t *)pkey;
@@ -562,6 +593,14 @@ static int id_compare(const void *pkey1, const void *pkey2)
 {
     int32_t key1 = *(int32_t *)pkey1;
     int32_t key2 = *(int32_t *)pkey2;
+
+    return (key1 == key2) ? 0 : ((key1 < key2) ? -1 : 1);
+}
+
+static int ltype_compare(const void *pkey1, const void *pkey2)
+{
+    mrp_wayland_layer_type_t  key1 = *(mrp_wayland_layer_type_t *)pkey1;
+    mrp_wayland_layer_type_t  key2 = *(mrp_wayland_layer_type_t *)pkey2;
 
     return (key1 == key2) ? 0 : ((key1 < key2) ? -1 : 1);
 }
