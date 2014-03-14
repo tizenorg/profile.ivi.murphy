@@ -79,6 +79,9 @@ void *mrp_wayland_scripting_window_map_create_from_c(lua_State *L,
 void mrp_wayland_scripting_window_map_destroy_from_c(lua_State *L,
                                                 mrp_wayland_window_map_t *map);
 
+void *mrp_wayland_scripting_window_hint_create_from_c(lua_State *L,
+                                            mrp_wayland_window_update_t *hint);
+
 
 /* scripting-output.c */
 void mrp_wayland_scripting_output_init(lua_State *L);
