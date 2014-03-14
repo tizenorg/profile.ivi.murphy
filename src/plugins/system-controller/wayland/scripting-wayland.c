@@ -178,7 +178,7 @@ int mrp_wayland_json_layer_copy(mrp_wayland_t *wl, void *uval,
 
     layerid = mrp_json_integer_value(jval);
 
-    if (!(layer = mrp_wayland_layer_find(wl, layerid)))
+    if (!(layer = mrp_wayland_layer_find_by_id(wl, layerid)))
         return 0;
 
     *(mrp_wayland_layer_t **)uval = layer;

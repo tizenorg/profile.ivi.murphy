@@ -340,6 +340,12 @@ static void window_configure_callback(void *data,
     u.nodeid = node;
     u.layertype = get_layer_type(layertype);
 
+
+    if (!(u.layer = mrp_wayland_layer_find_by_id(wl, layer)))
+        mrp_log_error("system-controller: can't find layer %u", layer);
+    else
+        u.mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
+
     if (hint == ICO_WINDOW_MGR_HINT_CHANGE) {
         if (x <= MAX_COORDINATE) {
             u.mask |= MRP_WAYLAND_WINDOW_X_MASK;
@@ -357,14 +363,21 @@ static void window_configure_callback(void *data,
             u.mask |= MRP_WAYLAND_WINDOW_HEIGHT_MASK;
             u.height = height;
         }
+        mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
+    }
+    else {
+        u.x = win->x;
+        u.y = win->y;
+        u.width = win->width;
+        u.height = win->height;
+
+        mrp_wayland_window_hint(win, MRP_WAYLAND_WINDOW_HINT, &u);
     }
 
-    if (!(u.layer = mrp_wayland_layer_find(wl, layer)))
-        mrp_log_error("system-controller: can't find layer %u", layer);
+    if (hint == ICO_WINDOW_MGR_HINT_CHANGE)
+        mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
     else
-        u.mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
-
-    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
+        mrp_wayland_window_hint(win, MRP_WAYLAND_WINDOW_HINT, &u);
 }
 
 static void window_active_callback(void *data,
@@ -433,7 +446,7 @@ static void layer_visible_callback(void *data,
     u.mask = MRP_WAYLAND_LAYER_VISIBLE_MASK;
     u.visible = visible;
 
-    if (!(layer = mrp_wayland_layer_find(wl, layerid))) {
+    if (!(layer = mrp_wayland_layer_find_by_id(wl, layerid))) {
         mrp_log_error("system-controller: can't find layer %u", layerid);
         return;
     }

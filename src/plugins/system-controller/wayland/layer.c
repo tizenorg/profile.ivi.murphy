@@ -51,8 +51,8 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
     mrp_wayland_layer_update_mask_t mask;
     char buf[2048];
 
-    MRP_ASSERT(wl && u && (u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK),
-               "invalid argument");
+    MRP_ASSERT(wl && u && (u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK) &&
+               (u->mask & MRP_WAYLAND_LAYER_TYPE_MASK), "invalid argument");
 
     if (!(layer = mrp_allocz(sizeof(mrp_wayland_layer_t)))) {
         mrp_log_error("system-controller: failed to create layer %d: "
@@ -62,13 +62,19 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
 
     layer->wl = wl;
     layer->wm = wl->wm;
-    layer->layerid =  u->layerid;
+    layer->layerid = u->layerid;
+    layer->type = u->type;
 
-    if (!mrp_htbl_insert(wl->layers, &layer->layerid, layer)) {
+    if (!mrp_htbl_insert(wl->layers.by_id, &layer->layerid, layer)) {
         mrp_log_error("system-controller: failed to create layer: "
                       "already exists");
         mrp_free(layer);
         return NULL;
+    }
+
+    if (!mrp_htbl_insert(wl->layers.by_type, &layer->type, layer)) {
+        mrp_log_warning("system-controller: layer id %d will "
+                        "not be mapped to layer type", layer->layerid);
     }
 
     if (!(u->mask & MRP_WAYLAND_LAYER_NAME_MASK)) {
@@ -78,7 +84,8 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
         u->name = buf;
     }
 
-    mask = update(layer, u);
+    mask  = MRP_WAYLAND_LAYER_LAYERID_MASK | MRP_WAYLAND_LAYER_TYPE_MASK;
+    mask |= update(layer, u);
 
     if (wl->create_scripting_layers)
         layer->scripting_data = mrp_wayland_scripting_layer_create_from_c(NULL,
@@ -96,6 +103,7 @@ void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer)
 {
     mrp_wayland_t *wl;
     char buf[1024];
+    void *vl;
 
     MRP_ASSERT(layer && layer->wl, "invalid argument");
 
@@ -109,8 +117,11 @@ void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer)
         wl->layer_update_callback(wl, MRP_WAYLAND_LAYER_DESTROY, 0, layer);
 
     mrp_free(layer->name);
+    vl = (void *)layer;
 
-    if ((void *)layer != mrp_htbl_remove(wl->layers, &layer->layerid, false)) {
+    if (vl != mrp_htbl_remove(wl->layers.by_id, &layer->layerid, false) ||
+        vl != mrp_htbl_remove(wl->layers.by_type, &layer->type, false))
+    {
         mrp_log_error("system-controller: failed to destroy layer %d: "
                       "confused with data structures", layer->layerid);
         return;
@@ -119,11 +130,20 @@ void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer)
     free(layer);
 }
 
-mrp_wayland_layer_t *mrp_wayland_layer_find(mrp_wayland_t *wl, int32_t layerid)
+mrp_wayland_layer_t *mrp_wayland_layer_find_by_id(mrp_wayland_t *wl,
+                                                  int32_t layerid)
 {
     MRP_ASSERT(wl, "invalid argument");
 
-    return (mrp_wayland_layer_t*)mrp_htbl_lookup(wl->layers,&layerid);
+    return (mrp_wayland_layer_t*)mrp_htbl_lookup(wl->layers.by_id, &layerid);
+}
+
+mrp_wayland_layer_t *mrp_wayland_layer_find_by_type(mrp_wayland_t *wl,
+                                                 mrp_wayland_layer_type_t type)
+{
+    MRP_ASSERT(wl, "invalid argument");
+
+    return (mrp_wayland_layer_t*)mrp_htbl_lookup(wl->layers.by_type, &type);
 }
 
 void mrp_wayland_layer_request(mrp_wayland_t *wl,mrp_wayland_layer_update_t *u)
@@ -134,7 +154,7 @@ void mrp_wayland_layer_request(mrp_wayland_t *wl,mrp_wayland_layer_update_t *u)
     MRP_ASSERT(wl && u, "invalid arguments");
 
     if (!(u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK) ||
-        !(layer = mrp_wayland_layer_find(wl, u->layerid)))
+        !(layer = mrp_wayland_layer_find_by_id(wl, u->layerid)))
     {
         mrp_debug("can't find layer %u: request rejected", u->layerid);
         return;
@@ -224,8 +244,10 @@ size_t mrp_wayland_layer_request_print(mrp_wayland_layer_update_t *u,
 
     if ((mask & MRP_WAYLAND_LAYER_NAME_MASK))
         PRINT("name: '%s'", u->name);
+#if 0
     if ((mask & MRP_WAYLAND_LAYER_TYPE_MASK))
         PRINT("type: %s", mrp_wayland_layer_type_str(u->type));
+#endif
     if ((mask & MRP_WAYLAND_LAYER_VISIBLE_MASK))
         PRINT("visible: %s", u->visible ? "yes" : "no");
 
@@ -291,6 +313,7 @@ static mrp_wayland_layer_update_mask_t update(mrp_wayland_layer_t *layer,
         }
     }
 
+#if 0
     if ((u->mask & MRP_WAYLAND_LAYER_TYPE_MASK)) {
         if (u->type != layer->type ||
             (passthrough & MRP_WAYLAND_LAYER_TYPE_MASK))
@@ -299,6 +322,7 @@ static mrp_wayland_layer_update_mask_t update(mrp_wayland_layer_t *layer,
             layer->type = u->type;
         }
     }
+#endif
 
     if ((u->mask & MRP_WAYLAND_LAYER_VISIBLE_MASK)) {
         if (( u->visible && !layer->visible) ||
