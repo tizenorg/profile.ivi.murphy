@@ -651,7 +651,8 @@ window_operation_names = {
     [4] = "visible",
     [5] = "configure",
     [6] = "active",
-    [7] = "map"
+    [7] = "map",
+    [8] = "hint"
 }
 
 function window_operation_name(oper)
@@ -1054,7 +1055,8 @@ wmgr = window_manager {
                            local wumask = window_mask { raise   = true,
                                                         visible = true,
                                                         active  = true }
-                           local wrmask = window_mask { active  = true }
+                           local wrmask = window_mask { active  = true,
+                                                        layer   = true }
                            local lumask = layer_mask  { visible = true }
                            local lrmask = layer_mask  { visible = true }
                            local req = m:JSON({
