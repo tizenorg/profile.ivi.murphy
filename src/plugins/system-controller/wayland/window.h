@@ -50,6 +50,7 @@ enum mrp_wayland_window_operation_e {
     MRP_WAYLAND_WINDOW_CONFIGURE,    /* 5 */
     MRP_WAYLAND_WINDOW_ACTIVE,       /* 6 */
     MRP_WAYLAND_WINDOW_MAP,          /* 7 */
+    MRP_WAYLAND_WINDOW_HINT,         /* 8 */
 };
 
 
@@ -151,6 +152,10 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
 void mrp_wayland_window_update(mrp_wayland_window_t *win,
                                mrp_wayland_window_operation_t oper,
                                mrp_wayland_window_update_t *u);
+
+void mrp_wayland_window_hint(mrp_wayland_window_t *win,
+                             mrp_wayland_window_operation_t oper,
+                             mrp_wayland_window_update_t *u);
 
 size_t mrp_wayland_window_print(mrp_wayland_window_t *win,
                                 mrp_wayland_window_update_mask_t mask,
