@@ -138,6 +138,9 @@ typedef void (*mrp_wayland_window_update_callback_t)(mrp_wayland_t *,
                                         mrp_wayland_window_operation_t,
                                         mrp_wayland_window_update_mask_t,
                                         mrp_wayland_window_t *);
+typedef void (*mrp_wayland_window_hint_callback_t)(mrp_wayland_t *,
+                                        mrp_wayland_window_operation_t,
+                                        mrp_wayland_window_update_t *);
 typedef void (*mrp_wayland_app_update_callback_t)(mrp_wayland_t *,
                                         mrp_application_operation_t,
                                         mrp_application_update_mask_t,
@@ -169,13 +172,18 @@ struct mrp_wayland_s {
     mrp_htbl_t *interfaces;
     mrp_htbl_t *outputs;
     mrp_htbl_t *windows;
-    mrp_htbl_t *layers;
     mrp_htbl_t *areas;
 
     struct {
         mrp_htbl_t *by_id;
         mrp_htbl_t *by_name;
     } devices; /* input devices more precisely */
+
+    struct {
+        mrp_htbl_t *by_id;
+        mrp_htbl_t *by_type;
+    } layers;
+
 
     mrp_wayland_window_manager_t *wm;
     mrp_wayland_input_manager_t *im;
@@ -185,6 +193,7 @@ struct mrp_wayland_s {
 
     mrp_wayland_output_update_callback_t output_update_callback;
     mrp_wayland_window_update_callback_t window_update_callback;
+    mrp_wayland_window_hint_callback_t window_hint_callback;
     mrp_wayland_layer_update_callback_t layer_update_callback;
     mrp_wayland_area_update_callback_t area_update_callback;
     mrp_wayland_app_update_callback_t application_update_callback;
@@ -244,6 +253,8 @@ void mrp_wayland_register_output_update_callback(mrp_wayland_t *wl,
                         mrp_wayland_output_update_callback_t callback);
 void mrp_wayland_register_window_update_callback(mrp_wayland_t *wl,
                         mrp_wayland_window_update_callback_t callback);
+void mrp_wayland_register_window_hint_callback(mrp_wayland_t *wl,
+                        mrp_wayland_window_hint_callback_t callback);
 void mrp_wayland_register_layer_update_callback(mrp_wayland_t *wl,
                         mrp_wayland_layer_update_callback_t callback);
 void mrp_wayland_register_area_update_callback(mrp_wayland_t *wl,

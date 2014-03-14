@@ -51,10 +51,12 @@
 #define WINDOW_CLASS       MRP_LUA_CLASS_SIMPLE(window)
 #define WINDOW_MASK_CLASS  MRP_LUA_CLASS_SIMPLE(window_mask)
 #define WINDOW_MAP_CLASS   MRP_LUA_CLASS_SIMPLE(window_map)
+#define WINDOW_HINT_CLASS  MRP_LUA_CLASS_SIMPLE(window_hint)
 
 typedef struct scripting_window_s  scripting_window_t;
 typedef struct scripting_window_mask_s  scripting_window_mask_t;
 typedef struct scripting_window_map_s  scripting_window_map_t;
+typedef struct mrp_wayland_window_update_s  scripting_window_hint_t;
 
 struct scripting_window_s {
     mrp_wayland_window_t *win;
@@ -67,6 +69,7 @@ struct scripting_window_mask_s {
 struct scripting_window_map_s {
     mrp_wayland_window_map_t *map;
 };
+
 
 static int  window_create_from_lua(lua_State *);
 static int  window_getfield(lua_State *);
@@ -95,6 +98,14 @@ static void window_map_destroy(void *);
 
 static scripting_window_map_t *window_map_check(lua_State *, int);
 static int window_map_push(lua_State *, mrp_wayland_window_map_t *);
+
+static int  window_hint_create_from_lua(lua_State *);
+static int  window_hint_getfield(lua_State *);
+static int  window_hint_setfield(lua_State *);
+static int  window_hint_stringify(lua_State *);
+static void window_hint_destroy(void *);
+
+static scripting_window_hint_t *window_hint_check(lua_State *, int);
 
 
 
@@ -144,6 +155,21 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
+MRP_LUA_CLASS_DEF_SIMPLE (
+    window_hint,                /* class name */
+    scripting_window_hint_t,    /* userdata type */
+    window_hint_destroy,        /* userdata destructor */
+    MRP_LUA_METHOD_LIST (       /* methods */
+       MRP_LUA_METHOD_CONSTRUCTOR (window_hint_create_from_lua)
+    ),
+    MRP_LUA_METHOD_LIST (       /* overrides */
+       MRP_LUA_OVERRIDE_CALL      (window_hint_create_from_lua)
+       MRP_LUA_OVERRIDE_GETFIELD  (window_hint_getfield)
+       MRP_LUA_OVERRIDE_SETFIELD  (window_hint_setfield)
+       MRP_LUA_OVERRIDE_STRINGIFY (window_hint_stringify)
+    )
+);
+
 
 
 void mrp_wayland_scripting_window_init(lua_State *L)
@@ -153,6 +179,7 @@ void mrp_wayland_scripting_window_init(lua_State *L)
     mrp_lua_create_object_class(L, WINDOW_CLASS);
     mrp_lua_create_object_class(L, WINDOW_MASK_CLASS);
     mrp_lua_create_object_class(L, WINDOW_MAP_CLASS);
+    mrp_lua_create_object_class(L, WINDOW_HINT_CLASS);
 }
 
 mrp_wayland_window_t *mrp_wayland_scripting_window_check(lua_State *L, int idx)
@@ -726,4 +753,191 @@ static int window_map_push(lua_State *L, mrp_wayland_window_map_t *map)
     }
 
     return 1;
+}
+
+
+void *mrp_wayland_scripting_window_hint_create_from_c(lua_State *L,
+                                             mrp_wayland_window_update_t *hint)
+{
+    scripting_window_hint_t *wh;
+    mrp_wayland_window_update_mask_t mask;
+
+    if (!L && !(L = mrp_lua_get_lua_state())) {
+        mrp_log_error("can't create scripting window hint: "
+                      "LUA is not initialized");
+        return NULL;
+    }
+
+    if (!hint) {
+        mrp_log_error("can't create scripting window hint: "
+                      "missing hint (NULL)");
+        return NULL;
+    }
+
+    if (hint->surfaceid < 0) {
+        mrp_log_error("can't create scripting window hint: "
+                      "missing surfaceid");
+        return NULL;
+    }
+
+    wh = (scripting_window_hint_t *)mrp_lua_create_object(L, WINDOW_HINT_CLASS,
+                                                          NULL, 0);
+    if (!wh)
+        mrp_log_error("can't create window_hint");
+    else {
+        mask = hint->mask;
+
+        memset(wh, 0, sizeof(scripting_window_hint_t));
+
+        wh->surfaceid = hint->surfaceid;
+        wh->name      = hint->name ? mrp_strdup(hint->name) : NULL;
+        wh->appid     = hint->appid ? mrp_strdup(hint->appid) : NULL;
+        wh->pid       = hint->pid;
+        wh->nodeid    = hint->nodeid;
+        wh->area      = hint->area;
+        wh->active    = hint->active;
+        wh->layertype = hint->layertype;
+
+        if ((mask & MRP_WAYLAND_WINDOW_LAYER_MASK) && hint->layer) {
+            wh->mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
+            wh->layer = hint->layer;
+        }
+        if ((mask & MRP_WAYLAND_WINDOW_X_MASK)) {
+            wh->mask |= MRP_WAYLAND_WINDOW_X_MASK;
+            wh->x = hint->x;
+        }
+        if ((mask & MRP_WAYLAND_WINDOW_Y_MASK)) {
+            wh->mask |= MRP_WAYLAND_WINDOW_Y_MASK;
+            wh->y = hint->y;
+        }
+        if ((mask & MRP_WAYLAND_WINDOW_WIDTH_MASK)) {
+            wh->mask |= MRP_WAYLAND_WINDOW_WIDTH_MASK;
+            wh->width = hint->width;
+        }
+        if ((mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK)) {
+            wh->mask |= MRP_WAYLAND_WINDOW_HEIGHT_MASK;
+            wh->height = hint->height;
+        }
+        if ((mask & MRP_WAYLAND_WINDOW_VISIBLE_MASK)) {
+            wh->mask |= MRP_WAYLAND_WINDOW_VISIBLE_MASK;
+            wh->visible = hint->visible;
+        }
+        if ((mask & MRP_WAYLAND_WINDOW_RAISE_MASK)) {
+            wh->mask |= MRP_WAYLAND_WINDOW_RAISE_MASK;
+            wh->raise = hint->raise;
+        }
+    }
+
+    return wh;
+}
+
+static int window_hint_create_from_lua(lua_State *L)
+{
+    MRP_LUA_ENTER;
+
+    luaL_error(L, "window_hint can't be created from LUA");
+
+    lua_pushnil(L);
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int window_hint_getfield(lua_State *L)
+{
+    scripting_window_hint_t *wh;
+    const char *fldnam;
+    mrp_wayland_scripting_field_t fld;
+
+    MRP_LUA_ENTER;
+
+    fld = mrp_wayland_scripting_field_check(L, 2, &fldnam);
+    lua_pop(L, 1);
+
+    wh = window_hint_check(L, 1);
+
+    if (!wh)
+        lua_pushnil(L);
+    else {
+        switch (fld) {
+        case SURFACE:   lua_pushinteger(L, wh->surfaceid);              break;
+        case NAME:      lua_pushstring(L, wh->name ? wh->name : "");    break;
+        case APPID:     lua_pushstring(L, wh->appid ? wh->appid : "");  break;
+        case PID:       lua_pushinteger(L, wh->pid);                    break;
+        case NODE:      lua_pushinteger(L, wh->nodeid);                 break;
+        case LAYER:     lua_pushinteger(L, wh->layer ?
+                                        wh->layer->layerid : -1);       break;
+        case POS_X:     lua_pushinteger(L, wh->x);                      break;
+        case POS_Y:     lua_pushinteger(L, wh->y);                      break;
+        case WIDTH:     lua_pushinteger(L, wh->width);                  break;
+        case HEIGHT:    lua_pushinteger(L, wh->height);                 break;
+        case VISIBLE:   lua_pushinteger(L, wh->visible ? 1 : 0);        break;
+        case RAISE:     lua_pushinteger(L, wh->raise ? 1 : 0);          break;
+        case ACTIVE:    lua_pushinteger(L, wh->active);                 break;
+        case LAYERTYPE: lua_pushinteger(L, wh->layertype);              break;
+        case AREA:      lua_pushstring(L, wh->area && wh->area->fullname ?
+                                       wh->area->fullname : "");        break;
+        default:        lua_pushnil(L);                                 break;
+        }
+    }
+
+    MRP_LUA_LEAVE(1);
+}
+
+
+static int window_hint_setfield(lua_State *L)
+{
+    MRP_LUA_ENTER;
+
+    luaL_error(L, "attempt to modify readonly window_hint object");
+
+    MRP_LUA_LEAVE(0);
+}
+
+static int window_hint_stringify(lua_State *L)
+{
+#define PRINT(m, fmt, args...)                                          \
+    if ((wh->mask & MRP_WAYLAND_WINDOW_ ## m ## _MASK) && (p < e)) {    \
+        p += snprintf(p, e-p, "\n      " fmt , ## args);                \
+    }
+
+    scripting_window_hint_t *wh;
+    char *p, *e;
+    char buf[4096];
+
+    MRP_LUA_ENTER;
+
+    wh = window_hint_check(L, 1);
+    e = (p = buf) + sizeof(buf);
+
+    p += snprintf(p, e-p, "window %d hint", wh->surfaceid);
+
+    PRINT(LAYER, "layer: '%s'", wh->layer ? wh->layer->name : "<not set>");
+    PRINT(POSITION, "position: %d,%d", wh->x, wh->y);
+    PRINT(SIZE, "size: %dx%d", wh->width, wh->height);
+    PRINT(VISIBLE, "visible: %s", wh->visible ? "yes" : "no");
+    PRINT(RAISE, "raise: %s", wh->raise ? "yes" : "no");
+
+    lua_pushlstring(L, buf, p-buf);
+
+    MRP_LUA_LEAVE(1);
+
+#undef PRINT
+}
+
+static void window_hint_destroy(void *data)
+{
+    scripting_window_hint_t *wh = (scripting_window_hint_t *)data;
+
+    MRP_LUA_ENTER;
+
+    mrp_free((void *)wh->name);
+    mrp_free((void *)wh->appid);
+
+    MRP_LUA_LEAVE_NOARG;
+}
+
+static scripting_window_hint_t *window_hint_check(lua_State *L, int idx)
+{
+    return (scripting_window_hint_t*)mrp_lua_check_object(L, WINDOW_HINT_CLASS,
+                                                          idx);
 }
