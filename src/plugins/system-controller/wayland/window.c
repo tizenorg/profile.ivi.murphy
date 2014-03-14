@@ -53,6 +53,8 @@ typedef struct {
 static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *,
                                                mrp_wayland_window_update_t *);
 
+static mrp_wayland_window_update_mask_t set_layertype(mrp_wayland_window_t *,
+                                                mrp_wayland_window_update_t *);
 static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *,
                                                 mrp_wayland_window_update_t *);
 
@@ -299,6 +301,48 @@ void mrp_wayland_window_update(mrp_wayland_window_t *win,
         mrp_htbl_foreach(wl->windows, update_others, &uo);
         break;
     }
+}
+
+void mrp_wayland_window_hint(mrp_wayland_window_t *win,
+                             mrp_wayland_window_operation_t oper,
+                             mrp_wayland_window_update_t *u)
+{
+    mrp_wayland_window_manager_t *wm;
+    mrp_wayland_interface_t *interface;
+    mrp_wayland_t *wl;
+    int32_t surfaceid;
+    char buf[2048];
+
+    MRP_ASSERT(win && win->wm && win->wm->interface &&
+               win->wm->interface->wl && u, "invalid argument");
+
+    wm = win->wm;
+    interface = wm->interface;
+    wl = interface->wl;
+
+    if (!(u->mask & MRP_WAYLAND_WINDOW_SURFACEID_MASK))
+        surfaceid = u->surfaceid = win->surfaceid;
+    else {
+        if (u->surfaceid != (surfaceid = win->surfaceid)) {
+            mrp_log_error("system-controller: window hint failed: "
+                          "mismatching surface ID's");
+            return;
+        }
+    }
+
+    u->name = win->name;
+    u->appid = win->appid;
+    u->pid = win->pid;
+    u->nodeid = win->nodeid;
+    u->area = win->area;
+    u->active = win->active;
+    u->layertype = win->layertype;
+
+    mrp_wayland_window_request_print(u, buf,sizeof(buf));
+    mrp_debug("window %d hint%s", surfaceid, buf);
+
+    if (win->scripting_data && wl->window_hint_callback)
+        wl->window_hint_callback(wl, oper, u);
 }
 
 size_t mrp_wayland_window_print(mrp_wayland_window_t *win,
@@ -622,16 +666,57 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
     }
 
     if ((u->mask & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK)) {
-        if (u->layertype != win->layertype ||
-            (passthrough & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK))
-        {
-            mask |= MRP_WAYLAND_WINDOW_LAYERTYPE_MASK;
-            win->layertype = u->layertype;
-        }
+        mask |= set_layertype(win, u);
     }
 
     if ((mask & MRP_WAYLAND_WINDOW_APPID_MASK)) {
         mask |= set_appid(win, u);
+    }
+
+    return mask;
+}
+
+static mrp_wayland_window_update_mask_t set_layertype(
+                                                mrp_wayland_window_t *win,
+                                                mrp_wayland_window_update_t *u)
+{
+    mrp_wayland_window_update_mask_t mask = 0;
+    mrp_wayland_window_update_mask_t passthrough = 0;
+    mrp_wayland_t *wl = NULL;
+    mrp_wayland_window_manager_t *wm;
+    bool need_update;
+#if 0
+    mrp_wayland_layer_t *layer;
+#endif
+
+
+    if ((u->mask & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK)) {
+        if ((wm = win->wm) && wm->interface && (wl = wm->interface->wl))
+            passthrough = wm->passthrough.window_update;
+
+        need_update = (u->layertype != win->layertype);
+
+        if (need_update || (passthrough & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK)) {
+            mask |= MRP_WAYLAND_WINDOW_LAYERTYPE_MASK;
+            win->layertype = u->layertype;
+        }
+
+#if 0
+        if (wl && need_update) {
+            if (!(layer = win->layer) || layer->type != win->layertype) {
+                layer = mrp_wayland_layer_find_by_type(wl, win->layertype);
+
+                if (!layer) {
+                    mrp_log_error("system-controller: can't find layer "
+                                  "for type %d", win->layertype);
+                }
+                else {
+                    mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
+                    win->layer = layer;
+                }
+            }
+        }
+#endif
     }
 
     return mask;
@@ -700,6 +785,11 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
         u2.mask |= MRP_WAYLAND_WINDOW_SIZE_MASK;
         u2.width  = u2.area->width;
         u2.height = u2.area->height;
+    }
+
+    if ((u->mask & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK) && win->layer) {
+        u2.mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
+        u2.layer = win->layer;
     }
 
     wm->window_request(win, &u2, NULL, 0);
