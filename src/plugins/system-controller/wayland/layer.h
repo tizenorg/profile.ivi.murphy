@@ -89,8 +89,10 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
                                               mrp_wayland_layer_update_t *u);
 void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer);
 
-mrp_wayland_layer_t *mrp_wayland_layer_find(mrp_wayland_t *wl,
-                                            int32_t layerid);
+mrp_wayland_layer_t *mrp_wayland_layer_find_by_id(mrp_wayland_t *wl,
+                                              int32_t layerid);
+mrp_wayland_layer_t *mrp_wayland_layer_find_by_type(mrp_wayland_t *wl,
+                                              mrp_wayland_layer_type_t type);
 
 
 void mrp_wayland_layer_request(mrp_wayland_t *wl,
