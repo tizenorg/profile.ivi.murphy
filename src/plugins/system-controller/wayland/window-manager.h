@@ -49,6 +49,9 @@ enum mrp_wayland_window_manager_operation_e {
                            mrp_wayland_window_update_t *,               \
                            mrp_wayland_animation_t *,                   \
                            uint32_t);                                   \
+    void (*buffer_request)(mrp_wayland_window_manager_t *,              \
+                           const char *,                                \
+                           uint32_t, uint32_t);                         \
     struct {                                                            \
         mrp_wayland_window_update_mask_t window_request;                \
         mrp_wayland_window_update_mask_t window_update;                 \

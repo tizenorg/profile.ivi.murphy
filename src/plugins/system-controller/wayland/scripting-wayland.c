@@ -654,6 +654,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
 
     case 14:
         switch (name[0]) {
+        case 'b':
+            if (!strcmp(name, "buffer_request"))
+                return BUFFER_REQUEST;
+            break;
         case 'm':
             if (!strcmp(name, "manager_update"))
                 return MANAGER_UPDATE;

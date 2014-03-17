@@ -118,6 +118,9 @@ static void window_request(mrp_wayland_window_t *,
 
 static mrp_wayland_layer_type_t get_layer_type(uint32_t);
 
+static void buffer_request(mrp_wayland_window_manager_t *, const char *,
+                           uint32_t, uint32_t);
+
 
 bool mrp_ico_window_manager_register(mrp_wayland_t *wl)
 {
@@ -155,6 +158,7 @@ static bool window_manager_constructor(mrp_wayland_t *wl,
 
     wm->layer_request = layer_request;
     wm->window_request = window_request;
+    wm->buffer_request = buffer_request;
 
     sts = ico_window_mgr_add_listener((struct ico_window_mgr *)wm->proxy,
                                       &listener, wm);
@@ -1143,4 +1147,23 @@ static mrp_wayland_layer_type_t get_layer_type(uint32_t layertype)
     default:
         return MRP_WAYLAND_LAYER_TYPE_UNKNOWN;
     }
+}
+
+static void buffer_request(mrp_wayland_window_manager_t *wm,
+                           const char *shmname,
+                           uint32_t bufsize,
+                           uint32_t bufnum)
+{
+
+    struct ico_window_mgr *ico_window_mgr;
+
+    MRP_ASSERT(wm && wm->proxy && shmname, "invalid argument");
+
+    ico_window_mgr = (struct ico_window_mgr *)wm->proxy;
+
+    mrp_debug("calling ico_window_mgr_set_map_buffer"
+              "(shmname='%s', bufsize=%u, bufnum=%u)",
+              shmname, bufsize,bufnum);
+
+    ico_window_mgr_set_map_buffer(ico_window_mgr, shmname, bufsize,bufnum);
 }
