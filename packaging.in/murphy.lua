@@ -1432,7 +1432,7 @@ application {
 
 application {
     appid           = "GV3ySIINq7.GhostCluster",
-    area            = "Mid.Full",
+    area            = "Center.Full",
     privileges      = { screen = "none", audio = "none" },
     resource_class  = "system",
     screen_priority = 30
@@ -1454,7 +1454,7 @@ if sc then
 
         if command == 0xFFFF then
             if verbose > 1 then
-                print('client ' .. cid .. ' (' .. msg.appid .. ') disconnected')
+                print('client ' .. cid .. ' disconnected')
             end
             if msg.appid == homescreen then
                 homescreen = ""
@@ -1628,14 +1628,27 @@ if sc then
                 print(msg.arg)
                 print('framerate: '..framerate)
             end
-            --wmgr:window_request(msg.arg, a, framerate)
+            wmgr:window_request(msg.arg, a, framerate)
         elseif msg.command == 0x10012 then   -- ico UNMAP_THUMB
             msg.arg.mapped = 0
             if verbose > 2 then
                 print('### ==> UNMAP_THUMB REQUEST')
                 print(msg.arg)
             end
-            --wmgr:window_request(msg.arg, a, 0)
+            wmgr:window_request(msg.arg, a, 0)
+        elseif msg.command == 0x10013 then -- ico MAP_BUFFER command
+            local shmname = msg.arg.anim_name
+            local bufsize = msg.arg.width
+            local bufnum  = msg.arg.height
+            if shmname and bufsize and bufnum then
+                if verbose > 2 then
+                    print('### ==> MAP_BUFFER REQUEST')
+                    print("shmaname='" .. shmname ..
+                          "' bufsize='" .. bufsize ..
+                          " bufnum=" .. bufnum)
+                end
+                wmgr:buffer_request(shmname, bufsize, bufnum)
+            end
         elseif msg.command == 0x10020 then   -- ico SHOW_LAYER command
             msg.arg.visible = 1
             if verbose > 2 then
