@@ -1,3 +1,18 @@
+* Mon Mar 17 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.50
+- system-controller: support for map_buffer
+- system-controller: try to harmonize the layer with the layertype
+- system-controller: premature setting of active and visible attributes
+- system-controller: support for full-screen layer
+- system-controller: add map field to window_request processing
+- system-controller: classify ICO_WINDOW_MGR_LAYERTYPE_FULLSCREEN as app.layer
+- system-monitor: update README (remove note on non-omittable uppest limit).
+- system-monitor: make omitted mem limit be 2**63 - 1.
+- packaging: clean up installed sample config before installing the packaged one.
+- system-monitor: added basic documentation for CPU, memory usage monitoring.
+- system-controller: cleanups.
+- packaging: updated config for HS lifecycle management.
+- system-controller: fix a screen management crash.
+
 * Thu Mar 13 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.49.1
 - config: fix config to work without system controller plugin.
 
