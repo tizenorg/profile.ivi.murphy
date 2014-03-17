@@ -145,6 +145,11 @@ static void layer_update_callback(mrp_wayland_t *,
                                   mrp_wayland_layer_update_mask_t,
                                   mrp_wayland_layer_t *);
 
+static bool buffer_request_bridge(lua_State *, void *,
+                                  const char *, mrp_funcbridge_value_t *,
+                                  char *, mrp_funcbridge_value_t *);
+
+
 static uint32_t copy_json_fields(mrp_wayland_t *, mrp_json_t *,
                                  request_def_t *, void *);
 static bool register_methods(lua_State *);
@@ -172,6 +177,7 @@ static mrp_funcbridge_t *output_request;
 static mrp_funcbridge_t *area_create;
 static mrp_funcbridge_t *layer_request;
 static mrp_funcbridge_t *window_request;
+static mrp_funcbridge_t *buffer_request;
 
 
 void mrp_wayland_scripting_window_manager_init(lua_State *L)
@@ -449,6 +455,10 @@ static int window_manager_getfield(lua_State *L)
 
         case WINDOW_UPDATE:
             mrp_funcbridge_push(L, wmgr->window_update);
+            break;
+
+        case BUFFER_REQUEST:
+            mrp_funcbridge_push(L, buffer_request);
             break;
 
         case PASSTHROUGH_WINDOW_REQUEST:
@@ -1170,6 +1180,54 @@ static void layer_update_callback(mrp_wayland_t *wl,
 }
 
 
+static bool buffer_request_bridge(lua_State *L,
+                                  void *data,
+                                  const char *signature,
+                                  mrp_funcbridge_value_t *args,
+                                  char *ret_type,
+                                  mrp_funcbridge_value_t *ret_val)
+{
+    mrp_wayland_t *wl;
+    mrp_wayland_window_manager_t *wm;
+    const char *shmname;
+    uint32_t bufsize;
+    uint32_t bufnum;
+
+    MRP_UNUSED(L);
+    MRP_UNUSED(data);
+    MRP_UNUSED(ret_val);
+    MRP_ASSERT(signature && args && ret_type, "invalid argument");
+
+    *ret_type = MRP_FUNCBRIDGE_NO_DATA;
+
+    if (strcmp(signature, "osdd")) {
+        mrp_log_error("system-controller: bad signature: "
+                      "expected 'osdd' got '%s'",signature);
+        return false;
+    }
+
+    if (!(wl = mrp_wayland_scripting_window_manager_unwrap(args[0].pointer))) {
+        mrp_log_error("system-controller: argument 1 is not a "
+                      "'window_manager' class object");
+        return false;
+    }
+
+    if (!(wm = wl->wm)) {
+        mrp_debug("ignoring buffer request: window manager is down");
+        return false;
+    }
+
+    shmname = args[1].string;
+    bufsize = args[2].integer;
+    bufnum  = args[3].integer;
+
+    if (wm->buffer_request)
+        wm->buffer_request(wm, shmname, bufsize, bufnum);
+
+    return true;
+}
+
+
 static uint32_t copy_json_fields(mrp_wayland_t *wl,
                                  mrp_json_t *json,
                                  request_def_t *fields,
@@ -1214,6 +1272,7 @@ static bool register_methods(lua_State *L)
         FUNCBRIDGE(area_create    , "oo"  , NULL),
         FUNCBRIDGE(layer_request  , "oo"  , NULL),
         FUNCBRIDGE(window_request , "oood", NULL),
+        FUNCBRIDGE(buffer_request , "osdd", NULL),
         FUNCBRIDGE_END
     };
 
