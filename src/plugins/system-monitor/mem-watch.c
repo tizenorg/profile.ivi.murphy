@@ -74,7 +74,7 @@ MRP_LUA_MEMBER_LIST_TABLE(mem_watch_members,
     MRP_LUA_CLASS_STRING ("sample"  , 0, setmember, getmember, RO        )
     MRP_LUA_CLASS_ANY    ("limits"  , 0, setmember, getmember, RO        )
     MRP_LUA_CLASS_INTEGER("polling" , 0, setmember, getmember, RO|NOINIT )
-    MRP_LUA_CLASS_INTEGER("alpha"   , 0, setmember, getmember,    NOFLAGS)
+    MRP_LUA_CLASS_DOUBLE ("alpha"   , 0, setmember, getmember,    NOFLAGS)
     MRP_LUA_CLASS_INTEGER("window"  , 0, setmember, getmember,    NOFLAGS)
     MRP_LUA_CLASS_INTEGER("raw"     , 0, setmember, getmember, RO|NOINIT )
     MRP_LUA_CLASS_INTEGER("value"   , 0, setmember, getmember, RO|NOINIT )
@@ -94,8 +94,8 @@ typedef enum {
     MEM_WATCH_MEMBER_SAMPLE,
     MEM_WATCH_MEMBER_LIMITS,
     MEM_WATCH_MEMBER_POLLING,
-    MEM_WATCH_MEMBER_WINDOW,
     MEM_WATCH_MEMBER_ALPHA,
+    MEM_WATCH_MEMBER_WINDOW,
     MEM_WATCH_MEMBER_RAW,
     MEM_WATCH_MEMBER_VALUE,
     MEM_WATCH_MEMBER_CURRENT,
