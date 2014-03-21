@@ -268,3 +268,148 @@ sm:MemWatch({
             print(w.sample .. ' change: ' .. prev .. ' -> ' .. curr)
          end
      })
+
+
+2. Control Group Interface
+
+The control group interface allows one to create, configure (write) and
+examine (read) control groups of various types. Creating and configuring
+control groups (write access) requires the daemon to have root priviledges,
+or more precisely it requires the daemon to be executed with effective
+user id 0. If run as a non-priviledged user, the daemon will still have
+read-only access to most control groups.
+
+Currently system-monitor supports memory, cpuacct, cpu, and freezer type
+of control groups. One can create or open a cgroup using the CGroupOpen
+method of the top-level Murphy object. Members of the resulting object
+correspond to (supported) filesystem entries of the related control
+group. Dereferencing a member will read the value of the filesystem
+entry and writing to a member will write to the filesystem entry. Hence,
+changing the configuration of a control group can be accomplisehd by
+setting the appropriate members of the corresponding object. The control
+group object also offers the set_param method to set the given control
+group parameter to a given value. This is equivalent to assigning the
+given value to the object member with the given name.
+
+Moving a task to a control group can be accomplished by assigning the
+task id to the Tasks member of the group object, or alternatively by
+calling the add_task method of the group object with the task id as an
+argument. Similarly, moving a process (and all its threads) to a control
+group can be accomplished by assigning the process id to the Processes
+member of the group object or alternatively by calling the add_process
+method of the group object with the process id as an argument.
+
+Currently only a subset of the filesystem entries of control groups have
+been made available via this object interface. Here is a short summary
+for the available entries for the currently supported group types.
+
+memory controller:
+    - Limit:           (rw) memory.limit_in_bytes
+    - SoftLimit:       (rw) memory.soft_limit_in_bytes
+    - Usage:           (ro) memory.usage_in_bytes
+    - MaxUsage:        (ro) memory.max_usage_in_bytes
+    - MemSwapLimit:    (rw) memory.memsw.limit_in_bytes
+    - MemSwapUsage:    (ro) memory.memsw.usage_in_bytes
+    - MemSwapMaxUsage: (ro) memory.memsw.max_usage_in_bytes
+    - Swappiness:      (rw) memory.swappiness
+    - Stat:            (ro) memory.stat
+    - Tasks:           (rw) tasks
+    - Processes:       (rw) cgroup.procs
+
+cpuacct controller:
+    - Usage:           (ro) cpuacct.usage_per_cpu
+    - Stat:            (ro) cpuacct.stat
+    - Tasks:           (rw) tasks
+    - Processes:       (rw) cgroup.procs
+
+cpu controller:
+    - Shares:          (rw) cpu.shares
+    - CFSPeriod:       (rw) cpu.cfs_period_us
+    - CFSQuota:        (rw) cpu.cfs_quota_us
+    - RTPeriod:        (rw) cpu.rt_period_us
+    - RTRuntime:       (rw) cpu.rt_runtime_us
+    - Tasks:           (rw) tasks
+    - Processes:       (rw) cgroup.procs
+
+freezer controller:
+    - State:           (rw) freezer.state
+    - Tasks:           (rw) tasks
+    - Processes:       (rw) cgroup.procs
+
+2.1 Control Group Example
+
+Here is simple example of opening the top-level cpuacct control group
+in read-only mode and reading out the per-cpu usage counts.
+
+--
+-- get top-level Murphy object
+--
+m = murphy.get()
+
+--
+-- open the top cpu accounting group
+--
+cg = m:CGroupOpen({ type = 'cpuacct',
+                    name = '/',
+                    mode = 'readonly' })
+
+--
+-- read and dump usage and status
+--
+print('CPU usage per cpu: ')
+for i, v in ipairs(cg.Usage) do
+    print('  CPU #' .. i .. ': ' .. v)
+end
+
+print('CPU usage statistics: ')
+for k, v in pairs(cg.Stat) do
+    print('  ' .. k .. ': ' .. v)
+end
+
+
+Here is simple example of opening the top-level memory control group
+in read-only mode and reading out the uasage and statistics.
+
+--
+-- get top-level Murphy object
+--
+m = murphy.get()
+
+--
+-- open the top memory control group
+--
+mg = m:CGroupOpen({ type = 'memory',
+                    name = '/',
+                    mode = 'readonly' })
+
+--
+-- dump usage and detailed status
+--
+print('Memory Usage  : ' .. mg.Usage)
+print('Mem+Swap Usage: ' .. mg.MemSwapUsage)
+
+print('Memory Detailed Status:')
+for k, v in pairs(mg.Stat) do
+    print('  ' .. k .. ': ' .. v)
+end
+
+
+Here is a simple example of creating a memory control group with
+a certain configuration and moving a given process to it.
+
+--
+-- get top-level Murphy object
+--
+m = murphy.get()
+
+--
+-- open the foo memory control group (create if it does not exist)
+--
+mg = m:CGroupOpen({ type = 'memory',
+                    name = 'foo',
+                    mode = 'create,readwrite',
+                    MemSwapLimit = 200 * 1024 * 1024,
+                    Limit        = 100 * 1024 * 1024,
+})
+
+mg:add_process(22977)
