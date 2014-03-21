@@ -29,6 +29,7 @@
 
 #include <unistd.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <fcntl.h>
@@ -74,6 +75,7 @@ typedef struct {
     } memory;
     struct {                             /* cpuacct-specific controls */
         int usage_percpu;                /*     usage_percpu */
+        int stat;                        /*     stat */
     } cpuacct;
     struct {                             /* cpu-specific controls */
         int shares;                      /*     shares */
@@ -206,7 +208,8 @@ static control_descr_t memory_controls[] = {
     RWCTRL(_a, cpuacct._path, cpuacct, _fld, _fmt)
 
 static control_descr_t cpuacct_controls[] = {
-    RO("Usage", usage_percpu, usage_percpu, NONE),
+    RO("Usage", usage_percpu, usage_percpu, INTARR),
+    RO("Stat" , stat        , stat        , INTTBL),
     { NULL, NULL, -1, 0, 0 }
 };
 
@@ -951,6 +954,8 @@ static int cgroup_lua_setfield(lua_State *L)
     if ((fd = get_cgroup_fd(cgrp->cg, name, NULL)) < 0)
         return 0;
 
+    mrp_debug("control fd for field '%s' is %d", name, fd);
+
     switch (lua_type(L, -1)) {
     case LUA_TSTRING:
         val = lua_tostring(L, -1);
@@ -963,6 +968,8 @@ static int cgroup_lua_setfield(lua_State *L)
     default:
         return luaL_error(L, "expecting string or integer value");
     }
+
+    mrp_debug("writing value '%s' for field '%s'", val, name);
 
     if (write(fd, val, len) == len)
         return 1;
@@ -997,6 +1004,11 @@ static int cgroup_lua_getfield(lua_State *L)
     }
     else {
         buf[len] = '\0';
+        while (len >= 1 && buf[len-1] == '\n')
+            buf[--len] = '\0';
+
+        mrp_debug("value for field '%s': '%s'", name, buf);
+
         return push_formatted(L, fmt, buf);
     }
 }
@@ -1147,7 +1159,13 @@ static int push_intarr(lua_State *L, char *data)
         lua_rawseti(L, -2, i);
         i++;
 
-        p = (e && *e) ? e + 1 : NULL;
+        if (e && *e) {
+            p = e + 1;
+            while (isspace(*p))
+                p++;
+        }
+        else
+            p = NULL;
     }
 
     return 1;
@@ -1177,7 +1195,13 @@ static int push_strarr(lua_State *L, char *data)
         lua_rawseti(L, -2, i);
         i++;
 
-        p = e ? e + 1 : NULL;
+        if (e && *e) {
+            p = e + 1;
+            while (isspace(*p))
+                p++;
+        }
+        else
+            p = NULL;
     }
 
     return 1;
