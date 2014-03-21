@@ -1,3 +1,11 @@
+* Fri Mar 21 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.51
+- system-monitor: cgroup handling fixes
+- system-monitor: avoid infinite loop for multiply opened cgroups.
+- system-monitor: member enum order typo/thinko fix
+- system-monitor: potential uninitialized variable usage fix
+- scripting: workaround for occasional Lua stack overflow corruption
+- system-monitor: fixes TIVI-2974
+
 * Mon Mar 17 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.50
 - system-controller: support for map_buffer
 - system-controller: try to harmonize the layer with the layertype
