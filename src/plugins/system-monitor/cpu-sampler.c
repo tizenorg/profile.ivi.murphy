@@ -489,6 +489,9 @@ static cpu_cgroup_t *find_cgroup_by_name(const char *name, cgroup_t **cgp)
     cpu_cgroup_t    *cgrp;
     cgroup_t        *cg;
 
+    if (cgp != NULL)
+        *cgp = NULL;
+
     if ((cg = cgroup_open(CGROUP_TYPE_CPUACCT, name, O_RDONLY)) == NULL)
         return NULL;
 
