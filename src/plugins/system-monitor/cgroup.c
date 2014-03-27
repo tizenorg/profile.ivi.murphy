@@ -441,7 +441,7 @@ static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int grpflags)
         flags = (ctrl->flags & CONTROL_FLAG_RDONLY) ? O_RDONLY : O_RDWR;
 
         if (*fdp >= 0)
-            continue;
+            goto next;
 
         if (snprintf(path, sizeof(path), "%s/%s",
                      cgrp->path, ctrl->path) >= (int)sizeof(path))
@@ -462,6 +462,7 @@ static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int grpflags)
             goto retry;
         }
 
+    next:
         ctrl++;
     }
 
