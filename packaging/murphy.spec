@@ -18,7 +18,7 @@
 %{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
 %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
 %{!?_with_smack:%{!?_without_smack:%define _with_smack 1}}
-#%{!?_with_icosyscon:%{!?_without_icosyscon:%define _with_icosyscon 1}}
+%{!?_with_icosyscon:%{!?_without_icosyscon:%define _without_icosyscon 1}}
 %{!?_with_sysmon:%{!?_without_sysmon:%define _with_sysmon 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
@@ -81,12 +81,12 @@ BuildRequires: pkgconfig(json)
 BuildRequires: pkgconfig(libsmack)
 %endif
 
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#BuildRequires: ico-uxf-weston-plugin-devel
-#BuildRequires: pkgconfig(ail)
-#BuildRequires: pkgconfig(aul)
-#BuildRequires: libxml2-devel
-#%endif
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+BuildRequires: ico-uxf-weston-plugin-devel
+BuildRequires: pkgconfig(ail)
+BuildRequires: pkgconfig(aul)
+BuildRequires: libxml2-devel
+%endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %package core
@@ -212,13 +212,13 @@ Requires: %{name} = %{version}
 Summary: Murphy IVI resource manager plugin
 Group: System/Service
 
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#%package system-controller
-#Summary: Murphy IVI System Controller plugin
-#Group: System/Service
-#Requires: ico-uxf-homescreen
-#Conflicts: murphy-ivi-resource-manager
-#%endif
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%package system-controller
+Summary: Murphy IVI System Controller plugin
+Group: System/Service
+Requires: ico-uxf-homescreen
+Conflicts: murphy-ivi-resource-manager
+%endif
 
 %description
 This package contains the basic daemon.
@@ -279,10 +279,10 @@ This package contains various test binaries for Murphy.
 %description ivi-resource-manager
 This package contains the Murphy IVI resource manager plugin.
 
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#%description system-controller
-#This package contains the Murphy IVI resource manager plugin.
-#%endif
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%description system-controller
+This package contains the Murphy IVI resource manager plugin.
+%endif
 
 %prep
 %setup -q
@@ -351,11 +351,11 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-smack"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-smack"
 %endif
 
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-controller"
-#%else
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-controller"
+%else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-controller"
-#%endif
+%endif
 
 %if %{?_with_sysmon:1}%{!?_with_sysmon:0}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-monitor"
@@ -420,10 +420,10 @@ cp packaging.in/murphyd.conf $RPM_BUILD_ROOT%{_tmpfilesdir}
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/user
 cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#cp packaging.in/ico-homescreen.service $RPM_BUILD_ROOT%{systemddir}/user
-#cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir}/user
-#%endif
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+cp packaging.in/ico-homescreen.service $RPM_BUILD_ROOT%{systemddir}/user
+cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir}/user
+%endif
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
@@ -446,9 +446,9 @@ cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-pulse.manifest
 %if %{?_with_ecore:1}%{!?_with_ecore:0}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ecore.manifest
 %endif
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-system-controller.manifest
-#%endif
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-system-controller.manifest
+%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -503,22 +503,22 @@ lfconfig
 ldconfig
 %endif
 
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#%post system-controller
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%post system-controller
 # prevent system controller from starting
-#rm -f %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+rm -f %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
 # instead launch just ico-homescreen
-#rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
-#ln -s %{systemddir}/user/murphy-wait-for-launchpad-ready.path \
-#    %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
+rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
+ln -s %{systemddir}/user/murphy-wait-for-launchpad-ready.path \
+    %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
 
-#%postun system-controller
-#rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
-#if [ -f %{systemddir}/user/ico-uxf-wait-launchpad-ready.path ]; then
-#    ln -sf %{systemddir}/user/ico-uxf-wait-launchpad-ready.path \
-#        %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
-#fi
-#%endif
+%postun system-controller
+rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
+if [ -f %{systemddir}/user/ico-uxf-wait-launchpad-ready.path ]; then
+    ln -sf %{systemddir}/user/ico-uxf-wait-launchpad-ready.path \
+        %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+fi
+%endif
 
 %if %{?_with_squashpkg:1}%{!?_with_squashpkg:0}
 %files -f filelist.plugins-base
@@ -693,14 +693,14 @@ ldconfig
 %{_libdir}/murphy/plugins/plugin-ivi-resource-manager.so
 %manifest %{_datadir}/murphy-ivi-resource-manager.manifest
 
-#%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#%files system-controller
-#%defattr(-,root,root,-)
-#%{_libdir}/murphy/plugins/plugin-system-controller.so
-#%{systemddir}/user/ico-homescreen.service
-#%{systemddir}/user/murphy-wait-for-launchpad-ready.path
-#%manifest %{_datadir}/murphy-system-controller.manifest
-#%endif
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+%files system-controller
+%defattr(-,root,root,-)
+%{_libdir}/murphy/plugins/plugin-system-controller.so
+%{systemddir}/user/ico-homescreen.service
+%{systemddir}/user/murphy-wait-for-launchpad-ready.path
+%manifest %{_datadir}/murphy-system-controller.manifest
+%endif
 
 %changelog
 * Tue Nov 27 2012 Krisztian Litkey <krisztian.litkey@intel.com> -
