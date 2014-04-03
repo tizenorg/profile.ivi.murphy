@@ -40,6 +40,7 @@ Requires: %{name}-core = %{version}
 %endif
 
 Requires(post): /bin/systemctl
+Requires(post): libcap-tools
 Requires(postun): /bin/systemctl
 
 BuildRequires: flex
@@ -47,6 +48,7 @@ BuildRequires: bison
 BuildRequires: pkgconfig(lua)
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(libsystemd-journal)
+BuildRequires: pkgconfig(libcap)
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 BuildRequires: pkgconfig(libpulse)
@@ -456,6 +458,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %post
 /bin/systemctl enable murphyd.service
+setcap 'cap_net_admin=+ep' %{_bindir}/murphyd
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %post core
