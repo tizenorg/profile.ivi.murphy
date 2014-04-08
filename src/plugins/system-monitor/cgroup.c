@@ -134,6 +134,7 @@ typedef struct {
     off_t       offs;                    /* fd offset within control struct */
     int         flags;                   /* control-specific flags */
     int         format;                  /* format of data read from fd */
+    int         missingok;               /* can be missing */
 } control_descr_t;
 
 
@@ -152,20 +153,20 @@ typedef struct {
  * common cgroup controller/filesytem entries
  */
 
-#define ROCTRL(_alias, _path, _type, _field, _fmt)          \
-    { _alias, #_path, MRP_OFFSET(control_t, _type._field),  \
-            CONTROL_FLAG_RDONLY, CONTROL_FORMAT_##_fmt   }
-#define RWCTRL(_alias, _path, _type, _field, _fmt)          \
-    { _alias, #_path, MRP_OFFSET(control_t, _type._field),  \
-            CONTROL_FLAG_NONE, CONTROL_FORMAT_##_fmt     }
+#define ROCTRL(_alias, _path, _type, _field, _fmt, _miss)       \
+    { _alias, #_path, MRP_OFFSET(control_t, _type._field),      \
+            CONTROL_FLAG_RDONLY, CONTROL_FORMAT_##_fmt, _miss }
+#define RWCTRL(_alias, _path, _type, _field, _fmt, _miss)       \
+    { _alias, #_path, MRP_OFFSET(control_t, _type._field),      \
+            CONTROL_FLAG_NONE, CONTROL_FORMAT_##_fmt, _miss   }
 
-#define RO(_a, _path, _fld, _fmt) ROCTRL(_a, _path, any, _fld, _fmt)
-#define RW(_a, _path, _fld, _fmt) RWCTRL(_a, _path, any, _fld, _fmt)
+#define RO(_a, _path, _fld, _fmt) ROCTRL(_a, _path, any, _fld, _fmt, 0)
+#define RW(_a, _path, _fld, _fmt) RWCTRL(_a, _path, any, _fld, _fmt, 0)
 
 static control_descr_t common_controls[] = {
     RW("Tasks"    , tasks       , tasks, INTARR),
     RW("Processes", cgroup.procs, procs, INTARR),
-    { NULL, NULL, -1, 0, 0 }
+    { NULL, NULL, -1, 0, 0, 0 }
 };
 
 #undef RO
@@ -176,22 +177,27 @@ static control_descr_t common_controls[] = {
  * 'memory' cgroup controller/filesystem entries
  */
 
-#define RO(_a, _path, _fld, _fmt) \
-    ROCTRL(_a, memory._path, memory, _fld, _fmt)
-#define RW(_a, _path, _fld, _fmt) \
-    RWCTRL(_a, memory._path, memory, _fld, _fmt)
+#define MRO(_a, _path, _fld, _fmt)                      \
+    ROCTRL(_a, memory._path, memory, _fld, _fmt, 0)
+#define MRW(_a, _path, _fld, _fmt)                      \
+    RWCTRL(_a, memory._path, memory, _fld, _fmt, 0)
+
+#define ORO(_a, _path, _fld, _fmt)                      \
+    ROCTRL(_a, memory._path, memory, _fld, _fmt, 1)
+#define ORW(_a, _path, _fld, _fmt)                      \
+    RWCTRL(_a, memory._path, memory, _fld, _fmt, 1)
 
 static control_descr_t memory_controls[] = {
-    RW("Limit"          , limit_in_bytes          , limit          , INTEGER),
-    RW("SoftLimit"      , soft_limit_in_bytes     , soft_limit     , INTEGER),
-    RO("Usage"          , usage_in_bytes          , usage          , INTEGER),
-    RO("MaxUsage"       , max_usage_in_bytes      , max_usage      , INTEGER),
-    RW("MemSwapLimit"   , memsw.limit_in_bytes    , memsw_limit    , INTEGER),
-    RO("MemSwapUsage"   , memsw.usage_in_bytes    , memsw_usage    , INTEGER),
-    RO("MemSwapMaxUsage", memsw.max_usage_in_bytes, memsw_max_usage, INTEGER),
-    RW("Swappiness"     , swappiness              , swappiness     , INTEGER),
-    RO("Stat"           , stat                    , stat           , INTTBL),
-    { NULL, NULL, -1, 0, 0 }
+    MRW("Limit"          , limit_in_bytes          , limit          , INTEGER),
+    MRW("SoftLimit"      , soft_limit_in_bytes     , soft_limit     , INTEGER),
+    MRO("Usage"          , usage_in_bytes          , usage          , INTEGER),
+    MRO("MaxUsage"       , max_usage_in_bytes      , max_usage      , INTEGER),
+    ORW("MemSwapLimit"   , memsw.limit_in_bytes    , memsw_limit    , INTEGER),
+    ORO("MemSwapUsage"   , memsw.usage_in_bytes    , memsw_usage    , INTEGER),
+    ORO("MemSwapMaxUsage", memsw.max_usage_in_bytes, memsw_max_usage, INTEGER),
+    MRW("Swappiness"     , swappiness              , swappiness     , INTEGER),
+    MRO("Stat"           , stat                    , stat           , INTTBL),
+    { NULL, NULL, -1, 0, 0, 0 }
 };
 
 #undef RO
@@ -203,14 +209,14 @@ static control_descr_t memory_controls[] = {
  */
 
 #define RO(_a, _path, _fld, _fmt) \
-    ROCTRL(_a, cpuacct._path, cpuacct, _fld, _fmt)
+    ROCTRL(_a, cpuacct._path, cpuacct, _fld, _fmt, 0)
 #define RW(_a, _path, _fld, _fmt) \
-    RWCTRL(_a, cpuacct._path, cpuacct, _fld, _fmt)
+    RWCTRL(_a, cpuacct._path, cpuacct, _fld, _fmt, 0)
 
 static control_descr_t cpuacct_controls[] = {
     RO("Usage", usage_percpu, usage_percpu, INTARR),
     RO("Stat" , stat        , stat        , INTTBL),
-    { NULL, NULL, -1, 0, 0 }
+    { NULL, NULL, -1, 0, 0, 0 }
 };
 
 #undef RO
@@ -222,9 +228,9 @@ static control_descr_t cpuacct_controls[] = {
  */
 
 #define RO(_a, _path, _fld, _fmt) \
-    ROCTRL(_a, cpu._path, cpu, _fld, _fmt)
+    ROCTRL(_a, cpu._path, cpu, _fld, _fmt, 0)
 #define RW(_a, _path, _fld, _fmt) \
-    RWCTRL(_a, cpu._path, cpu, _fld, _fmt)
+    RWCTRL(_a, cpu._path, cpu, _fld, _fmt, 0)
 
 static control_descr_t cpu_controls[] = {
     RW("Shares"   , shares        , shares    , INTEGER),
@@ -232,7 +238,7 @@ static control_descr_t cpu_controls[] = {
     RW("CFSQuota" , cfs_quota_us  , cfs_quota , INTEGER),
     RW("RTPeriod" , rt_period_us  , rt_period , INTEGER),
     RW("RTRuntime", rt_runtime_us , rt_runtime, INTEGER),
-    { NULL, NULL, -1, 0, 0 }
+    { NULL, NULL, -1, 0, 0, 0 }
 };
 
 #undef RO
@@ -244,13 +250,13 @@ static control_descr_t cpu_controls[] = {
  */
 
 #define RO(_a, _path, _fld, _fmt)                       \
-    ROCTRL(_a, freezer._path, freezer, _fld, _fmt)
+    ROCTRL(_a, freezer._path, freezer, _fld, _fmt, 0)
 #define RW(_a, _path, _fld, _fmt)                       \
-    RWCTRL(_a, freezer._path, freezer, _fld, _fmt)
+    RWCTRL(_a, freezer._path, freezer, _fld, _fmt, 0)
 
 static control_descr_t freezer_controls[] = {
     RW("State", state, state, STRING),
-    { NULL, NULL, -1, 0, 0 }
+    { NULL, NULL, -1, 0, 0, 0 }
 };
 
 #undef RO
@@ -452,6 +458,15 @@ static int open_controls(cgroup_t *cgrp, cgroup_type_t type, int grpflags)
                   flags == O_RDONLY ? "read-only" : "read-write");
 
         if ((*fdp = open(path, flags)) < 0) {
+            mrp_debug("failed: %d (%s)", errno, strerror(errno));
+            if (errno == ENOENT) {
+                if (ctrl->missingok) {
+                    *fdp = -2;
+                    goto next;
+                }
+                else
+                    return -1;
+            }
             if (errno != EACCES)
                 return -1;
             if (flags == O_RDONLY)
@@ -953,7 +968,7 @@ static int cgroup_lua_setfield(lua_State *L)
     mrp_debug("setting cgroup field '%s'", name);
 
     if ((fd = get_cgroup_fd(cgrp->cg, name, NULL)) < 0)
-        return 0;
+        return (fd == -2);               /* missing optional entry */
 
     mrp_debug("control fd for field '%s' is %d", name, fd);
 
