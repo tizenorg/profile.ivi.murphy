@@ -720,17 +720,80 @@ static int ping_cb(mrp_domctl_t *dc, int narg, mrp_domctl_arg_t *args,
     client_t *c = (client_t *)user_data;
     int       i;
 
-    MRP_UNUSED(c);
     MRP_UNUSED(dc);
-    MRP_UNUSED(narg);
-    MRP_UNUSED(args);
+    MRP_UNUSED(c);
+
+    info_msg("pinged with %d arguments", narg);
+
+    for (i = 0; i < narg; i++) {
+        switch (args[i].type) {
+        case MRP_DOMCTL_STRING:
+            info_msg("    #%d: %s", i, args[i].str);
+            break;
+        case MRP_DOMCTL_UINT32:
+            info_msg("    #%d: %u", i, args[i].u32);
+            break;
+        default:
+            if (MRP_DOMCTL_IS_ARRAY(args[i].type)) {
+                uint32_t j;
+
+                info_msg("    #%d: array of %u items:", i, args[i].size);
+                for (j = 0; j < args[i].size; j++) {
+                    switch (MRP_DOMCTL_ARRAY_TYPE(args[i].type)) {
+                    case MRP_DOMCTL_STRING:
+                        info_msg("        #%d: '%s'", j,
+                                 ((char **)args[i].arr)[j]);
+                        break;
+                    case MRP_DOMCTL_UINT32:
+                        info_msg("        #%d: %u", j,
+                                 ((uint32_t *)args[i].arr)[j]);
+                        break;
+                    default:
+                        info_msg("        #%d: <type 0x%x", j,
+                                 MRP_DOMCTL_ARRAY_TYPE(args[i].type));
+                        break;
+                    }
+                }
+            }
+            else
+                info_msg("    <type 0x%x>", args[i].type);
+        }
+    }
+
 
     for (i = 0; i < *nout; i++) {
-        if (i < narg)
-            outs[i] = args[i];
+        if (i < narg) {
+            if (MRP_DOMCTL_IS_ARRAY(args[i].type)) {
+                int j;
+
+                if (i & 0x1) {
+                    outs[i].type = MRP_DOMCTL_ARRAY(STRING);
+                    outs[i].arr  = mrp_allocz(sizeof(char *) * 5);
+                    for (j = 0; j < 5; j++) {
+                        char entry[32];
+                        snprintf(entry, sizeof(entry), "xyzzy #%d.%d", i, j);
+                        ((char **)outs[i].arr)[j] = mrp_strdup(entry);
+                    }
+                    outs[i].size = 5;
+                }
+                else {
+                    outs[i].type = MRP_DOMCTL_ARRAY(UINT32);
+                    outs[i].arr  = mrp_allocz(sizeof(uint32_t) * 5);
+                    for (j = 0; j < 5; j++)
+                        ((uint32_t*)outs[i].arr)[j] = 3141 + i * j;
+                    outs[i].size = 5;
+                }
+            }
+            else {
+                outs[i] = args[i];
+
+                if (outs[i].type == MRP_DOMCTL_STRING)
+                    outs[i].str = mrp_strdup(outs[i].str);
+            }
+        }
         else {
-            outs[i].type = MRP_DOMCTL_INTEGER;
-            outs[i].s32  = i;
+            outs[i].type = MRP_DOMCTL_UINT32;
+            outs[i].u32  = i;
         }
     }
 
@@ -741,7 +804,7 @@ static int ping_cb(mrp_domctl_t *dc, int narg, mrp_domctl_arg_t *args,
 void init_methods(client_t *c)
 {
     mrp_domctl_method_def_t methods[] = {
-        { "ping", 8, ping_cb, c },
+        { "ping", 32, ping_cb, c },
     };
     int nmethod = MRP_ARRAY_SIZE(methods);
 

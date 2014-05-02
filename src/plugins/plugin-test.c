@@ -251,7 +251,29 @@ void pong_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
             printf("    #%d: %u\n", i, args[i].u32);
             break;
         default:
-            printf("    <something else>\n");
+            if (MRP_DOMCTL_IS_ARRAY(args[i].type)) {
+                uint32_t j;
+
+                printf("    #%d: array of %u items:\n", i, args[i].size);
+                for (j = 0; j < args[i].size; j++) {
+                    switch (MRP_DOMCTL_ARRAY_TYPE(args[i].type)) {
+                    case MRP_DOMCTL_STRING:
+                        printf("        #%d: '%s'\n", j,
+                               ((char **)args[i].arr)[j]);
+                        break;
+                    case MRP_DOMCTL_UINT32:
+                        printf("        #%d: %u\n", j,
+                               ((uint32_t *)args[i].arr)[j]);
+                        break;
+                    default:
+                        printf("        #%d: <type 0x%x\n", j,
+                               MRP_DOMCTL_ARRAY_TYPE(args[i].type));
+                        break;
+                    }
+                }
+            }
+            else
+                printf("    <type 0x%x>\n", args[i].type);
         }
     }
 }
@@ -261,7 +283,9 @@ void ping_cb(mrp_console_t *c, void *user_data, int argc, char **argv)
 {
     static uint32_t   cnt = 1;
     const char       *domain;
-    mrp_domctl_arg_t  args[8];
+    char             *strings[] = { "foo", "bar", "foobar", "barfoo" };
+    uint32_t          uints[]   = { 69, 96, 696, 969 };
+    mrp_domctl_arg_t  args[32];
     int               narg, i;
 
     MRP_UNUSED(user_data);
@@ -276,11 +300,17 @@ void ping_cb(mrp_console_t *c, void *user_data, int argc, char **argv)
 
     args[0].type = MRP_DOMCTL_UINT32;
     args[0].u32  = cnt++;
+    args[1].type = MRP_DOMCTL_ARRAY(STRING);
+    args[1].arr  = strings;
+    args[1].size = MRP_ARRAY_SIZE(strings);
+    args[2].type = MRP_DOMCTL_ARRAY(UINT32);
+    args[2].arr  = uints;
+    args[2].size = MRP_ARRAY_SIZE(uints);
 
-    for (i = 1; i < narg; i++) {
-        if (i + 1 < argc) {
+    for (i = 3; i < narg; i++) {
+        if (i + 2 < argc) {
             args[i].type = MRP_DOMCTL_STRING;
-            args[i].str  = argv[i + 1];
+            args[i].str  = argv[i + 2];
         }
         else {
             args[i].type = MRP_DOMCTL_UINT32;
