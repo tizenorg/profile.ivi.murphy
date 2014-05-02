@@ -714,6 +714,40 @@ void update_imports(client_t *c, mrp_domctl_data_t *data, int ntable)
 }
 
 
+static int ping_cb(mrp_domctl_t *dc, int narg, mrp_domctl_arg_t *args,
+                   int *nout, mrp_domctl_arg_t *outs, void *user_data)
+{
+    client_t *c = (client_t *)user_data;
+    int       i;
+
+    MRP_UNUSED(c);
+    MRP_UNUSED(dc);
+    MRP_UNUSED(narg);
+    MRP_UNUSED(args);
+
+    for (i = 0; i < *nout; i++) {
+        if (i < narg)
+            outs[i] = args[i];
+        else {
+            outs[i].type = MRP_DOMCTL_INTEGER;
+            outs[i].s32  = i;
+        }
+    }
+
+    return 0;
+}
+
+
+void init_methods(client_t *c)
+{
+    mrp_domctl_method_def_t methods[] = {
+        { "ping", 8, ping_cb, c },
+    };
+    int nmethod = MRP_ARRAY_SIZE(methods);
+
+    mrp_domctl_register_methods(c->dc, methods, nmethod);
+}
+
 
 static void show_help(void)
 {
@@ -1126,6 +1160,8 @@ static void client_setup(client_t *c)
     }
     else
         fatal_msg(1, "Failed to create mainloop.");
+
+    init_methods(c);
 }
 
 

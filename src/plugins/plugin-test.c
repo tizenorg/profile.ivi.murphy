@@ -35,6 +35,7 @@
 #include <murphy/core/console.h>
 #include <murphy/core/event.h>
 #include <murphy/core/auth.h>
+#include <murphy/core/domain.h>
 
 
 typedef struct {
@@ -63,6 +64,7 @@ void three_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 void four_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 void resolve_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 void auth_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
+void ping_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 
 MRP_CONSOLE_GROUP(test_group, "test", NULL, NULL, {
         MRP_TOKENIZED_CMD("one"  , one_cb  , TRUE,
@@ -77,7 +79,11 @@ MRP_CONSOLE_GROUP(test_group, "test", NULL, NULL, {
                           "update <target>", "update target", "update target"),
         MRP_TOKENIZED_CMD("auth-test", auth_cb, TRUE,
                           "auth-test [@backend] target mode id [token]",
-                          "test authentication", "test authentication")
+                          "test authentication", "test authentication"),
+        MRP_TOKENIZED_CMD("ping", ping_cb, FALSE,
+                          "ping domain",
+                          "ping the given domain", "ping a domain"),
+
 });
 
 
@@ -221,6 +227,70 @@ void auth_cb(mrp_console_t *c, void *user_data, int argc, char **argv)
     printf("authentication status: %d\n", status);
 }
 
+
+void pong_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
+             void *user_data)
+{
+    mrp_console_t *c = (mrp_console_t *)user_data;
+    int            i;
+
+    MRP_UNUSED(c);
+
+    if (error) {
+        printf("ping failed with error code %d\n", error);
+    }
+
+    printf("pong (return value %d)\n", retval);
+
+    for (i = 0; i < narg; i++) {
+        switch (args[i].type) {
+        case MRP_DOMCTL_STRING:
+            printf("    #%d: %s\n", i, args[i].str);
+            break;
+        case MRP_DOMCTL_UINT32:
+            printf("    #%d: %u\n", i, args[i].u32);
+            break;
+        default:
+            printf("    <something else>\n");
+        }
+    }
+}
+
+
+void ping_cb(mrp_console_t *c, void *user_data, int argc, char **argv)
+{
+    static uint32_t   cnt = 1;
+    const char       *domain;
+    mrp_domctl_arg_t  args[8];
+    int               narg, i;
+
+    MRP_UNUSED(user_data);
+
+    if (argc < 3) {
+        printf("Usage: %s domain\n", argv[0]);
+        return;
+    }
+
+    domain = argv[2];
+    narg   = MRP_ARRAY_SIZE(args);
+
+    args[0].type = MRP_DOMCTL_UINT32;
+    args[0].u32  = cnt++;
+
+    for (i = 1; i < narg; i++) {
+        if (i + 1 < argc) {
+            args[i].type = MRP_DOMCTL_STRING;
+            args[i].str  = argv[i + 1];
+        }
+        else {
+            args[i].type = MRP_DOMCTL_UINT32;
+            args[i].u32  = i;
+        }
+    }
+
+    if (!mrp_invoke_domain(c->ctx, domain, "ping", narg, args, pong_cb, c))
+        printf("Failed to ping domain '%s'.\n", domain);
+}
 
 MRP_EXPORTABLE(char *, method1, (int arg1, char *arg2, double arg3))
 {
