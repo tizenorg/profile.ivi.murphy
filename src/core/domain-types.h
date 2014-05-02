@@ -55,8 +55,9 @@ typedef enum {
     MRP_DOMCTL_UINT64   = MRP_MSG_FIELD_UINT64,
     MRP_DOMCTL_INT64    = MRP_MSG_FIELD_INT64,
 
-    /* XXX TODO: arrays are not implemented yet */
-#define MRP_DOMCTL_ARRAY(_type) (MRP_MSG_FIELD_ARRAY | MRP_MSG_FIELD_##_type)
+#define MRP_DOMCTL_ARRAY(_type)      MRP_MSG_FIELD_ARRAY_OF(_type)
+#define MRP_DOMCTL_IS_ARRAY(_type)   MRP_MSG_FIELD_IS_ARRAY(_type)
+#define MRP_DOMCTL_ARRAY_TYPE(_type) MRP_MSG_FIELD_ARRAY_TYPE(_type)
 } mrp_domctl_type_t;
 
 
@@ -82,6 +83,7 @@ typedef struct {
         int64_t     s64;                 /* MRP_DOMCTL_INT64 */
         void       *arr;                 /* MRP_DOMCTL_ARRAY(*) */
     };
+    uint32_t           size;             /* size for arrays */
 } mrp_domctl_value_t;
 
 

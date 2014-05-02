@@ -97,6 +97,9 @@ typedef enum {
 #define MSG_STRING(tag, val) MRP_MSG_TAG_STRING(MSGTAG_##tag, val)
 #define MSG_BOOL(tag, val) MRP_MSG_TAG_BOOL(MSGTAG_##tag, val)
 #define MSG_ANY(tag, typep, valp) MRP_MSG_TAG_ANY(MSGTAG_##tag, typep, valp)
+#define MSG_ARRAY(tag, type, size, arr) \
+    MRP_MSG_TAGGED(MSGTAG_##tag, type, size, arr)
+
 #define MSG_END MRP_MSG_END
 
 #define COMMON_MSG_FIELDS                /* common message fields */      \

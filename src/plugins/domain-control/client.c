@@ -547,9 +547,19 @@ static void process_invoke(mrp_domctl_t *dc, invoke_msg_t *invoke)
         mrp_msg_unref(msg);
     }
 
+    narg = ret.narg;
     for (i = 0; i < narg; i++) {
         if (args[i].type == MRP_DOMCTL_STRING)
             mrp_free((char *)args[i].str);
+        else if (MRP_DOMCTL_IS_ARRAY(args[i].type)) {
+            uint32_t j;
+
+            for (j = 0; j < args[i].size; j++)
+                if (MRP_DOMCTL_ARRAY_TYPE(args[i].type) == MRP_DOMCTL_STRING)
+                    mrp_free(((char **)args[i].arr)[j]);
+
+            mrp_free(args[i].arr);
+        }
     }
 }
 

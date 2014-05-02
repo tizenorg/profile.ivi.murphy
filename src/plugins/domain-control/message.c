@@ -779,39 +779,46 @@ mrp_msg_t *msg_encode_invoke(invoke_msg_t *invoke)
                 goto fail;
             break;
         case MRP_DOMCTL_UINT8:
-            if (!mrp_msg_append(msg, MSG_SINT8(ARG, arg->s8)))
+            if (!mrp_msg_append(msg, MSG_UINT8(ARG, arg->s8)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT8:
-            if (!mrp_msg_append(msg, MSG_UINT8(ARG, arg->u8)))
+            if (!mrp_msg_append(msg, MSG_SINT8(ARG, arg->u8)))
                 goto fail;
             break;
         case MRP_DOMCTL_UINT16:
-            if (!mrp_msg_append(msg, MSG_SINT16(ARG, arg->s16)))
+            if (!mrp_msg_append(msg, MSG_UINT16(ARG, arg->s16)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT16:
-            if (!mrp_msg_append(msg, MSG_UINT16(ARG, arg->u16)))
+            if (!mrp_msg_append(msg, MSG_SINT16(ARG, arg->u16)))
                 goto fail;
             break;
         case MRP_DOMCTL_UINT32:
-            if (!mrp_msg_append(msg, MSG_SINT32(ARG, arg->s32)))
+            if (!mrp_msg_append(msg, MSG_UINT32(ARG, arg->s32)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT32:
-            if (!mrp_msg_append(msg, MSG_UINT32(ARG, arg->u32)))
+            if (!mrp_msg_append(msg, MSG_SINT32(ARG, arg->u32)))
                 goto fail;
             break;
         case MRP_DOMCTL_UINT64:
-            if (!mrp_msg_append(msg, MSG_SINT64(ARG, arg->s64)))
+            if (!mrp_msg_append(msg, MSG_UINT64(ARG, arg->s64)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT64:
-            if (!mrp_msg_append(msg, MSG_UINT64(ARG, arg->u64)))
+            if (!mrp_msg_append(msg, MSG_SINT64(ARG, arg->u64)))
                 goto fail;
             break;
         default:
-            goto fail;
+            if (MRP_DOMCTL_IS_ARRAY(arg->type)) {
+                if (!mrp_msg_append(msg, MSG_ARRAY(ARG, arg->type,
+                                                   arg->size, arg->arr)))
+                    goto fail;
+            }
+            else
+                goto fail;
+            break;
         }
     }
 
@@ -832,6 +839,10 @@ msg_t *msg_decode_invoke(mrp_msg_t *msg)
     mrp_domctl_arg_t *arg;
     uint32_t          i;
     size_t            size;
+
+    mrp_debug_code({
+            mrp_debug("got domain invoke request:");
+            mrp_msg_dump(msg, stdout); });
 
     it     = NULL;
     invoke = mrp_allocz(sizeof(*invoke));
@@ -876,7 +887,12 @@ msg_t *msg_decode_invoke(mrp_msg_t *msg)
         case MRP_DOMCTL_INT64:   arg->s64 = val.s64; break;
         case MRP_DOMCTL_DOUBLE:  arg->dbl = val.dbl; break;
         default:
-            goto fail;
+            if (MRP_DOMCTL_IS_ARRAY(type)) {
+                arg->arr  = val.aany;
+                arg->size = size;
+            }
+            else
+                goto fail;
         }
     }
 
@@ -928,39 +944,46 @@ mrp_msg_t *msg_encode_return(return_msg_t *ret)
                 goto fail;
             break;
         case MRP_DOMCTL_UINT8:
-            if (!mrp_msg_append(msg, MSG_SINT8(ARG, arg->s8)))
+            if (!mrp_msg_append(msg, MSG_UINT8(ARG, arg->s8)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT8:
-            if (!mrp_msg_append(msg, MSG_UINT8(ARG, arg->u8)))
+            if (!mrp_msg_append(msg, MSG_SINT8(ARG, arg->u8)))
                 goto fail;
             break;
         case MRP_DOMCTL_UINT16:
-            if (!mrp_msg_append(msg, MSG_SINT16(ARG, arg->s16)))
+            if (!mrp_msg_append(msg, MSG_UINT16(ARG, arg->s16)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT16:
-            if (!mrp_msg_append(msg, MSG_UINT16(ARG, arg->u16)))
+            if (!mrp_msg_append(msg, MSG_SINT16(ARG, arg->u16)))
                 goto fail;
             break;
         case MRP_DOMCTL_UINT32:
-            if (!mrp_msg_append(msg, MSG_SINT32(ARG, arg->s32)))
+            if (!mrp_msg_append(msg, MSG_UINT32(ARG, arg->s32)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT32:
-            if (!mrp_msg_append(msg, MSG_UINT32(ARG, arg->u32)))
+            if (!mrp_msg_append(msg, MSG_SINT32(ARG, arg->u32)))
                 goto fail;
             break;
         case MRP_DOMCTL_UINT64:
-            if (!mrp_msg_append(msg, MSG_SINT64(ARG, arg->s64)))
+            if (!mrp_msg_append(msg, MSG_UINT64(ARG, arg->s64)))
                 goto fail;
             break;
         case MRP_DOMCTL_INT64:
-            if (!mrp_msg_append(msg, MSG_UINT64(ARG, arg->u64)))
+            if (!mrp_msg_append(msg, MSG_SINT64(ARG, arg->u64)))
                 goto fail;
             break;
         default:
-            goto fail;
+            if (MRP_DOMCTL_IS_ARRAY(arg->type)) {
+                if (!mrp_msg_append(msg, MSG_ARRAY(ARG, arg->type,
+                                                   arg->size, arg->arr)))
+                    goto fail;
+            }
+            else
+                goto fail;
+            break;
         }
     }
 
@@ -981,6 +1004,10 @@ msg_t *msg_decode_return(mrp_msg_t *msg)
     mrp_domctl_arg_t *arg;
     uint32_t          i;
     size_t            size;
+
+    mrp_debug_code({
+            mrp_debug("got domain invoke request:");
+            mrp_msg_dump(msg, stdout); });
 
     it  = NULL;
     ret = mrp_allocz(sizeof(*ret));
@@ -1023,7 +1050,12 @@ msg_t *msg_decode_return(mrp_msg_t *msg)
         case MRP_DOMCTL_INT64:   arg->s64 = val.s64; break;
         case MRP_DOMCTL_DOUBLE:  arg->dbl = val.dbl; break;
         default:
-            goto fail;
+            if (MRP_DOMCTL_IS_ARRAY(type)) {
+                arg->arr  = val.aany;
+                arg->size = size;
+            }
+            else
+                goto fail;
         }
     }
 
