@@ -1133,10 +1133,9 @@ static void unsubscribe_events(mrp_plugin_t *plugin)
 
 static void register_events(mrp_plugin_t *plugin)
 {
-    /* register the events that are sent on the resource state changes */
-
     MRP_UNUSED(plugin);
 
+    /* register the events that are sent on the resource state changes */
     mrp_register_event(MURPHY_RESOURCE_EVENT_CREATED);
     mrp_register_event(MURPHY_RESOURCE_EVENT_ACQUIRE);
     mrp_register_event(MURPHY_RESOURCE_EVENT_RELEASE);
