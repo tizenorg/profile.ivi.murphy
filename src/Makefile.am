@@ -1337,6 +1337,108 @@ plugin_ivi_resource_manager_la_LDFLAGS = -module -avoid-version
 plugin_ivi_resource_manager_la_LIBADD  = $(PLUGIN_IVI_RESOURCE_MANAGER_LIBS)
 
 plugin_LTLIBRARIES += plugin-ivi-resource-manager.la
+
+#
+# GAM support:
+# - decision-tree library
+# - gam-resource-manager plugin
+# - pattern generator and decision-test
+#
+
+# decision-tree library
+if BUILD_RESOURCES
+DECISION_TREE_LIBRARY = libmurphy-decision-tree.la
+
+lib_LTLIBRARIES += $(DECISION_TREE_LIBRARY)
+
+libmurphy_decision_tree_ladir =                                             \
+		$(includedir)/murphy/decision-tree
+
+libmurphy_decision_tree_la_HEADERS =                                        \
+		plugins/gam-resource-manager/decision-tree.h                \
+		plugins/gam-resource-manager/c5-decision-tree.h
+libmurphy_decision_tree_la_SOURCES =                                        \
+		plugins/gam-resource-manager/decision-tree.c                \
+		plugins/gam-resource-manager/c5-decision-tree.c
+libmurphy_decision_tree_la_CFLAGS =		                            \
+		$(AM_CFLAGS)
+libmurphy_decision_tree_la_LIBADD =                                         \
+		libmurphy-common.la
+
+libmurphy_decision_tree_la_DEPENDENCIES = linker-script.decision_tree       \
+	$(filter %.la, $(libmurphy_decision_tree_la_LIBADD))
+
+# debug file:line-function mapping generation
+decision-tree-func-info.c: $(libmurphy_decision_tree_la_REGULAR_SOURCES)
+	$(QUIET_GEN)$(top_builddir)/build-aux/gen-debug-table -o $@ $^
+
+clean-func-infos::
+	-rm decision-tree-func-info.c
+
+# decision-tree linker script generation
+linker-script.decision_tree: $(libmurphy_decision_tree_la_HEADERS)
+	$(QUIET_GEN)$(top_builddir)/build-aux/gen-linker-script -q \
+		-c "$(libmurphy_decision_tree_la_CFLAGS)" -o $@ $^
+
+clean-linker-script::
+	-rm -f linker-script.decision_tree
+
+generate-linker-scripts: linker-script.decision_tree
+
+
+# gam-resource-manager plugin
+PLUGIN_GAM_RESOURCE_MANAGER_REGULAR_SOURCES = 				    \
+		plugins/gam-resource-manager/plugin-gam-resource-manager.c  \
+		plugins/gam-resource-manager/backend.c                      \
+		plugins/gam-resource-manager/source.c                       \
+		plugins/gam-resource-manager/sink.c                         \
+		plugins/gam-resource-manager/usecase.c
+PLUGIN_GAM_RESOURCE_MANAGER_SOURCES = 					    \
+		$(PLUGIN_GAM_RESOURCE_MANAGER_REGULAR_SOURCES)		    \
+                plugin-gam-resource-manager-func-info.c
+PLUGIN_GAM_RESOURCE_MANAGER_CFLAGS =					    \
+		$(LUA_CFLAGS)
+
+PLUGIN_GAM_RESOURCE_MANAGER_LIBS =       				    \
+		libmurphy-common.la					    \
+		libmurphy-decision-tree.la                                  \
+		$(RESOURCE_LIBRARY)                   			    \
+		$(LUA_LIBS)
+
+plugin_gam_resource_manager_la_SOURCES = $(PLUGIN_GAM_RESOURCE_MANAGER_SOURCES)
+plugin_gam_resource_manager_la_CFLAGS  = $(PLUGIN_GAM_RESOURCE_MANAGER_CFLAGS)\
+					 $(MURPHY_CFLAGS) $(AM_CFLAGS)	      \
+					 $(JSON_CFLAGS)
+plugin_gam_resource_manager_la_LDFLAGS = -module -avoid-version
+plugin_gam_resource_manager_la_LIBADD  = $(PLUGIN_GAM_RESOURCE_MANAGER_LIBS)
+
+plugin_LTLIBRARIES += plugin-gam-resource-manager.la
+
+# debug file:line-function mapping generation
+plugin-gam-resource-manager-func-info.c: $(PLUGIN_GAM_RESOURCE_MANAGER_REGULAR_SOURCES)
+	$(QUIET_GEN)$(top_builddir)/build-aux/gen-debug-table -o $@ $^
+
+clean-func-infos::
+	-rm plugin-gam-resource-manager-func-info.c
+
+# pattern-generator
+bin_PROGRAMS += pattern-generator
+
+pattern_generator_SOURCES =                              \
+	plugins/gam-resource-manager/pattern-generator.c \
+	plugins/gam-resource-manager/decision-maker.c
+pattern_generator_CFLAGS  = $(AM_CFLAGS)
+pattern_generator_LDADD   = libmurphy-common.la
+
+# decision-test
+bin_PROGRAMS += decision-test
+
+decision_test_SOURCES = plugins/gam-resource-manager/decision-test.c
+decision_test_CFLAGS  = $(AM_CFLAGS)
+decision_test_LDADD   =                                  \
+		libbreedline-murphy.la libbreedline.la   \
+		libmurphy-common.la                      \
+		libmurphy-decision-tree.la
 endif
 
 
