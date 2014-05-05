@@ -1487,6 +1487,33 @@ endif
 endif
 
 
+# Immelmann plugin
+IMMELMANN_PLUGIN_SOURCES = plugins/plugin-immelmann.c
+IMMELMANN_PLUGIN_CFLAGS  =
+IMMELMANN_PLUGIN_LIBS    = 	libmurphy-core.la	\
+				libmurphy-common.la	\
+				$(RESOURCE_LIBRARY)
+
+if IMMELMANN_ENABLED
+
+if !DISABLED_PLUGIN_IMMELMANN
+
+if BUILTIN_PLUGIN_IMMELMANN
+BUILTIN_PLUGINS += $(IMMELMANN_PLUGIN_SOURCES)
+BUILTIN_CFLAGS  += $(IMMELMANN_PLUGIN_CFLAGS)
+BUILTIN_LIBS    += $(IMMELMANN_PLUGIN_LIBS)
+else
+plugin_immelmann_la_SOURCES = $(IMMELMANN_PLUGIN_SOURCES)
+plugin_immelmann_la_CFLAGS  = $(IMMELMANN_PLUGIN_CFLAGS) $(MURPHY_CFLAGS) $(AM_CFLAGS)
+plugin_immelmann_la_LDFLAGS = -module -avoid-version
+plugin_immelmann_la_LIBADD  = $(IMMELMANN_PLUGIN_LIBS)
+
+plugin_LTLIBRARIES    += plugin-immelmann.la
+endif
+endif
+
+endif
+
 ###################################
 # murphy daemon
 #

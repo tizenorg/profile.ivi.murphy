@@ -395,6 +395,19 @@ AC_SUBST(SYSTEMD_ENABLED)
 AC_SUBST(SYSTEMD_CFLAGS)
 AC_SUBST(SYSTEMD_LIBS)
 
+# Check if Immelmann plugin was enabled.
+AC_ARG_ENABLE(immelmann,
+              [  --enable-immelmann  build Immelmann plugin],
+        [enable_immelmann=$enableval], [enable_immelmann=no])
+if test "$enable_immelmann" = "yes"; then
+    AC_DEFINE([IMMELMANN_ENABLED], 1, [Enable Immelmann support ?])
+else
+    AC_MSG_NOTICE([Immelmann support is disabled.])
+fi
+AM_CONDITIONAL(IMMELMANN_ENABLED, [test "$enable_immelmann" = "yes"])
+AC_SUBST(IMMELMANN_ENABLED)
+
+
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
 MURPHY_LIBS=""
@@ -496,6 +509,7 @@ AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_WRT, [check_if_disabled resource-wrt])
 AM_CONDITIONAL(DISABLED_PLUGIN_DOMAIN_CONTROL,
                [check_if_disabled domain-control])
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMD,  [check_if_disabled systemd])
+AM_CONDITIONAL(DISABLED_PLUGIN_IMMELMANN,  [check_if_disabled immelmann])
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
@@ -507,6 +521,7 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_DOMAIN_CONTROL,
                [check_if_internal domain-control])
 AM_CONDITIONAL(BUILTIN_PLUGIN_LUA,      [check_if_internal lua])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMD,  [check_if_internal systemd])
+AM_CONDITIONAL(BUILTIN_PLUGIN_IMMELMANN,  [check_if_internal immelmann])
 
 # Check for Check (unit test framework).
 PKG_CHECK_MODULES(CHECK, 
