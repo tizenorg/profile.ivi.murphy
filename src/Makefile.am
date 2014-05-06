@@ -306,7 +306,8 @@ libmurphy_core_la_HEADERS =		\
 		core/method.h		\
 		core/event.h		\
 		core/auth.h		\
-		core/domain.h
+		core/domain.h		\
+		core/domain-types.h
 
 libmurphy_core_la_REGULAR_SOURCES =	\
 		core/context.c		\
