@@ -27,30 +27,63 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <glib.h>
-
-#include <pulse/pulseaudio.h>
-#include <pulse/glib-mainloop.h>
+#include <lualib.h>
+#include <lauxlib.h>
 
 #include <murphy/common.h>
 
 #include <murphy/core/plugin.h>
 #include <murphy/core/event.h>
+#include <murphy/core/lua-bindings/murphy.h>
+#include <murphy/core/lua-utils/object.h>
+
+#include <murphy/resource/client-api.h>
+#include <murphy/resource/manager-api.h>
 
 #include <murphy/resource/resource-set.h>
-#include <murphy/resource/client-api.h>
+#include <murphy/resource/zone.h>
+#include <murphy/resource/application-class.h>
+
+#define PRIORITY_CLASS MRP_LUA_CLASS_SIMPLE(routing_sink_priority)
+
 
 /* Listen for new resource sets. When one appears, check if it already has
  * attributes "sink" and "connection_id" set. If it has, the request has come
  * from a GAM-aware application, otherwise not. If not, tell GAM that a new
  * application has come around to ask for routing. */
 
+
+typedef struct {
+    char *name;
+    mrp_list_hook_t sinks;
+} priority_t;
+
 typedef struct {
     mrp_mainloop_t *ml;
+
+    char *zone;
+    char *default_sink;
+
+    mrp_htbl_t *pqs; /* "application_class" -> priority_t */
 
     mrp_event_watch_t *w;
     int events[4];
 } immelmann_t;
+
+typedef struct {
+    char *name;
+    mrp_list_hook_t hook;
+} routing_target_t;
+
+
+/* global context for Lua configuration */
+
+static immelmann_t *global_ctx;
+
+enum {
+    ARG_ZONE,
+    ARG_DEFAULT_SINK,
+};
 
 enum {
     CREATED = 0,
@@ -59,11 +92,104 @@ enum {
     DESTROYED,
 };
 
+static int  priority_create(lua_State *);
+static int  priority_getfield(lua_State *);
+static int  priority_setfield(lua_State *);
+static void priority_destroy(void *);
+
+MRP_LUA_CLASS_DEF_SIMPLE (
+    routing_sink_priority,          /* main class & constructor name */
+    priority_t,        /* userdata type */
+    priority_destroy,               /* userdata destructor */
+    MRP_LUA_METHOD_LIST (           /* main class methods */
+        MRP_LUA_METHOD_CONSTRUCTOR  (priority_create)
+    ),
+    MRP_LUA_METHOD_LIST (           /* main class overrides */
+        MRP_LUA_OVERRIDE_CALL       (priority_create)
+        MRP_LUA_OVERRIDE_GETFIELD   (priority_getfield)
+        MRP_LUA_OVERRIDE_SETFIELD   (priority_setfield)
+    )
+);
+
+void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
+        const char *resource, uint32_t conn_id)
+{
+    mrp_attr_t *conn_id_attr;
+    mrp_zone_t *zone;
+
+    MRP_UNUSED(resource);
+
+    conn_id_attr = mrp_resource_set_get_attribute_by_name(rset,
+            "audio_playback", "conn_id");
+
+    if (conn_id_attr && conn_id_attr->type == mqi_unsignd) {
+        conn_id_attr->value.unsignd = conn_id;
+    }
+
+    /* GAM domains map in some sense to Murphy zones, so we'll play only
+     * in some default GAM zone for the recalculation. */
+
+    zone = mrp_zone_find_by_name(ctx->zone);
+
+    if (zone)
+        mrp_resource_owner_recalc(zone->id);
+}
+
+bool is_sink_available(immelmann_t *ctx, const char *sink)
+{
+    /* TODO: check from the database table if GAM has provided this sink */
+
+    MRP_UNUSED(ctx);
+    MRP_UNUSED(sink);
+
+    return TRUE;
+}
+
+void create_priority_class(immelmann_t *ctx)
+{
+    lua_State *L = mrp_lua_get_lua_state();
+
+    MRP_UNUSED(ctx);
+
+    mrp_lua_create_object_class(L, PRIORITY_CLASS);
+}
+
+mrp_list_hook_t *get_priorities_for_application_class(immelmann_t *ctx,
+        const char *name)
+{
+    priority_t *prio = mrp_htbl_lookup(ctx->pqs, (char *) name);
+
+    if (prio) {
+        return &prio->sinks;
+    }
+
+    return NULL;
+}
+
 const char *get_default_sink(immelmann_t *ctx, mrp_resource_set_t *rset)
 {
-    /* TODO: placeholder for the real algorithm for finding out the default
-     * route for a given application class */
-    return "speakers";
+    mrp_list_hook_t *pq = NULL;
+    mrp_list_hook_t *p, *n;
+
+    /* get the priority list from Murphy configuration for this particular
+     * application class */
+
+    pq = get_priorities_for_application_class(ctx, rset->class.ptr->name);
+
+    if (!pq)
+        return NULL;
+
+    /* go through the list while checking if the defined sinks are available */
+
+    mrp_list_foreach(pq, p, n) {
+        routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
+
+        if (is_sink_available(ctx, t->name)) {
+            return t->name;
+        }
+    }
+
+    return NULL;
 }
 
 void register_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
@@ -74,6 +200,11 @@ void register_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
     /* ask GAM for the connection via control interface */
 
     sink = get_default_sink(ctx, rset);
+
+    if (!sink) {
+        mrp_log_error("Error finding default sink, using global default");
+        sink = ctx->default_sink;
+    }
 
     mrp_log_info("register rset %u with GAM! (%s -> %s)",
             rset->id, source, sink);
@@ -109,7 +240,6 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
         mrp_resource_t *audio_playback = NULL;
         mrp_resource_t *audio_recording = NULL;
         const char *name;
-        bool need_to_register = FALSE;
 
         if (!rset)
             return;
@@ -152,6 +282,9 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
             }
         }
 
+#if 0
+        /* TODO: think properly about audio recording */
+
         if (audio_recording) {
             mrp_attr_t *sink; /* the application itself */
             mrp_attr_t *conn_id;
@@ -171,11 +304,6 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
                 need_to_register = TRUE;
             }
         }
-
-#if 0
-        if (need_to_register) {
-            register_with_gam(ctx, rset, !!audio_playback, !!audio_recording);
-        }
 #endif
 
         mrp_log_info("Resource set %u (%p) was acquired", rset_id, rset);
@@ -190,19 +318,164 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
     }
 }
 
+static int priority_create(lua_State *L)
+{
+    priority_t *prio;
+    size_t fldnamlen;
+    const char *fldnam;
+    char *name = NULL;
+    mrp_list_hook_t priority_queue;
+    immelmann_t *ctx = global_ctx;
+
+    MRP_LUA_ENTER;
+
+    mrp_log_error(">>> priority_create");
+
+    mrp_list_init(&priority_queue);
+
+    /*
+        general_pq = {
+            "headset", "bluetooth", "speakers"
+        }
+
+        sink_routing_priority {
+            application_class = "player",
+            priority_queue = general_pq
+        }
+    */
+
+    MRP_LUA_FOREACH_FIELD(L, 2, fldnam, fldnamlen) {
+
+        if (strncmp(fldnam, "application_class", fldnamlen) == 0) {
+            name = mrp_strdup(luaL_checkstring(L, -1));
+
+            mrp_log_error("immelmann application class name: %s", name);
+        }
+        else if (strncmp(fldnam, "priority_queue", fldnamlen) == 0) {
+
+            if (lua_istable(L, -1)) {
+
+                /* push NIL to stack as the first key */
+                lua_pushnil(L);
+
+                while (lua_next(L, -2)) {
+                    const char *sink_name;
+                    mrp_log_error(">>> priority_create: processing table");
+
+                    /* only string values are accepted */
+                    if (lua_isstring(L, -1)) {
+                        routing_target_t *sink;
+
+                        mrp_log_error(">>> priority_create: isstring match");
+                        sink_name = lua_tostring(L, -1);
+
+                        sink = mrp_allocz(sizeof(routing_target_t));
+
+                        sink->name = mrp_strdup(sink_name);
+                        mrp_list_init(&sink->hook);
+
+                        mrp_list_append(&priority_queue, &sink->hook);
+
+                        mrp_log_info("immelmann sink name: %s", sink->name);
+                    }
+
+                    /* remove the value, keep key */
+                    lua_pop(L, 1);
+                }
+            }
+        }
+        else {
+            mrp_log_error("unknown field");
+        }
+    }
+
+    if (!name)
+        luaL_error(L, "missing or wrong application_class field");
+
+    /* FIXME: check that there is an application class definition for 'name'? */
+
+    prio = (priority_t *) mrp_lua_create_object(L, PRIORITY_CLASS, name, 0);
+
+    if (!prio)
+        luaL_error(L, "invalid or duplicate application_class '%s'", name);
+    else {
+        prio->name = name;
+        mrp_log_info("application class priority object '%s' created", name);
+    }
+
+    prio->sinks = priority_queue;
+
+    if (ctx) {
+        mrp_htbl_insert(ctx->pqs, name, prio);
+    }
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int priority_getfield(lua_State *L)
+{
+    MRP_LUA_ENTER;
+
+    /* TODO */
+    lua_pushnil(L);
+
+    MRP_LUA_LEAVE(1);
+}
+
+static int priority_setfield(lua_State *L)
+{
+    MRP_LUA_ENTER;
+
+    luaL_error(L, "TODO: add dynamic modification of priorities");
+
+    MRP_LUA_LEAVE(0);
+}
+
+static void priority_destroy(void *data)
+{
+    priority_t *prio = (priority_t *) data;
+    mrp_list_hook_t *p, *n;
+
+    MRP_LUA_ENTER;
+
+    mrp_free(prio->name);
+
+    mrp_list_foreach(&prio->sinks, p, n) {
+        routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
+
+        mrp_list_delete(&t->hook);
+        mrp_free(t->name);
+        mrp_free(t);
+    }
+
+    prio->name = NULL;
+    mrp_list_init(&prio->sinks);
+
+    MRP_LUA_LEAVE_NOARG;
+}
+
 static int plugin_init(mrp_plugin_t *plugin)
 {
     immelmann_t *ctx;
     ctx = mrp_allocz(sizeof(immelmann_t));
     mrp_event_mask_t mask = 0;
+    mrp_htbl_config_t conf;
 
     mrp_reset_event_mask(&mask);
 
     if (!ctx)
         goto error;
 
+    ctx->zone = mrp_strdup(plugin->args[ARG_ZONE].str);
+    ctx->default_sink = mrp_strdup(plugin->args[ARG_DEFAULT_SINK].str);
+
+    if (!ctx->zone || !ctx->default_sink)
+        goto error;
+
     ctx->ml = plugin->ctx->ml;
     plugin->data = ctx;
+
+    global_ctx = ctx;
 
     /* subscribe to the events coming from resource library */
 
@@ -222,13 +495,40 @@ static int plugin_init(mrp_plugin_t *plugin)
     mrp_add_event(&mask, ctx->events[RELEASE]);
     mrp_add_event(&mask, ctx->events[DESTROYED]);
 
+    conf.comp = mrp_string_comp;
+    conf.hash = mrp_string_hash;
+    conf.free = NULL;
+    conf.nbucket = 0;
+    conf.nentry = 10;
+
+    ctx->pqs = mrp_htbl_create(&conf);
+
+    if (!ctx->pqs)
+        goto error;
+
     ctx->w = mrp_add_event_watch(&mask, resource_set_event, ctx);
+    if (!ctx->w)
+        goto error;
+
+    create_priority_class(ctx);
 
     mrp_log_info("Launched the Murphy Immelmann plugin!");
     return TRUE;
 
 error:
     mrp_log_error("Error starting Murphy Immelmann plugin!");
+
+    if (ctx->w)
+        mrp_del_event_watch(ctx->w);
+
+    if (ctx->pqs)
+        mrp_htbl_destroy(ctx->pqs, FALSE);
+
+    mrp_free(ctx->zone);
+    mrp_free(ctx);
+
+    global_ctx = NULL;
+
     return FALSE;
 }
 
@@ -239,30 +539,27 @@ static void plugin_exit(mrp_plugin_t *plugin)
     if (ctx->w)
         mrp_del_event_watch(ctx->w);
 
+    if (ctx->pqs)
+        mrp_htbl_destroy(ctx->pqs, FALSE);
+
+    mrp_free(ctx->zone);
     mrp_free(ctx);
+
+    global_ctx = NULL;
 }
 
-#if 0
-enum {
-    ARG_ADDRESS,
-};
-
-#define DEFAULT_ADDRESS    "foo"
-#endif
+#define DEFAULT_ZONE    "driver"
+#define DEFAULT_SINK    "speakers"
 
 #define PLUGIN_DESCRIPTION "Plugin to add PA streams to GAM (with resource support)"
 #define PLUGIN_HELP        "Help coming later."
 #define PLUGIN_AUTHORS     "Ismo Puustinen <ismo.puustinen@intel.com>"
 #define PLUGIN_VERSION     MRP_VERSION_INT(0, 0, 1)
 
-#if 0
 static mrp_plugin_arg_t plugin_args[] = {
-    MRP_PLUGIN_ARGIDX(ARG_ADDRESS, STRING, "address", DEFAULT_ADDRESS),
+    MRP_PLUGIN_ARGIDX(ARG_ZONE, STRING, "zone", DEFAULT_ZONE),
+    MRP_PLUGIN_ARGIDX(ARG_DEFAULT_SINK, STRING, "default_sink", DEFAULT_SINK),
 };
-#else
-static mrp_plugin_arg_t plugin_args[] = {
-};
-#endif
 
 MURPHY_REGISTER_PLUGIN("immelmann",
                        PLUGIN_VERSION, PLUGIN_DESCRIPTION, PLUGIN_AUTHORS,
