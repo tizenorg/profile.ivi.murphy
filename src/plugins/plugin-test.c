@@ -65,6 +65,7 @@ void four_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 void resolve_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 void auth_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 void ping_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
+void invoke_cb(mrp_console_t *c, void *user_data, int argc, char **argv);
 
 MRP_CONSOLE_GROUP(test_group, "test", NULL, NULL, {
         MRP_TOKENIZED_CMD("one"  , one_cb  , TRUE,
@@ -83,7 +84,10 @@ MRP_CONSOLE_GROUP(test_group, "test", NULL, NULL, {
         MRP_TOKENIZED_CMD("ping", ping_cb, FALSE,
                           "ping domain",
                           "ping the given domain", "ping a domain"),
-
+        MRP_TOKENIZED_CMD("invoke", invoke_cb, TRUE,
+                          "invoke domain method [ərguments]",
+                          "invoke the given domain method",
+                          "invoke a domain method")
 });
 
 
@@ -321,6 +325,115 @@ void ping_cb(mrp_console_t *c, void *user_data, int argc, char **argv)
     if (!mrp_invoke_domain(c->ctx, domain, "ping", narg, args, pong_cb, c))
         printf("Failed to ping domain '%s'.\n", domain);
 }
+
+
+void invoke_reply(int error, int retval, int narg, mrp_domctl_arg_t *args,
+                  void *user_data)
+{
+    mrp_console_t *c = (mrp_console_t *)user_data;
+    int            i;
+
+    if (error) {
+        mrp_console_printf(c, "invoked method failed with error code %d\n",
+                           error);
+        return;
+    }
+
+    mrp_console_printf(c, "invoked method returned (return value %d)\n", retval);
+
+    for (i = 0; i < narg; i++) {
+        switch (args[i].type) {
+        case MRP_DOMCTL_STRING:
+            mrp_console_printf(c, "    #%d: %s\n", i, args[i].str);
+            break;
+        case MRP_DOMCTL_UINT16:
+            mrp_console_printf(c, "    #%d: %u\n", i, args[i].u16);
+            break;
+        case MRP_DOMCTL_INT16:
+            mrp_console_printf(c, "    #%d: %u\n", i, args[i].s16);
+            break;
+        case MRP_DOMCTL_UINT32:
+            mrp_console_printf(c, "    #%d: %u\n", i, args[i].u32);
+            break;
+        case MRP_DOMCTL_INT32:
+            mrp_console_printf(c, "    #%d: %u\n", i, args[i].s32);
+            break;
+        default:
+            mrp_console_printf(c, "    #%d: <type 0x%x\n", i, args[i].type);
+            break;
+        }
+    }
+}
+
+
+void invoke_cb(mrp_console_t *c, void *user_data, int argc, char **argv)
+{
+    const char       *domain, *method, *type, *value;
+    mrp_domctl_arg_t  args[32];
+    int               tlen, narg, i;
+
+    MRP_UNUSED(user_data);
+
+    if (argc < 4) {
+        printf("Usage: %s %s <domain> <method> [args]\n", argv[0], argv[1]);
+        return;
+    }
+
+    domain = argv[2];
+    method = argv[3];
+    narg   = MRP_ARRAY_SIZE(args);
+
+    for (i = 4, narg = 0; i < argc && narg < MRP_ARRAY_SIZE(args); i++, narg++) {
+        type  = argv[i];
+        value = strchr(type, ':');
+
+        if (value == NULL) {
+            value = type;
+            type  = "string";
+            tlen  = 6;
+        }
+        else {
+            tlen  = value - type;
+            value++;
+        }
+
+        if (!strncmp(type, "string", tlen)) {
+            args[narg].type = MRP_DOMCTL_STRING;
+            args[narg].str  = value;
+        }
+        else if (!strncmp(type, "u16"     , tlen) ||
+                 !strncmp(type, "uint16_t", tlen)) {
+            args[narg].type = MRP_DOMCTL_UINT16;
+            args[narg].u16  = (uint16_t)strtoul(value, NULL, 0);
+        }
+        else if (!strncmp(type, "u16"     , tlen) ||
+                 !strncmp(type, "uint16_t", tlen)) {
+            args[narg].type = MRP_DOMCTL_INT16;
+            args[narg].s16  = (int16_t)strtol(value, NULL, 0);
+        }
+        else if (!strncmp(type, "u32"     , tlen) ||
+                 !strncmp(type, "uint32_t", tlen)) {
+            args[narg].type = MRP_DOMCTL_UINT32;
+            args[narg].u32  = (uint32_t)strtoul(value, NULL, 0);
+        }
+        else if (!strncmp(type, "u32"     , tlen) ||
+                 !strncmp(type, "uint32_t", tlen)) {
+            args[narg].type = MRP_DOMCTL_INT32;
+            args[narg].s32  = (int32_t)strtol(value, NULL, 0);
+        }
+        else {
+            printf("invalid typecast in %s\n", argv[i]);
+            return;
+        }
+    }
+
+    printf("Invoking domain method '%s.%s' with %d args...\n", domain, method,
+           narg);
+
+    if (!mrp_invoke_domain(c->ctx, domain, method, narg, args, invoke_reply, c))
+        printf("Failed to invoke '%s.%s'.\n", domain, method);
+}
+
 
 MRP_EXPORTABLE(char *, method1, (int arg1, char *arg2, double arg3))
 {
