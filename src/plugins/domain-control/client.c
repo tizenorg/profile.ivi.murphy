@@ -510,7 +510,7 @@ static void process_notify(mrp_domctl_t *dc, notify_msg_t *notify)
 static void process_invoke(mrp_domctl_t *dc, invoke_msg_t *invoke)
 {
     method_t         *m;
-    mrp_domctl_arg_t *args;
+    mrp_domctl_arg_t *args, error;
     int               narg;
     return_msg_t      ret;
     mrp_msg_t        *msg;
@@ -541,6 +541,19 @@ static void process_invoke(mrp_domctl_t *dc, invoke_msg_t *invoke)
     }
 
     msg = msg_encode_message((msg_t *)&ret);
+
+    if (msg == NULL) {
+        error.type = MRP_DOMCTL_STRING;
+        error.str  = "failed to encode return message (arguments)";
+        ret.error  = MRP_DOMAIN_FAILED;
+        ret.narg   = 1;
+        ret.args   = &error;
+
+        msg = msg_encode_message((msg_t *)&ret);
+
+        ret.narg = 0;
+        ret.args = NULL;
+    }
 
     if (msg != NULL) {
         mrp_transport_send(dc->t, msg);

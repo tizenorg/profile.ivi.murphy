@@ -95,6 +95,7 @@ typedef enum {
     MRP_DOMAIN_OK = 0,                   /* no errors */
     MRP_DOMAIN_NOTFOUND,                 /* domain not found */
     MRP_DOMAIN_NOMETHOD,                 /* call domain method not found */
+    MRP_DOMAIN_FAILED,                   /* called method remotely failed */
 } mrp_domain_error_t;
 
 /* Type for a proxied invocation argument. */
