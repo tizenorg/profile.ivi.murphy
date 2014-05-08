@@ -36,6 +36,10 @@
 #include <murphy/core/event.h>
 #include <murphy/core/lua-bindings/murphy.h>
 #include <murphy/core/lua-utils/object.h>
+#include <murphy/core/domain.h>
+
+#include <murphy-db/mqi.h>
+#include <murphy-db/mql.h>
 
 #include <murphy/resource/client-api.h>
 #include <murphy/resource/manager-api.h>
@@ -45,13 +49,13 @@
 #include <murphy/resource/application-class.h>
 
 #define PRIORITY_CLASS MRP_LUA_CLASS_SIMPLE(routing_sink_priority)
-
+#define CONN_ID_ATTRIBUTE "conn_id"
+#define SOURCE_ATTRIBUTE  "source"
 
 /* Listen for new resource sets. When one appears, check if it already has
  * attributes "sink" and "connection_id" set. If it has, the request has come
  * from a GAM-aware application, otherwise not. If not, tell GAM that a new
  * application has come around to ask for routing. */
-
 
 typedef struct {
     char *name;
@@ -60,6 +64,7 @@ typedef struct {
 
 typedef struct {
     mrp_mainloop_t *ml;
+    mrp_context_t *mrp_ctx;
 
     char *zone;
     char *default_sink;
@@ -75,6 +80,11 @@ typedef struct {
     mrp_list_hook_t hook;
 } routing_target_t;
 
+typedef struct {
+    immelmann_t *ctx;
+    uint32_t rset_id;
+    char *resource;
+} domain_data_t;
 
 /* global context for Lua configuration */
 
@@ -98,13 +108,13 @@ static int  priority_setfield(lua_State *);
 static void priority_destroy(void *);
 
 MRP_LUA_CLASS_DEF_SIMPLE (
-    routing_sink_priority,          /* main class & constructor name */
-    priority_t,        /* userdata type */
-    priority_destroy,               /* userdata destructor */
-    MRP_LUA_METHOD_LIST (           /* main class methods */
+    routing_sink_priority,
+    priority_t,
+    priority_destroy,
+    MRP_LUA_METHOD_LIST (
         MRP_LUA_METHOD_CONSTRUCTOR  (priority_create)
     ),
-    MRP_LUA_METHOD_LIST (           /* main class overrides */
+    MRP_LUA_METHOD_LIST (
         MRP_LUA_OVERRIDE_CALL       (priority_create)
         MRP_LUA_OVERRIDE_GETFIELD   (priority_getfield)
         MRP_LUA_OVERRIDE_SETFIELD   (priority_setfield)
@@ -117,10 +127,8 @@ void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
     mrp_attr_t *conn_id_attr;
     mrp_zone_t *zone;
 
-    MRP_UNUSED(resource);
-
     conn_id_attr = mrp_resource_set_get_attribute_by_name(rset,
-            "audio_playback", "conn_id");
+            resource, CONN_ID_ATTRIBUTE);
 
     if (conn_id_attr && conn_id_attr->type == mqi_unsignd) {
         conn_id_attr->value.unsignd = conn_id;
@@ -135,15 +143,101 @@ void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
         mrp_resource_owner_recalc(zone->id);
 }
 
-bool is_sink_available(immelmann_t *ctx, const char *sink)
+#define BUFLEN 1024
+uint32_t get_node_id(immelmann_t *ctx, const char *name, bool sink)
 {
-    /* TODO: check from the database table if GAM has provided this sink */
+    char cmdbuf[BUFLEN];
+    int ret;
+    mql_result_t *result = NULL;
+    uint32_t id = 0;
+    mqi_handle_t tx;
 
     MRP_UNUSED(ctx);
-    MRP_UNUSED(sink);
 
-    return TRUE;
+    tx = mqi_begin_transaction();
+
+    /* FIXME: quote the string? */
+
+    ret = snprintf(cmdbuf, BUFLEN, "SELECT id from %s where name = %s",
+            sink ? "audio_manager_sinks" : "audio_manager_sources",
+            name);
+
+    if (ret < 0 || ret == BUFLEN)
+        goto end;
+
+    result = mql_exec_string(mql_result_string, cmdbuf);
+
+    if (!mql_result_is_success(result))
+        goto end;
+
+    if (mql_result_rows_get_row_count(result) != 1)
+        goto end;
+
+    id = mql_result_rows_get_unsigned(result, 0, 0); /* first column, row */
+
+end:
+    if (result)
+        mql_result_free(result);
+
+    mqi_commit_transaction(tx);
+    return id;
 }
+#undef BUFLEN
+
+uint32_t get_source_id(immelmann_t *ctx, const char *source)
+{
+    return get_node_id(ctx, source, FALSE);
+}
+
+uint32_t get_sink_id(immelmann_t *ctx, const char *sink)
+{
+    return get_node_id(ctx, sink, TRUE);
+}
+
+
+#define BUFLEN 1024
+bool is_sink_available(immelmann_t *ctx, const char *sink)
+{
+    char cmdbuf[BUFLEN];
+    int ret;
+    mql_result_t *result = NULL;
+    bool available = FALSE;
+    mqi_handle_t tx;
+
+    MRP_UNUSED(ctx);
+
+    /* check from the database table if GAM has provided this sink */
+
+    tx = mqi_begin_transaction();
+
+    /*
+    a sink can be used if it's both visible and available:
+        - "visible" means that the sink cannot be referenced from HMI.
+        - "available" means that the sink cannot be used.
+    */
+
+    ret = snprintf(cmdbuf, BUFLEN, "SELECT * from audio_manager_sinks where"
+            "visible = 1 AND available = 1 AND name = %s", sink);
+
+    if (ret < 0 || ret == BUFLEN)
+        goto end;
+
+    result = mql_exec_string(mql_result_string, cmdbuf);
+
+    if (!mql_result_is_success(result))
+        goto end;
+
+    if (mql_result_rows_get_row_count(result) == 1)
+        available = TRUE;
+
+end:
+    if (result)
+        mql_result_free(result);
+
+    mqi_commit_transaction(tx);
+    return available;
+}
+#undef BUFLEN
 
 void create_priority_class(immelmann_t *ctx)
 {
@@ -192,25 +286,110 @@ const char *get_default_sink(immelmann_t *ctx, mrp_resource_set_t *rset)
     return NULL;
 }
 
-void register_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
+void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
+             void *user_data)
+{
+    uint32_t connid;
+    domain_data_t *d = (domain_data_t *) user_data;
+    mrp_resource_set_t *rset;
+
+    MRP_UNUSED(retval);
+
+    if (error) {
+        mrp_log_error("connect call to GAM failed: %d", error);
+        goto end;
+    }
+
+    if (narg != 1) {
+        mrp_log_error("unexpected number (%d) of return values", narg);
+        goto end;
+    }
+
+    if (args[0].type != MRP_DOMCTL_UINT32) {
+        mrp_log_error("wrong type for return argument");
+        goto end;
+    }
+
+    connid = args[0].u32;
+
+    if (connid == 0) {
+        mrp_log_error("error doing the GAM connection");
+        goto end;
+    }
+
+    rset = mrp_resource_set_find_by_id(d->rset_id);
+
+    if (!rset) {
+        mrp_log_error("no resource set matching id (%u)", d->rset_id);
+        goto end;
+    }
+
+    set_connection_id(d->ctx, rset, d->resource, connid);
+
+end:
+    mrp_free(d->resource);
+    mrp_free(d);
+
+    /* TODO: what to do to the resource set in the error case? */
+}
+
+void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
         const char *source)
 {
     const char *sink;
+    uint32_t sink_id, source_id;
+    mrp_domctl_arg_t args[2];
+    domain_data_t *d;
 
     /* ask GAM for the connection via control interface */
 
     sink = get_default_sink(ctx, rset);
 
     if (!sink) {
-        mrp_log_error("Error finding default sink, using global default");
+        mrp_log_error("error finding default sink, using global default");
         sink = ctx->default_sink;
     }
 
-    mrp_log_info("register rset %u with GAM! (%s -> %s)",
-            rset->id, source, sink);
+    source_id = get_source_id(ctx, source);
+    sink_id = get_sink_id(ctx, sink);
 
-    /* TODO: call the function here:
-     * register_source(sink, source, rset->id, callback); */
+    mrp_log_info("register rset %u with GAM! (%s(%u) -> %s(%u))",
+            rset->id, source, source_id, sink, sink_id);
+
+    /*
+        calling GAM:
+            domain: "audio-manager", function: "connect", source_id, sink_id
+            return value: connection id, 0 as error
+    */
+
+    args[0].type = MRP_DOMCTL_UINT32;
+    args[0].u32 = source_id;
+
+    args[1].type = MRP_DOMCTL_UINT32;
+    args[1].u32 = sink_id;
+
+    /* TODO: do proper error handling */
+
+    d = mrp_allocz(sizeof(domain_data_t));
+
+    if (!d) {
+        mrp_log_error("memory allocation error");
+        return;
+    }
+
+    /* TODO: resource names from config */
+    d->resource = mrp_strdup("audio_playback");
+    if (!d->resource) {
+        mrp_log_error("memory allocation error");
+        mrp_free(d);
+        return;
+    }
+
+    d->ctx = ctx;
+    d->rset_id = rset->id; /* use id to escape a race condition */
+
+    mrp_invoke_domain(ctx->mrp_ctx, "audio-manager", "connect", 2, args,
+            connect_cb, d);
 
     return;
 }
@@ -263,9 +442,9 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
             mrp_attr_t *conn_id;
 
             source = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_playback", "source");
+                    "audio_playback", SOURCE_ATTRIBUTE);
             conn_id = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_playback", "conn_id");
+                    "audio_playback", CONN_ID_ATTRIBUTE);
 
             if (!source || !conn_id) {
                 /* what is this? */
@@ -278,7 +457,7 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
             else if (conn_id->value.unsignd == 0) {
                 /* this connection is not already managed by GAM */
 
-                register_with_gam(ctx, rset, source->value.string);
+                register_sink_with_gam(ctx, rset, source->value.string);
             }
         }
 
@@ -328,8 +507,6 @@ static int priority_create(lua_State *L)
     immelmann_t *ctx = global_ctx;
 
     MRP_LUA_ENTER;
-
-    mrp_log_error(">>> priority_create");
 
     mrp_list_init(&priority_queue);
 
@@ -473,6 +650,7 @@ static int plugin_init(mrp_plugin_t *plugin)
         goto error;
 
     ctx->ml = plugin->ctx->ml;
+    ctx->mrp_ctx = plugin->ctx;
     plugin->data = ctx;
 
     global_ctx = ctx;
@@ -524,6 +702,7 @@ error:
     if (ctx->pqs)
         mrp_htbl_destroy(ctx->pqs, FALSE);
 
+    mrp_free(ctx->default_sink);
     mrp_free(ctx->zone);
     mrp_free(ctx);
 
@@ -542,6 +721,7 @@ static void plugin_exit(mrp_plugin_t *plugin)
     if (ctx->pqs)
         mrp_htbl_destroy(ctx->pqs, FALSE);
 
+    mrp_free(ctx->default_sink);
     mrp_free(ctx->zone);
     mrp_free(ctx);
 
