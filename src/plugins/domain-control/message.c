@@ -1006,7 +1006,7 @@ msg_t *msg_decode_return(mrp_msg_t *msg)
     size_t            size;
 
     mrp_debug_code({
-            mrp_debug("got domain invoke request:");
+            mrp_debug("got domain return (invoke reply):");
             mrp_msg_dump(msg, stdout); });
 
     it  = NULL;
