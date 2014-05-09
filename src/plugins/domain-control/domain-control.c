@@ -234,6 +234,8 @@ static void process_invoke(pep_proxy_t *proxy, invoke_msg_t *invoke)
 
     ret.type = MSG_TYPE_RETURN;
     ret.seq  = invoke->seq;
+    args     = NULL;
+    narg     = 0;
 
     if (!mrp_lookup_domain_method(ctx, invoke->name, &cb, &max_out,&user_data)) {
         ret.error = MRP_DOMCTL_NOTFOUND;
