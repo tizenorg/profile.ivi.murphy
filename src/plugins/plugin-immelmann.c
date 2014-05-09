@@ -158,7 +158,7 @@ uint32_t get_node_id(immelmann_t *ctx, const char *name, bool sink)
 
     /* FIXME: quote the string? */
 
-    ret = snprintf(cmdbuf, BUFLEN, "SELECT id from %s where name = %s",
+    ret = snprintf(cmdbuf, BUFLEN, "SELECT id from %s where name = '%s'",
             sink ? "audio_manager_sinks" : "audio_manager_sources",
             name);
 
@@ -217,7 +217,7 @@ bool is_sink_available(immelmann_t *ctx, const char *sink)
     */
 
     ret = snprintf(cmdbuf, BUFLEN, "SELECT * from audio_manager_sinks where"
-            "visible = 1 AND available = 1 AND name = %s", sink);
+            "name = '%s' AND visible = 1 AND available = 1", sink);
 
     if (ret < 0 || ret == BUFLEN)
         goto end;
@@ -227,8 +227,16 @@ bool is_sink_available(immelmann_t *ctx, const char *sink)
     if (!mql_result_is_success(result))
         goto end;
 
-    if (mql_result_rows_get_row_count(result) == 1)
-        available = TRUE;
+    if (mql_result_rows_get_row_count(result) == 1) {
+        uint32_t sink_available = mql_result_rows_get_unsigned(result, 2, 0);
+        uint32_t sink_visible = mql_result_rows_get_unsigned(result, 3, 0);
+
+        /* currently there's a bug that makes AND not work in MQL */
+
+        if (sink_available && sink_visible) {
+            available = TRUE;
+        }
+    }
 
 end:
     if (result)
