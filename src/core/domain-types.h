@@ -55,7 +55,8 @@ typedef enum {
     MRP_DOMCTL_UINT64   = MRP_MSG_FIELD_UINT64,
     MRP_DOMCTL_INT64    = MRP_MSG_FIELD_INT64,
 
-#define MRP_DOMCTL_ARRAY(_type)      MRP_MSG_FIELD_ARRAY_OF(_type)
+#define MRP_DOMCTL_ARRAY(_type)      \
+    (mrp_domctl_type_t)MRP_MSG_FIELD_ARRAY_OF(_type)
 #define MRP_DOMCTL_IS_ARRAY(_type)   MRP_MSG_FIELD_IS_ARRAY(_type)
 #define MRP_DOMCTL_ARRAY_TYPE(_type) MRP_MSG_FIELD_ARRAY_TYPE(_type)
 } mrp_domctl_type_t;
