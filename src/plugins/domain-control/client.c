@@ -414,6 +414,7 @@ int mrp_domctl_invoke(mrp_domctl_t *dc, const char *name, int narg,
 
     mrp_clear(&invoke);
     invoke.type  = MSG_TYPE_INVOKE;
+    invoke.seq   = seq;
     invoke.name  = name;
     invoke.noret = reply_cb ? TRUE : FALSE;
     invoke.narg  = narg;
