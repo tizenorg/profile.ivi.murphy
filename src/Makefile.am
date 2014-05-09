@@ -1844,6 +1844,57 @@ endif
 
 endif
 
+# Immelmann plugin
+IMMELMANN_PLUGIN_SOURCES = plugins/plugin-immelmann.c
+IMMELMANN_PLUGIN_CFLAGS  =
+IMMELMANN_PLUGIN_LIBS    = 	libmurphy-core.la	\
+				libmurphy-common.la	\
+				$(RESOURCE_LIBRARY)
+
+if IMMELMANN_ENABLED
+
+if !DISABLED_PLUGIN_IMMELMANN
+
+if BUILTIN_PLUGIN_IMMELMANN
+BUILTIN_PLUGINS += $(IMMELMANN_PLUGIN_SOURCES)
+BUILTIN_CFLAGS  += $(IMMELMANN_PLUGIN_CFLAGS)
+BUILTIN_LIBS    += $(IMMELMANN_PLUGIN_LIBS)
+else
+plugin_immelmann_la_SOURCES = $(IMMELMANN_PLUGIN_SOURCES)
+plugin_immelmann_la_CFLAGS  = $(IMMELMANN_PLUGIN_CFLAGS) $(MURPHY_CFLAGS) $(AM_CFLAGS)
+plugin_immelmann_la_LDFLAGS = -module -avoid-version
+plugin_immelmann_la_LIBADD  = $(IMMELMANN_PLUGIN_LIBS)
+
+plugin_LTLIBRARIES    += plugin-immelmann.la
+endif
+endif
+
+endif
+
+# Genivi Audio Manager control plugin
+if GAM_CONTROL_ENABLED
+GAM_CONTROL_PLUGIN_SOURCES = plugins/gam-control/plugin-gam-control.c
+GAM_CONTROL_PLUGIN_CFLAGS  =
+GAM_COTNROL_PLUGIN_LIBS    =
+
+if !DISABLED_PLUGIN_GAM_CONTROL
+if BUILTIN_PLUGIN_GAM_CONTROL
+BUILTIN_PLUGINS += $(GAM_CONTROL_PLUGIN_SOURCES)
+BUILTIN_CFLAGS  += $(GAM_CONTROL_PLUGIN_CFLAGS)
+BUILTIN_LIBS    += $(GAM_CONTROL_PLUGIN_LIBS)
+else
+plugin_gam_control_la_SOURCES = $(GAM_CONTROL_PLUGIN_SOURCES)
+plugin_gam_control_la_CFLAGS  = $(GAM_CONTROL_PLUGIN_CFLAGS) \
+                            $(MURPHY_CFLAGS) \
+                            $(AM_CFLAGS)
+plugin_gam_control_la_LDFLAGS = -module -avoid-version
+plugin_gam_control_la_LIBADD  = $(GAM_CONTROL_PLUGIN_LIBS)
+
+plugin_LTLIBRARIES += plugin-gam-control.la
+endif
+endif
+endif
+
 ###################################
 # murphy daemon
 #

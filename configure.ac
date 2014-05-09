@@ -614,6 +614,35 @@ fi
 AM_CONDITIONAL(RESOURCE_ASM_ENABLED, [test "$enable_resource_asm" = "yes"])
 AC_SUBST(RESOURCE_ASM_ENABLED)
 
+# Check if Immelmann plugin was enabled.
+AC_ARG_ENABLE(immelmann,
+              [  --enable-immelmann  build Immelmann plugin],
+        [enable_immelmann=$enableval], [enable_immelmann=no])
+if test "$enable_immelmann" = "yes"; then
+    AC_DEFINE([IMMELMANN_ENABLED], 1, [Enable Immelmann support ?])
+else
+    AC_MSG_NOTICE([Immelmann support is disabled.])
+fi
+AM_CONDITIONAL(IMMELMANN_ENABLED, [test "$enable_immelmann" = "yes"])
+AC_SUBST(IMMELMANN_ENABLED)
+
+# Check if Genivi Audio Manager control plugin should be built.
+AC_ARG_ENABLE(gam-control,
+              [  --enable-gam-control     enable Audio Manager control plugin],
+	      [enable_gam_control=$enableval], [enable_gam_control=no])
+
+if test "$enable_gam_control" != "yes"; then
+    AC_MSG_NOTICE([Genivi Audio Manager control plugin is enabled.])
+else
+    AC_MSG_NOTICE([Genivi Audio Manager control plugin is disabled.])
+fi
+
+if test "$enable_gam_control" = "yes"; then
+    AC_DEFINE([GAM_CONTROL_ENABLED], 1, [Enable Genivi Audio Manager control ?])
+fi
+AM_CONDITIONAL(GAM_CONTROL_ENABLED, [test "$enable_gam_control" = "yes"])
+AC_SUBST(GAM_CONTROL_ENABLED)
+
 # Set up murphy CFLAGS and LIBS.
 MURPHY_CFLAGS=""
 MURPHY_LIBS=""
@@ -722,6 +751,8 @@ AM_CONDITIONAL(DISABLED_PLUGIN_RESOURCE_ASM,     [check_if_disabled resource-asm
 
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSTEMCTL,  [test $enable_systemctl != yes])
 AM_CONDITIONAL(DISABLED_PLUGIN_SYSMON,  [test $enable_sysmon != yes])
+AM_CONDITIONAL(DISABLED_PLUGIN_IMMELMANN,  [check_if_disabled immelmann])
+AM_CONDITIONAL(DISABLED_PLUGIN_GAM_CONTROL, [check_if_disabled gam-control])
 
 AM_CONDITIONAL(BUILTIN_PLUGIN_TEST,     [check_if_internal test])
 AM_CONDITIONAL(BUILTIN_PLUGIN_DBUS,     [check_if_internal dbus])
@@ -739,6 +770,8 @@ AM_CONDITIONAL(BUILTIN_PLUGIN_TELEPHONY, [check_if_internal telephony])
 AM_CONDITIONAL(BUILTIN_PLUGIN_RESOURCE_ASM,      [check_if_internal resource-asm])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSTEMCTL, [check_if_internal system-controller])
 AM_CONDITIONAL(BUILTIN_PLUGIN_SYSMON, [check_if_internal system-monitor])
+AM_CONDITIONAL(BUILTIN_PLUGIN_IMMELMANN,  [check_if_internal immelmann])
+AM_CONDITIONAL(BUILTIN_PLUGIN_GAM_CONTROL, [check_if_internal gam-control])
 
 # Check for Check (unit test framework).
 PKG_CHECK_MODULES(CHECK,
