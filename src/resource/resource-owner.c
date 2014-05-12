@@ -39,6 +39,7 @@
 
 #include <murphy-db/mqi.h>
 
+#include <murphy/resource/manager-api.h>
 #include <murphy/resource/client-api.h>
 #include <murphy/resource/config-api.h>
 
