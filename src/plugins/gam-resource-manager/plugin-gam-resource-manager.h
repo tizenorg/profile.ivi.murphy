@@ -37,7 +37,7 @@
 
 #define MRP_RESMGR_DEFAULT_CONFDIR          "/etc/murphy/gam_config"
 #define MRP_RESMGR_DEFAULT_PREFIX           "gam"
-
+#define MRP_RESMGR_DEFAULT_NAMES            MRP_RESMGR_DEFAULT_PREFIX
 #define MRP_RESMGR_RESOURCE_MAX             256
 #define MRP_RESMGR_SOURCE_MAX               64
 #define MRP_RESMGR_SINK_MAX                 64
@@ -67,6 +67,7 @@ typedef struct mrp_resmgr_usecase_s         mrp_resmgr_usecase_t;
 struct mrp_resmgr_config_s {
     const char *confdir;
     const char *prefix;
+    const char *confnams;
     int max_active;
 };
 

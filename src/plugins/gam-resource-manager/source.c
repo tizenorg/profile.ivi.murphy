@@ -63,18 +63,26 @@ struct mrp_resmgr_source_s {
 };
 
 
-static void source_free(void *, void *);
+static mrp_decision_conf_t *load_decision_conf(const char *);
 static bool decision_values_match(mrp_decision_conf_t *);
+
+static void source_free(void *, void *);
+
 static int id_hash_compare(const void *, const void *);
 static uint32_t id_hash_function(const void *);
 
 
 mrp_resmgr_sources_t *mrp_resmgr_sources_create(mrp_resmgr_t *resmgr)
 {
+    mrp_resmgr_config_t *config;
     mrp_resmgr_sources_t *sources;
     mrp_htbl_config_t ncfg, icfg;
+    char stem[1024];
 
     MRP_ASSERT(resmgr, "invalid argument");
+
+    config = mrp_resmgr_get_config(resmgr);
+    snprintf(stem, sizeof(stem), "%s/%s", config->confdir, config->confnams);
 
     memset(&ncfg, 0, sizeof(ncfg));
     ncfg.nentry = MRP_RESMGR_SOURCE_MAX;
@@ -94,7 +102,7 @@ mrp_resmgr_sources_t *mrp_resmgr_sources_create(mrp_resmgr_t *resmgr)
         sources->resmgr = resmgr;
         sources->lookup.by_name = mrp_htbl_create(&ncfg);
         sources->lookup.by_id = mrp_htbl_create(&icfg);
-        sources->decision_conf = NULL;
+        sources->decision_conf = load_decision_conf(stem);
     }
 
     return sources;
@@ -150,26 +158,6 @@ mrp_resmgr_source_t *mrp_resmgr_source_add(mrp_resmgr_t *resmgr,
 
     snprintf(stem, sizeof(stem), "%s/%s-%s-%d", config->confdir,
              config->prefix, gam_name, config->max_active);
-
-    /* consider to move this to sources creation */
-    if (!sources->decision_conf) {
-        sources->decision_conf = mrp_decision_conf_create_from_file(stem);
-
-        if (!sources->decision_conf) {
-            mrp_log_error("gam-resource-manager: can't load "
-                          "decision conf file %s.names", stem);
-            return NULL;
-        }
-
-        if (!decision_values_match(sources->decision_conf)) {
-            mrp_log_error("gam-resource-manager: decision values in conf file "
-                          "%s.name do not match their builtin counterpart",
-                          stem);
-            mrp_decision_conf_destroy(sources->decision_conf);
-            sources->decision_conf = NULL;
-            return NULL;
-        }
-    }
 
     src   = NULL;
     dc    = sources->decision_conf;
@@ -349,6 +337,25 @@ int32_t mrp_resmgr_source_make_decision(mrp_resmgr_source_t *src)
         decision = value->integer;
 
     return decision;
+}
+
+static mrp_decision_conf_t *load_decision_conf(const char *stem)
+{
+    mrp_decision_conf_t *conf;
+
+    if (!(conf = mrp_decision_conf_create_from_file(stem))) {
+        mrp_log_error("gam-resource-manager: can't load "
+                      "decision conf file %s.names", stem);
+    }
+    else if (!decision_values_match(conf)) {
+        mrp_log_error("gam-resource-manager: decision values in conf file "
+                      "%s.name do not match their builtin counterpart", stem);
+
+        mrp_decision_conf_destroy(conf);
+        conf = NULL;
+    }
+
+    return conf;
 }
 
 static bool decision_values_match(mrp_decision_conf_t *conf)

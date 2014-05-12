@@ -59,6 +59,7 @@
 enum {
     CONFDIR,
     PREFIX,
+    DECISION_NAMES,
     MAX_ACTIVE,
 };
 
@@ -308,6 +309,7 @@ static mrp_resmgr_config_t *config_create(mrp_plugin_t *plugin)
     if ((config = mrp_allocz(sizeof(mrp_resmgr_config_t)))) {
         config->confdir    = mrp_strdup(args[CONFDIR].str);
         config->prefix     = mrp_strdup(args[PREFIX].str);
+        config->confnams   = mrp_strdup(args[DECISION_NAMES].str);
         config->max_active = args[MAX_ACTIVE].i32;
     }
 
@@ -463,9 +465,10 @@ static void manager_exit(mrp_plugin_t *plugin)
 #define INTEGER_ARG(_id,_n,_d) MRP_PLUGIN_ARGIDX(_id, INT32, _n, _d)
 
 static mrp_plugin_arg_t arg_defs[] = {
-    STRING_ARG  (CONFDIR   , "config_dir", MRP_RESMGR_DEFAULT_CONFDIR),
-    STRING_ARG  (PREFIX    , "prefix"    , MRP_RESMGR_DEFAULT_PREFIX ),
-    INTEGER_ARG (MAX_ACTIVE, "max_active", 1                         ),
+    STRING_ARG  (CONFDIR       , "config_dir"    , MRP_RESMGR_DEFAULT_CONFDIR),
+    STRING_ARG  (PREFIX        , "prefix"        , MRP_RESMGR_DEFAULT_PREFIX ),
+    STRING_ARG  (DECISION_NAMES, "decision_names", MRP_RESMGR_DEFAULT_NAMES  ),
+    INTEGER_ARG (MAX_ACTIVE    , "max_active"    , 1                         ),
 };
 
 #undef INTEGER_ARG
