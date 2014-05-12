@@ -40,6 +40,8 @@ mrp_attr_t *mrp_zone_read_attribute(mrp_zone_t *zone,
 mrp_attr_t *mrp_zone_read_all_attributes(mrp_zone_t *zone,
                                          uint32_t buflen,
                                          mrp_attr_t *buf);
+uint32_t mrp_zone_count(void);
+mrp_zone_t *mrp_zone_find_by_name(const char *name);
 
 
 const char *mrp_application_class_get_name(mrp_application_class_t *class);
@@ -58,7 +60,6 @@ const char *mrp_resource_get_application_class(mrp_resource_t *resource);
 
 void mrp_resource_owner_recalc(uint32_t zoneid);
 
-mrp_zone_t *mrp_zone_find_by_name(const char *name);
 
 #endif  /* __MURPHY_RESOURCE_MANAGER_API_H__ */
 
