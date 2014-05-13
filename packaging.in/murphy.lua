@@ -50,6 +50,9 @@ else
     m:info("No glib plugin found...")
 end
 
+m:load_plugin('immelmann')
+m:load_plugin('gam-control')
+
 -- load the AMB plugin
 if m:plugin_exists('amb') then
     m:try_load_plugin('amb')
@@ -200,7 +203,9 @@ then
         attributes = {
             role = { mdb.string, "music", "rw" },
             pid = { mdb.string, "<unknown>", "rw" },
-            policy = { mdb.string, "relaxed", "rw" }
+            policy = { mdb.string, "relaxed", "rw" },
+            source = { mdb.string, "paplay", "rw" },
+            conn_id = { mdb.unsigned, 0, "rw" }
         }
    }
 end
@@ -233,6 +238,44 @@ resource.class {
 resource.class {
      name = "speech_synthesis",
      shareable = true
+}
+
+phone_priorities = {
+    "bluetooth", "headset"
+}
+
+general_priorities = {
+    "headset", "bluetooth", "speakers"
+}
+
+routing_sink_priority {
+    application_class = "player",
+    priority_queue = general_priorities
+}
+
+routing_sink_priority {
+    application_class = "game",
+    priority_queue = general_priorities
+}
+
+routing_sink_priority {
+    application_class = "implicit",
+    priority_queue = general_priorities
+}
+
+routing_sink_priority {
+    application_class = "phone",
+    priority_queue = phone_priorities
+}
+
+routing_sink_priority {
+    application_class = "basic",
+    priority_queue = phone_priorities
+}
+
+routing_sink_priority {
+    application_class = "event",
+    priority_queue = phone_priorities
 }
 
 if not m:plugin_exists('ivi-resource-manager') and
