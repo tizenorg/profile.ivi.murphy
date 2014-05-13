@@ -48,6 +48,7 @@ mrp_resmgr_source_t *mrp_resmgr_source_find_by_id(mrp_resmgr_t *resmgr,
                                            uint16_t gam_id);
 
 const char *mrp_resmgr_source_get_name(mrp_resmgr_source_t *src);
+bool mrp_resmgr_source_get_availability(mrp_resmgr_source_t *src);
 
 mrp_resmgr_resource_t *mrp_resmgr_source_get_resource(mrp_resmgr_source_t *src,
                                            uint32_t connno);

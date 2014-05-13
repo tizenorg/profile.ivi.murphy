@@ -42,7 +42,6 @@
 #include <murphy/core/context.h>
 #include <murphy/core/lua-bindings/murphy.h>
 
-#include <murphy-db/mql.h>
 #include <murphy-db/mqi.h>
 
 #include <murphy/resource/config-api.h>
@@ -56,6 +55,8 @@
 #include "sink.h"
 #include "usecase.h"
 
+typedef struct dependency_s   dependency_t;
+
 enum {
     CONFDIR,
     PREFIX,
@@ -63,16 +64,28 @@ enum {
     MAX_ACTIVE,
 };
 
+struct dependency_s {
+    const char *db_table_name;
+    mrp_resmgr_dependency_cb_t callback;
+    bool changed;
+};
+
 struct mrp_resmgr_s {
     mrp_plugin_t *plugin;
+
     mrp_resmgr_config_t *config;
     mrp_event_watch_t *w;
     mrp_resmgr_backend_t *backend;
     mrp_resmgr_sources_t *sources;
     mrp_resmgr_sinks_t *sinks;
     mrp_resmgr_usecase_t *usecase;
+
+    size_t ndepend;
+    dependency_t *depends;
 };
 
+static int resource_update_cb(mrp_scriptlet_t *, mrp_context_tbl_t *);
+static void add_depenedencies_to_resolver(mrp_resmgr_t *);
 
 static void print_resources_cb(mrp_console_t *, void *, int, char **);
 static void print_usecase_cb(mrp_console_t *, void *, int, char **);
@@ -81,8 +94,8 @@ static mrp_resmgr_config_t *config_create(mrp_plugin_t *);
 static void config_destroy(mrp_resmgr_config_t *);
 
 static void event_cb(mrp_event_watch_t *, int, mrp_msg_t *, void *);
-static int subscribe_events(mrp_plugin_t *);
-static void unsubscribe_events(mrp_plugin_t *);
+static int subscribe_events(mrp_resmgr_t *);
+static void unsubscribe_events(mrp_resmgr_t *);
 
 
 
@@ -127,95 +140,57 @@ mrp_resmgr_usecase_t *mrp_resmgr_get_usecase(mrp_resmgr_t *resmgr)
 }
 
 
-#if 0
-void mrp_resmgr_insert_resource(mrp_resmgr_t *resmgr,
-                                mrp_zone_t *zone,
-                                mrp_resource_t *key,
-                                void *resource)
+
+void mrp_resmgr_register_dependency(mrp_resmgr_t *resmgr,
+                                    const char *db_table_name,
+                                    mrp_resmgr_dependency_cb_t callback)
 {
-    uint32_t zoneid;
+    size_t size;
+    char dependency[512];
+    int idx;
 
-    MRP_ASSERT(resmgr && zone && key && resource, "invalid argument");
-    MRP_ASSERT(resmgr->resources.by_pointer, "uninitialised data structure");
+    MRP_ASSERT(resmgr && db_table_name, "invalid argument");
 
-    zoneid = mrp_zone_get_id(zone);
+    snprintf(dependency, sizeof(dependency), "$%s", db_table_name);
 
-    resmgr->active_zones.mask |= ((mrp_zone_mask_t)1 << zoneid);
-    resmgr->active_zones.refs[zoneid]++;
+    idx = resmgr->ndepend++;
+    size = resmgr->ndepend * sizeof(dependency_t);
 
-    mrp_htbl_insert(resmgr->resources.by_pointer, key, resource);
-}
-
-void *mrp_resmgr_remove_resource(mrp_resmgr_t *resmgr,
-                                 mrp_zone_t *zone,
-                                 mrp_resource_t *key)
-{
-    uint32_t zoneid;
-
-    MRP_ASSERT(resmgr && zone && key, "invalid argument");
-    MRP_ASSERT(resmgr->resources.by_pointer, "uninitialised data structure");
-
-    zoneid = mrp_zone_get_id(zone);
-
-    if (--(resmgr->active_zones.refs[zoneid]) <= 0) {
-        resmgr->active_zones.refs[zoneid] = 0;
-        resmgr->active_zones.mask &= ~((mrp_zone_mask_t)1 << zoneid);
+    if (!(resmgr->depends = mrp_realloc(resmgr->depends, size)) ||
+        !(resmgr->depends[idx].db_table_name = mrp_strdup(dependency)))
+    {
+        mrp_log_error("gam-resource-manager: failed to allocate memory "
+                      "for resource dependencies");
+        resmgr->ndepend = 0;
+        resmgr->depends = NULL;
+        return;
     }
 
-    return mrp_htbl_remove(resmgr->resources.by_pointer, key, FALSE);
-}
-
-void *mrp_resmgr_lookup_resource(mrp_resmgr_t *resmgr, mrp_resource_t *key)
-{
-    MRP_ASSERT(resmgr && key, "invalid argument");
-    MRP_ASSERT(resmgr->resources.by_pointer, "uninitialised data structure");
-
-    return mrp_htbl_lookup(resmgr->resources.by_pointer, key);
+    resmgr->depends[idx].callback = callback;
 }
 
 
 
-void mrp_resmgr_insert_connection(mrp_resmgr_t *resmgr,
-                                  uint16_t connid,
-                                  void *resource)
-{
-    MRP_ASSERT(resmgr && resource, "invalid argument");
-    MRP_ASSERT(resmgr->resources.by_connid, "uninitialised data structure");
-
-    mrp_htbl_insert(resmgr->resources.by_connid, NULL + connid, resource);
-}
-
-void *mrp_resmgr_remove_connection(mrp_resmgr_t *resmgr, uint16_t connid)
-{
-    MRP_ASSERT(resmgr, "invalid argument");
-    MRP_ASSERT(resmgr->resources.by_pointer, "uninitialised data structure");
-
-    return mrp_htbl_remove(resmgr->resources.by_connid, NULL + connid, FALSE);
-}
-
-void *mrp_resmgr_lookup_connection(mrp_resmgr_t *resmgr, uint16_t connid)
-{
-    MRP_ASSERT(resmgr, "invalid argument");
-    MRP_ASSERT(resmgr->resources.by_pointer, "uninitialised data structure");
-
-    return mrp_htbl_lookup(resmgr->resources.by_pointer, NULL + connid);
-}
-#endif
-
-
-
-
-#if 0
 static int resource_update_cb(mrp_scriptlet_t *script, mrp_context_tbl_t *ctbl)
 {
     mrp_resmgr_t *resmgr = (mrp_resmgr_t *)script->data;
-    mrp_zone_mask_t mask;
     uint32_t zoneid;
+    size_t i;
+    bool recalc;
 
     MRP_UNUSED(ctbl);
 
-    for (mask = resmgr->zones, zoneid = 0;   mask;   mask >>= 1, zoneid++) {
-        if ((mask & 1))
+    MRP_ASSERT(resmgr, "invalid argument");
+
+    printf("### %s() called\n", __FUNCTION__);
+
+    for (recalc = false, i = 0;    i < resmgr->ndepend;    i++)
+        recalc |= resmgr->depends[i].callback(resmgr);
+
+    if (recalc) {
+        printf("=> recalc resource allocations!\n");
+
+        for (zoneid = 0;  zoneid < mrp_zone_count();  zoneid++)
             mrp_resource_owner_recalc(zoneid);
     }
 
@@ -227,7 +202,7 @@ static void add_depenedencies_to_resolver(mrp_resmgr_t *resmgr)
     static const char *target = "_gam_resources";
     static mrp_interpreter_t resource_updater = {
         { NULL, NULL },
-        "resource_updater",
+        "gam_resource_updater",
         NULL,
         NULL,
         NULL,
@@ -239,9 +214,10 @@ static void add_depenedencies_to_resolver(mrp_resmgr_t *resmgr)
     mrp_context_t *ctx;
     mrp_resolver_t *resolver;
     char buf[2048];
+    const char *deps[256];
+    size_t i,ndep;
     char *p, *e;
-    int i;
-    int success;
+    int ok;
 
     MRP_ASSERT(resmgr, "invalid argument");
 
@@ -250,24 +226,27 @@ static void add_depenedencies_to_resolver(mrp_resmgr_t *resmgr)
     if (!(ctx = plugin->ctx) || !(resolver = ctx->r))
         return;
 
-    if (!resmgr->ndepend || !resmgr->depends)
+    if (!(ndep = resmgr->ndepend) || !resmgr->depends)
         return;
 
-    for (i = 0, e = (p = buf) + sizeof(buf); i < resmgr->ndepend && p < e; i++)
-        p += snprintf(p, e-p, " %s", resmgr->depends[i]);
+    MRP_ASSERT(ndep < MRP_ARRAY_SIZE(deps), "dependency overflow");
+
+    for (e = (p = buf) + sizeof(buf), i = 0;     i < ndep;     i++) {
+        deps[i] = resmgr->depends[i].db_table_name;
+
+        if (p < e)
+            p += snprintf(p, e-p, " %s", resmgr->depends[i].db_table_name);
+    }
 
     printf("%s:%s\n\tresource_recalc()\n\n", target, buf);
 
-    success = mrp_resolver_add_prepared_target(resolver, target,
-                                               resmgr->depends, resmgr->ndepend,
-                                               &resource_updater, NULL, resmgr);
-    if (!success) {
+    ok = mrp_resolver_add_prepared_target(resolver, target, deps, ndep,
+                                          &resource_updater, NULL, resmgr);
+    if (!ok) {
         mrp_log_error("gam-resource-manager: failed to install "
                       "resolver target '%s'", target);
     }
 }
-
-#endif
 
 
 static void print_resources_cb(mrp_console_t *c, void *user_data,
@@ -360,10 +339,10 @@ static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
     }
 }
 
-static int subscribe_events(mrp_plugin_t *plugin)
+static int subscribe_events(mrp_resmgr_t *resmgr)
 {
-    mrp_resmgr_t *resmgr = (mrp_resmgr_t *)plugin->data;
-    mrp_event_mask_t   events;
+    mrp_plugin_t *plugin = resmgr->plugin;
+    mrp_event_mask_t events;
 
     mrp_set_named_events(&events,
                          MRP_PLUGIN_EVENT_LOADED,
@@ -380,10 +359,8 @@ static int subscribe_events(mrp_plugin_t *plugin)
 }
 
 
-static void unsubscribe_events(mrp_plugin_t *plugin)
+static void unsubscribe_events(mrp_resmgr_t *resmgr)
 {
-    mrp_resmgr_t *resmgr = (mrp_resmgr_t *)plugin->data;
-
     if (resmgr->w) {
         mrp_del_event_watch(resmgr->w);
         resmgr->w = NULL;
@@ -416,21 +393,23 @@ static int manager_init(mrp_plugin_t *plugin)
     plugin->data = resmgr;
     resmgr_data = resmgr;
 
-    subscribe_events(plugin);
+    subscribe_events(resmgr);
+    mqi_open();
+    add_depenedencies_to_resolver(resmgr);
 
     /*******************************/
-    mrp_resmgr_sink_add(resmgr, "speakers"        , 1, NULL);
-    mrp_resmgr_sink_add(resmgr, "wiredHeadset"    , 2, NULL);
-    mrp_resmgr_sink_add(resmgr, "usbHeadset"      , 3, NULL);
-    mrp_resmgr_sink_add(resmgr, "btHeadset"       , 4, NULL);
-    mrp_resmgr_sink_add(resmgr, "voiceRecognition", 5, NULL);
+    mrp_resmgr_sink_add(resmgr, "speakers"        , 0, NULL);
+    mrp_resmgr_sink_add(resmgr, "wiredHeadset"    , 0, NULL);
+    mrp_resmgr_sink_add(resmgr, "usbHeadset"      , 0, NULL);
+    mrp_resmgr_sink_add(resmgr, "btHeadset"       , 0, NULL);
+    mrp_resmgr_sink_add(resmgr, "voiceRecognition", 0, NULL);
 
-    mrp_resmgr_source_add(resmgr, "wrtApplication", 1);
-    mrp_resmgr_source_add(resmgr, "icoApplication", 2);
-    mrp_resmgr_source_add(resmgr, "phone"         , 3);
-    mrp_resmgr_source_add(resmgr, "radio"         , 4);
-    mrp_resmgr_source_add(resmgr, "microphone"    , 5);
-    mrp_resmgr_source_add(resmgr, "navigator"     , 6);
+    mrp_resmgr_source_add(resmgr, "wrtApplication", 0);
+    mrp_resmgr_source_add(resmgr, "icoApplication", 0);
+    mrp_resmgr_source_add(resmgr, "phone"         , 0);
+    mrp_resmgr_source_add(resmgr, "radio"         , 0);
+    mrp_resmgr_source_add(resmgr, "microphone"    , 0);
+    mrp_resmgr_source_add(resmgr, "navigator"     , 0);
     /*******************************/
 
     return TRUE;
@@ -440,18 +419,27 @@ static int manager_init(mrp_plugin_t *plugin)
 static void manager_exit(mrp_plugin_t *plugin)
 {
     mrp_resmgr_t *resmgr;
+    size_t i;
 
     mrp_log_info("%s() called for GAM resource manager instance '%s'...",
                  __FUNCTION__, plugin->instance);
 
-    unsubscribe_events(plugin);
-
     if ((resmgr = plugin->data) && resmgr_data == resmgr) {
+        unsubscribe_events(resmgr);
+
+        for (i = 0;  i < resmgr->ndepend;  i++)
+            mrp_free((void *)resmgr->depends[i].db_table_name);
+        mrp_free((void *)resmgr->depends);
+
         mrp_resmgr_backend_destroy(resmgr->backend);
         mrp_resmgr_sources_destroy(resmgr->sources);
         mrp_resmgr_sinks_destroy(resmgr->sinks);
         mrp_resmgr_usecase_destroy(resmgr->usecase);
         config_destroy(resmgr->config);
+
+        mrp_free(resmgr);
+
+        resmgr_data = NULL;
     }
 }
 

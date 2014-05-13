@@ -42,6 +42,7 @@ mrp_resmgr_sink_t *mrp_resmgr_sink_find_by_gam_id(mrp_resmgr_t *resmgr,
                                                   uint16_t gam_id);
 
 const char *mrp_resmgr_sink_get_name(mrp_resmgr_sink_t *sink);
+bool mrp_resmgr_sink_get_availability(mrp_resmgr_sink_t *sink);
 int32_t mrp_resmgr_sink_get_decision_id(mrp_resmgr_sink_t *sink,
                                         mrp_resmgr_source_t *source);
 

@@ -204,7 +204,7 @@ ssize_t mrp_resmgr_usecase_add_attribute(mrp_resmgr_usecase_t *usecase,
             upd = usecase->updates + upd_idx;
             void_idx = NULL + (upd_idx + 1);
 
-            if (!mrp_htbl_insert(usecase->entries, mrp_strdup(name), void_idx)){
+            if (!mrp_htbl_insert(usecase->entries,mrp_strdup(name),void_idx)) {
                 mrp_log_error("gam-resource-manager: failed to insert into "
                               "hashtable usecase attribute '%s'", name);
             }

@@ -34,11 +34,36 @@
 
 #include <murphy/common.h>
 
+#include <murphy-db/mqi.h>
+
 #include "sink.h"
 #include "source.h"
 #include "c5-decision-tree.h"
 
-typedef struct gam_sink_s   gam_sink_t;
+#define COLUMN_MAX 4
+
+typedef struct gam_sink_s     gam_sink_t;
+typedef struct table_s        table_t;
+typedef struct row_s          row_t;
+typedef struct colum_def_s    column_def_t;
+
+struct table_s {
+    mqi_handle_t handle;
+    mqi_column_desc_t cols[COLUMN_MAX+1];
+};
+
+struct row_s {
+    int32_t id;
+    const char *name;
+    int32_t available;
+    int32_t visible;
+};
+
+struct colum_def_s {
+    char *name;
+    mqi_data_type_t type;
+    int offset;
+};
 
 struct mrp_resmgr_sinks_s {
     mrp_resmgr_t *resmgr;
@@ -46,6 +71,7 @@ struct mrp_resmgr_sinks_s {
         mrp_htbl_t *by_name;
         mrp_htbl_t *by_id;
     } lookup;
+    table_t state_table;
 };
 
 struct gam_sink_s {
@@ -58,13 +84,20 @@ struct mrp_resmgr_sink_s {
     mrp_resmgr_sinks_t *sinks;
     gam_sink_t gam_sink;
     mrp_htbl_t *decision_ids;
+    bool available;
 };
 
+static bool register_gam_id(mrp_resmgr_sink_t *, uint16_t);
 
 static void sink_free(void *, void *);
+
 static int hash_compare(const void *, const void *);
 static uint32_t id_hash_function(const void *);
 static uint32_t ptr_hash_function(const void *);
+
+static bool sink_status_changed_cb(mrp_resmgr_t *);
+static mqi_handle_t get_table_handle(mrp_resmgr_sinks_t *);
+
 
 
 mrp_resmgr_sinks_t *mrp_resmgr_sinks_create(mrp_resmgr_t *resmgr)
@@ -92,6 +125,10 @@ mrp_resmgr_sinks_t *mrp_resmgr_sinks_create(mrp_resmgr_t *resmgr)
         sinks->resmgr = resmgr;
         sinks->lookup.by_name = mrp_htbl_create(&ncfg);
         sinks->lookup.by_id = mrp_htbl_create(&icfg);
+        sinks->state_table.handle = MQI_HANDLE_INVALID;
+
+        mrp_resmgr_register_dependency(resmgr, MRP_RESMGR_SINK_STATE_TABLE,
+                                       sink_status_changed_cb);
     }
 
     return sinks;
@@ -153,26 +190,12 @@ mrp_resmgr_sink_t *mrp_resmgr_sink_add(mrp_resmgr_t *resmgr,
 
     if (sink) {
         if (!source) {
-            do {
-                if (!id || id == sink->gam_sink.id)
-                    break;
-
-                if (sink->gam_sink.id) {
-                    mrp_log_error("gam-resource-manager: attempt to reset "
-                                  "gam ID of '%s'", sink->gam_sink.name);
-                    break;
-                }
-
-                sink->gam_sink.id = id;
-
-                if (!mrp_htbl_insert(sinks->lookup.by_id, NULL+id, sink)) {
-                    mrp_log_error("gam-resource-manager: attempt to add "
-                                  "sink %d multiple times", id);
-                }
-            } while(0);
+            /* id is a gam sink ID */
+            register_gam_id(sink, id);
         }
         else {
-            if (!(mrp_htbl_insert(sink->decision_ids, source, NULL + (id+1)))) {
+            /* id is the enumeration of the source in the decision conf */
+            if (!(mrp_htbl_insert(sink->decision_ids, source, NULL + (id+1)))){
                 mrp_log_error("gam-resource-manager: attempt to add id %d "
                               "multiple time for source '%s'",
                               id, mrp_resmgr_source_get_name(source));
@@ -218,6 +241,15 @@ const char *mrp_resmgr_sink_get_name(mrp_resmgr_sink_t *sink)
     return sink->gam_sink.name;
 }
 
+bool mrp_resmgr_sink_get_availability(mrp_resmgr_sink_t *sink)
+{
+    if (!sink)
+        return false;
+
+    return sink->available;
+}
+
+
 int32_t mrp_resmgr_sink_get_decision_id(mrp_resmgr_sink_t *sink,
                                         mrp_resmgr_source_t *source)
 {
@@ -230,6 +262,36 @@ int32_t mrp_resmgr_sink_get_decision_id(mrp_resmgr_sink_t *sink,
         return -1;
 
     return (void_id - NULL) - 1;
+}
+
+static bool register_gam_id(mrp_resmgr_sink_t *sink, uint16_t gam_id)
+{
+    mrp_resmgr_sinks_t *sinks;
+
+    if (!(sinks = sink->sinks))
+        return false;
+
+    if (!gam_id || gam_id == sink->gam_sink.id)
+        return true;
+
+    if (sink->gam_sink.id) {
+        mrp_log_error("gam-resource-manager: attempt to reset "
+                      "gam ID of '%s'", sink->gam_sink.name);
+        return false;
+    }
+
+    if (!mrp_htbl_insert(sinks->lookup.by_id, NULL+gam_id, sink)) {
+        mrp_log_error("gam-resource-manager: attempt to add "
+                      "sink %d multiple times", gam_id);
+        return false;
+    }
+
+    sink->gam_sink.id = gam_id;
+
+    mrp_debug("assign id %d to sink '%s'", gam_id, sink->gam_sink.name);
+
+
+    return true;
 }
 
 static void sink_free(void *key, void *object)
@@ -263,4 +325,113 @@ static uint32_t id_hash_function(const void *key)
 static uint32_t ptr_hash_function(const void *key)
 {
     return (uint32_t)(((size_t)key >> 4) & 0xffffffff);
+}
+
+static bool sink_status_changed_cb(mrp_resmgr_t *resmgr)
+{
+    mrp_resmgr_sinks_t *sinks;
+    mrp_resmgr_sink_t *sink;
+    mqi_handle_t h;
+    int i, n;
+    row_t rows[MRP_RESMGR_SOURCE_MAX];
+    row_t *r;
+    int change_count;
+
+    MRP_ASSERT(resmgr, "invalid argument");
+
+    printf("### %s() called\n", __FUNCTION__);
+
+    if (!(sinks = mrp_resmgr_get_sinks(resmgr)) ||
+        !sinks->lookup.by_name)
+        return false;
+
+    if ((h = get_table_handle(sinks)) == MQI_HANDLE_INVALID) {
+        mrp_log_error("gam-resource-manager: can't update status changes: "
+                      "database error");
+        return false;
+    }
+
+    memset(rows, 0, sizeof(rows));
+
+    if ((n = MQI_SELECT(sinks->state_table.cols, h, MQI_ALL, rows)) < 0) {
+        mrp_log_error("gam-resource-manager: select on table '%s' failed: %s",
+                      MRP_RESMGR_SINK_STATE_TABLE, strerror(errno));
+        return false;
+    }
+
+    if (n == 0)
+        return false;
+
+    for (change_count = i = 0;  i < n;  i++) {
+        r = rows + i;
+
+        if (!r->visible)
+            continue;
+
+        if ((sink = mrp_htbl_lookup(sinks->lookup.by_name, (void *)r->name))) {
+            register_gam_id(sink, r->id);
+
+            if (( r->available && !sink->available) ||
+                (!r->available &&  sink->available)  )
+            {
+                sink->available = r->available;
+                change_count++;
+
+                mrp_debug("%s become %savailable", sink->gam_sink.name,
+                          sink->available ? "":"un");
+            }
+        }
+    }
+
+    return change_count > 0;
+}
+
+
+static mqi_handle_t get_table_handle(mrp_resmgr_sinks_t *sinks)
+{
+#define COLUMN(_n, _t)  { # _n, mqi_ ## _t, MQI_OFFSET(row_t, _n) }
+
+    static column_def_t col_defs[COLUMN_MAX] = {
+        COLUMN( id       , integer ),
+        COLUMN( name     , string  ),
+        COLUMN( available, integer ),
+        COLUMN( visible  , integer ),
+    };
+
+    mqi_handle_t h;
+    column_def_t *def;
+    mqi_column_desc_t *desc;
+    int i;
+
+    if (sinks->state_table.handle == MQI_HANDLE_INVALID) {
+        h = mqi_get_table_handle(MRP_RESMGR_SINK_STATE_TABLE);
+
+        if (h != MQI_HANDLE_INVALID) {
+            sinks->state_table.handle = h;
+
+            for (i = 0;  i < COLUMN_MAX;  i++) {
+                def = col_defs + i;
+                desc = sinks->state_table.cols + i;
+
+                if ((desc->cindex = mqi_get_column_index(h, def->name)) < 0) {
+                    mrp_log_error("gam-resource-manager: can't find column "
+                                  "'%s' in table '%s'", def->name,
+                                  MRP_RESMGR_SINK_STATE_TABLE);
+                    sinks->state_table.handle = MQI_HANDLE_INVALID;
+                    break;
+                }
+
+                desc->offset = def->offset;
+            }
+
+            desc = sinks->state_table.cols + i;
+            desc->cindex = -1;
+            desc->offset = -1;
+        }
+
+    }
+
+    return sinks->state_table.handle;
+
+#undef COLUMN
 }

@@ -121,7 +121,7 @@ struct mrp_resmgr_resource_s {
 };
 
 
-static void make_resource_definition(mrp_resmgr_backend_t *, int, const char *);
+static void make_resource_definition(mrp_resmgr_backend_t *, int, const char*);
 static resource_type_t *find_resource_definition_by_id(mrp_resmgr_backend_t *,
                                                        int);
 
@@ -154,7 +154,7 @@ static bool resource_release(mrp_resmgr_backend_t *, mrp_zone_t *,
 
 static bool resource_register_by_id(mrp_resmgr_backend_t *,
                                     mrp_resmgr_resource_t *);
-static mrp_resmgr_resource_t *resource_lookup_by_pointer(mrp_resmgr_backend_t *,
+static mrp_resmgr_resource_t *resource_lookup_by_pointer(mrp_resmgr_backend_t*,
                                                          mrp_resource_t *);
 
 static void make_decisions(mrp_resmgr_backend_t *);
@@ -163,7 +163,7 @@ static size_t print_decision(mrp_resmgr_resource_t *, char *, size_t);
 static size_t print_commit(mrp_resmgr_resource_t *, char *, size_t);
 
 static void backend_notify(mrp_resource_event_t, mrp_zone_t *,
-                           mrp_application_class_t *, mrp_resource_t *, void *);
+                           mrp_application_class_t *, mrp_resource_t *, void*);
 static void backend_init(mrp_zone_t *, void *);
 static bool backend_allocate(mrp_zone_t *, mrp_resource_t *, void *);
 static void backend_free(mrp_zone_t *, mrp_resource_t *, void *);
@@ -765,9 +765,9 @@ static void resource_destroy(mrp_resmgr_backend_t *backend,
 
     if (ar->connid > 0 && (hash = backend->resources.by_connid)) {
         if (ar != mrp_htbl_remove(hash, NULL + ar->connid, false)) {
-            mrp_log_error("gam-resource-manager: confused with data structures "
-                          "when attempting to remove resource '%s' "
-                          "from ID hash", ar->name);
+            mrp_log_error("gam-resource-manager: confused with data "
+                          "structures when attempting to remove "
+                          "resource '%s' from ID hash", ar->name);
         }
     }
 
@@ -865,16 +865,21 @@ static int decision_cb(void *key, void *object, void *user_data)
 {
     // mrp_resmgr_backend_t  *backend = (mrp_resmgr_backend_t *)user_data;
     mrp_resmgr_resource_t *ar = (mrp_resmgr_resource_t *)object;
+    bool sink_available, source_available;
     int32_t decision_new, state_new;
     char buf[512];
 
     MRP_UNUSED(key);
     MRP_UNUSED(user_data);
 
-    MRP_ASSERT(ar && ar->source, "confused with data structures");
+    MRP_ASSERT(ar, "confused with data structures");
 
+    source_available = mrp_resmgr_source_get_availability(ar->source);
+    sink_available = mrp_resmgr_sink_get_availability(ar->sink);
 
-    if (ar->connno != 0 || ar->connid < 1)
+    if (!source_available || !sink_available)
+        decision_new = DECISION_DISCONNECTED; /* or teardown ? */
+    else if (ar->connno != 0 || ar->connid < 1)
         decision_new = DECISION_DISCONNECTED;
     else
         decision_new = mrp_resmgr_source_make_decision(ar->source);

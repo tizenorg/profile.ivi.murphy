@@ -34,11 +34,37 @@
 
 #include <murphy/common.h>
 
+#include <murphy-db/mqi.h>
+
 #include "source.h"
 #include "usecase.h"
 #include "backend.h"
 
+#define COLUMN_MAX 4
+
 typedef struct gam_source_s   gam_source_t;
+typedef struct table_s        table_t;
+typedef struct row_s          row_t;
+typedef struct colum_def_s    column_def_t;
+
+struct table_s {
+    mqi_handle_t handle;
+    mqi_column_desc_t cols[COLUMN_MAX+1];
+};
+
+struct row_s {
+    int32_t id;
+    const char *name;
+    int32_t available;
+    int32_t visible;
+};
+
+struct colum_def_s {
+    char *name;
+    mqi_data_type_t type;
+    int offset;
+};
+
 
 struct mrp_resmgr_sources_s {
     mrp_resmgr_t *resmgr;
@@ -47,6 +73,7 @@ struct mrp_resmgr_sources_s {
         mrp_htbl_t *by_id;
     } lookup;
     mrp_decision_conf_t *decision_conf;
+    table_t state_table;
 };
 
 struct gam_source_s {
@@ -60,16 +87,21 @@ struct mrp_resmgr_source_s {
     gam_source_t gam_source;
     mrp_list_hook_t resources;
     mrp_decision_tree_t *decision_tree;
+    bool available;
 };
 
+
+static bool register_gam_id(mrp_resmgr_source_t *, uint16_t);
 
 static mrp_decision_conf_t *load_decision_conf(const char *);
 static bool decision_values_match(mrp_decision_conf_t *);
 
 static void source_free(void *, void *);
-
 static int id_hash_compare(const void *, const void *);
 static uint32_t id_hash_function(const void *);
+
+static bool source_status_changed_cb(mrp_resmgr_t *);
+static mqi_handle_t get_table_handle(mrp_resmgr_sources_t *);
 
 
 mrp_resmgr_sources_t *mrp_resmgr_sources_create(mrp_resmgr_t *resmgr)
@@ -103,6 +135,10 @@ mrp_resmgr_sources_t *mrp_resmgr_sources_create(mrp_resmgr_t *resmgr)
         sources->lookup.by_name = mrp_htbl_create(&ncfg);
         sources->lookup.by_id = mrp_htbl_create(&icfg);
         sources->decision_conf = load_decision_conf(stem);
+        sources->state_table.handle = MQI_HANDLE_INVALID;
+
+        mrp_resmgr_register_dependency(resmgr, MRP_RESMGR_SOURCE_STATE_TABLE,
+                                       source_status_changed_cb);
     }
 
     return sources;
@@ -156,55 +192,56 @@ mrp_resmgr_source_t *mrp_resmgr_source_add(mrp_resmgr_t *resmgr,
 
     MRP_ASSERT(config && sources && usecase, "internal error");
 
-    snprintf(stem, sizeof(stem), "%s/%s-%s-%d", config->confdir,
-             config->prefix, gam_name, config->max_active);
+    if (!(src = mrp_resmgr_source_find_by_name(resmgr, gam_name))) {
+        snprintf(stem, sizeof(stem), "%s/%s-%s-%d", config->confdir,
+                 config->prefix, gam_name, config->max_active);
 
-    src   = NULL;
-    dc    = sources->decision_conf;
-    nattr = mrp_decision_attr_list(dc, attrs, ATTR_MAX);
+        dc = sources->decision_conf;
+        nattr = mrp_decision_attr_list(dc, attrs, ATTR_MAX);
 
-    if (dc && nattr > 0 &&
-        (src = mrp_allocz(sizeof(mrp_resmgr_source_t))) &&
-        (gam_name_dup = mrp_strdup(gam_name)))
-    {
-        src->sources = sources;
-        src->gam_source.name = gam_name_dup;
-        src->gam_source.id = gam_id;
-        mrp_list_init(&src->resources);
-
-        if (!mrp_htbl_insert(sources->lookup.by_name, gam_name_dup, src) ||
-            !mrp_htbl_insert(sources->lookup.by_id,  NULL + gam_id, src)  )
+        if (dc && nattr > 0 &&
+            (src = mrp_allocz(sizeof(mrp_resmgr_source_t))) &&
+            (gam_name_dup = mrp_strdup(gam_name)))
         {
-            mrp_log_error("gam-resource-manager: attempt to add source "
-                          "'%s' (%d) multiple times", gam_name_dup, gam_id);
-            goto failed;
-        }
+            src->sources = sources;
+            src->gam_source.name = gam_name_dup;
+            src->gam_source.id = gam_id;
+            mrp_list_init(&src->resources);
 
-        for (i = 0;  i < nattr;  i++) {
-            offs = mrp_resmgr_usecase_add_attribute(usecase, src, attrs[i]);
-
-            if (offs < 0) {
-                mrp_log_error("gam-resource-manager: failed to add attribute "
-                              "'%s' to source '%s'", attrs[i], gam_name);
+            if (!mrp_htbl_insert(sources->lookup.by_name, gam_name_dup, src)) {
+                mrp_log_error("gam-resource-manager: attempt to add source "
+                              "'%s' multiple times", gam_name_dup);
+                goto failed;
             }
-            else {
-                if (!mrp_decision_set_attr_offset(dc, attrs[i], offs)) {
-                    mrp_log_error("gam-resource-manager: failed to set offset "
-                                  "for attribute '%s' in source '%s'",
+
+            for (i = 0;  i < nattr;  i++) {
+                offs = mrp_resmgr_usecase_add_attribute(usecase,src,attrs[i]);
+
+                if (offs < 0) {
+                    mrp_log_error("gam-resource-manager: failed to add "
+                                  "attribute '%s' to source '%s'",
                                   attrs[i], gam_name);
                 }
+                else {
+                    if (!mrp_decision_set_attr_offset(dc, attrs[i], offs)) {
+                        mrp_log_error("gam-resource-manager: failed to set "
+                                      "offset for attribute '%s' in source "
+                                      "'%s'", attrs[i], gam_name);
+                    }
+                }
+            }
+
+            src->decision_tree = mrp_decision_tree_create_from_file(dc, stem);
+
+            if (!src->decision_tree) {
+                mrp_log_error("gam-resource-manager: source '%s' "
+                              "is nonfunctional", gam_name);
             }
         }
+    }
 
-        if ((src->decision_tree = mrp_decision_tree_create_from_file(dc,stem))){
-
-
-        }
-
-        if (!src->decision_tree) {
-            mrp_log_error("gam-resource-manager: source '%s' is nonfunctional",
-                          gam_name);
-        }
+    if (src) {
+        register_gam_id(src, gam_id);
     }
 
     return src;
@@ -260,6 +297,15 @@ const char *mrp_resmgr_source_get_name(mrp_resmgr_source_t *src)
 
     return src->gam_source.name;
 }
+
+bool mrp_resmgr_source_get_availability(mrp_resmgr_source_t *src)
+{
+    if (!src)
+        return false;
+
+    return src->available;
+}
+
 
 mrp_resmgr_resource_t *mrp_resmgr_source_get_resource(mrp_resmgr_source_t *src,
                                                       uint32_t connno)
@@ -339,6 +385,35 @@ int32_t mrp_resmgr_source_make_decision(mrp_resmgr_source_t *src)
     return decision;
 }
 
+static bool register_gam_id(mrp_resmgr_source_t *src, uint16_t gam_id)
+{
+    mrp_resmgr_sources_t *sources;
+
+    if (!(sources = src->sources))
+        return false;
+
+    if (!gam_id || gam_id == src->gam_source.id)
+        return true;
+
+    if (src->gam_source.id) {
+        mrp_log_error("gam-resource-manager: attempt to reset "
+                      "gam ID of '%s'", src->gam_source.name);
+        return false;
+    }
+
+    if (!mrp_htbl_insert(sources->lookup.by_id,  NULL+gam_id, src)) {
+        mrp_log_error("gam-resource-manager: attempt to add source "
+                      "%d multiple times", gam_id);
+        return false;
+    }
+
+    src->gam_source.id = gam_id;
+
+    mrp_debug("assign id %d to source '%s'", gam_id, src->gam_source.name);
+
+    return true;
+}
+
 static mrp_decision_conf_t *load_decision_conf(const char *stem)
 {
     mrp_decision_conf_t *conf;
@@ -401,4 +476,113 @@ static int id_hash_compare(const void *key1, const void *key2)
 static uint32_t id_hash_function(const void *key)
 {
     return (uint32_t)(key - (const void *)0);
+}
+
+
+static bool source_status_changed_cb(mrp_resmgr_t *resmgr)
+{
+    mrp_resmgr_sources_t *sources;
+    mrp_resmgr_source_t *src;
+    mqi_handle_t h;
+    int i, n;
+    row_t rows[MRP_RESMGR_SOURCE_MAX];
+    row_t *r;
+    int change_count;
+
+    MRP_ASSERT(resmgr, "invalid argument");
+
+    printf("### %s() called\n", __FUNCTION__);
+
+    if (!(sources = mrp_resmgr_get_sources(resmgr)) ||
+        !sources->lookup.by_name)
+        return false;
+
+    if ((h = get_table_handle(sources)) == MQI_HANDLE_INVALID) {
+        mrp_log_error("gam-resource-manager: can't update status changes: "
+                      "database error");
+        return false;
+    }
+
+    memset(rows, 0, sizeof(rows));
+
+    if ((n = MQI_SELECT(sources->state_table.cols, h, MQI_ALL, rows)) < 0) {
+        mrp_log_error("gam-resource-manager: select on table '%s' failed: %s",
+                      MRP_RESMGR_SOURCE_STATE_TABLE, strerror(errno));
+        return false;
+    }
+
+    if (n == 0)
+        return false;
+
+    for (change_count = i = 0;  i < n;  i++) {
+        r = rows + i;
+
+        if (!r->visible)
+            continue;
+
+        if ((src = mrp_htbl_lookup(sources->lookup.by_name, (void *)r->name))){
+            register_gam_id(src, r->id);
+
+            if (( r->available && !src->available) ||
+                (!r->available &&  src->available)  )
+            {
+                src->available = r->available;
+                change_count++;
+
+                mrp_debug("%s become %savailable", src->gam_source.name,
+                          src->available ? "":"un");
+            }
+        }
+    }
+
+    return change_count > 0;
+}
+
+static mqi_handle_t get_table_handle(mrp_resmgr_sources_t *sources)
+{
+#define COLUMN(_n, _t)  { # _n, mqi_ ## _t, MQI_OFFSET(row_t, _n) }
+
+    static column_def_t col_defs[COLUMN_MAX] = {
+        COLUMN( id       , integer ),
+        COLUMN( name     , string  ),
+        COLUMN( available, integer ),
+        COLUMN( visible  , integer ),
+    };
+
+    mqi_handle_t h;
+    column_def_t *def;
+    mqi_column_desc_t *desc;
+    int i;
+
+    if (sources->state_table.handle == MQI_HANDLE_INVALID) {
+        h = mqi_get_table_handle(MRP_RESMGR_SOURCE_STATE_TABLE);
+
+        if (h != MQI_HANDLE_INVALID) {
+            sources->state_table.handle = h;
+
+            for (i = 0;  i < COLUMN_MAX;  i++) {
+                def = col_defs + i;
+                desc = sources->state_table.cols + i;
+
+                if ((desc->cindex = mqi_get_column_index(h, def->name)) < 0) {
+                    mrp_log_error("gam-resource-manager: can't find column "
+                                  "'%s' in table '%s'", def->name,
+                                  MRP_RESMGR_SOURCE_STATE_TABLE);
+                    sources->state_table.handle = MQI_HANDLE_INVALID;
+                    break;
+                }
+
+                desc->offset = def->offset;
+            }
+
+            desc = sources->state_table.cols + i;
+            desc->cindex = -1;
+            desc->offset = -1;
+        }
+
+    }
+
+    return sources->state_table.handle;
+
+#undef COLUMN
 }
