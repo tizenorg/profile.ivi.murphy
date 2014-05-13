@@ -59,7 +59,7 @@
 
 typedef struct {
     char *name;
-    mrp_list_hook_t sinks;
+    mrp_list_hook_t *sinks;
 } priority_t;
 
 typedef struct {
@@ -262,7 +262,7 @@ mrp_list_hook_t *get_priorities_for_application_class(immelmann_t *ctx,
     priority_t *prio = mrp_htbl_lookup(ctx->pqs, (char *) name);
 
     if (prio) {
-        return &prio->sinks;
+        return prio->sinks;
     }
 
     return NULL;
@@ -511,12 +511,14 @@ static int priority_create(lua_State *L)
     size_t fldnamlen;
     const char *fldnam;
     char *name = NULL;
-    mrp_list_hook_t priority_queue;
+    mrp_list_hook_t *priority_queue;
     immelmann_t *ctx = global_ctx;
 
     MRP_LUA_ENTER;
 
-    mrp_list_init(&priority_queue);
+    priority_queue = mrp_allocz(sizeof(mrp_list_hook_t));
+
+    mrp_list_init(priority_queue);
 
     /*
         general_pq = {
@@ -555,7 +557,7 @@ static int priority_create(lua_State *L)
                         sink->name = mrp_strdup(sink_name);
                         mrp_list_init(&sink->hook);
 
-                        mrp_list_append(&priority_queue, &sink->hook);
+                        mrp_list_append(priority_queue, &sink->hook);
                     }
 
                     /* remove the value, keep key */
@@ -619,7 +621,7 @@ static void priority_destroy(void *data)
 
     mrp_free(prio->name);
 
-    mrp_list_foreach(&prio->sinks, p, n) {
+    mrp_list_foreach(prio->sinks, p, n) {
         routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
 
         mrp_list_delete(&t->hook);
@@ -627,8 +629,9 @@ static void priority_destroy(void *data)
         mrp_free(t);
     }
 
+    mrp_free(prio->sinks);
+    prio->sinks = NULL;
     prio->name = NULL;
-    mrp_list_init(&prio->sinks);
 
     MRP_LUA_LEAVE_NOARG;
 }
