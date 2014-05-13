@@ -301,9 +301,7 @@ void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
     domain_data_t *d = (domain_data_t *) user_data;
     mrp_resource_set_t *rset;
 
-    MRP_UNUSED(retval);
-
-    if (error) {
+    if (error || retval == 0) {
         mrp_log_error("connect call to GAM failed: %d", error);
         goto end;
     }
@@ -370,11 +368,11 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
             return value: connection id, 0 as error
     */
 
-    args[0].type = MRP_DOMCTL_UINT32;
-    args[0].u32 = source_id;
+    args[0].type = MRP_DOMCTL_UINT16;
+    args[0].u16 = source_id;
 
-    args[1].type = MRP_DOMCTL_UINT32;
-    args[1].u32 = sink_id;
+    args[1].type = MRP_DOMCTL_UINT16;
+    args[1].u16 = sink_id;
 
     /* TODO: do proper error handling */
 
