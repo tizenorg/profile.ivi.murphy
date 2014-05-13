@@ -216,7 +216,7 @@ bool is_sink_available(immelmann_t *ctx, const char *sink)
         - "available" means that the sink cannot be used.
     */
 
-    ret = snprintf(cmdbuf, BUFLEN, "SELECT * from audio_manager_sinks where"
+    ret = snprintf(cmdbuf, BUFLEN, "SELECT * from audio_manager_sinks where "
             "name = '%s' AND visible = 1 AND available = 1", sink);
 
     if (ret < 0 || ret == BUFLEN)
