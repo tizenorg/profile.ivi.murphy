@@ -533,8 +533,6 @@ static int priority_create(lua_State *L)
 
         if (strncmp(fldnam, "application_class", fldnamlen) == 0) {
             name = mrp_strdup(luaL_checkstring(L, -1));
-
-            mrp_log_error("immelmann application class name: %s", name);
         }
         else if (strncmp(fldnam, "priority_queue", fldnamlen) == 0) {
 
@@ -545,13 +543,11 @@ static int priority_create(lua_State *L)
 
                 while (lua_next(L, -2)) {
                     const char *sink_name;
-                    mrp_log_error(">>> priority_create: processing table");
 
                     /* only string values are accepted */
                     if (lua_isstring(L, -1)) {
                         routing_target_t *sink;
 
-                        mrp_log_error(">>> priority_create: isstring match");
                         sink_name = lua_tostring(L, -1);
 
                         sink = mrp_allocz(sizeof(routing_target_t));
@@ -560,8 +556,6 @@ static int priority_create(lua_State *L)
                         mrp_list_init(&sink->hook);
 
                         mrp_list_append(&priority_queue, &sink->hook);
-
-                        mrp_log_info("immelmann sink name: %s", sink->name);
                     }
 
                     /* remove the value, keep key */
@@ -570,7 +564,7 @@ static int priority_create(lua_State *L)
             }
         }
         else {
-            mrp_log_error("unknown field");
+            mrp_log_error("Immelmann config: unknown field");
         }
     }
 
