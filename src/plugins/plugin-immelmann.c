@@ -469,7 +469,7 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
                     app_id->type != mqi_string) {
                 mrp_log_error("immelmann: appid or connid types don't match!");
             }
-            else if (conn_id->value.unsignd < 1) {
+            else if (conn_id->value.integer < 1) {
                 /* this connection is not yet managed by GAM */
 
                 register_sink_with_gam(ctx, rset, app_id->value.string);
@@ -493,7 +493,7 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
                 mrp_log_error("immelmann: sink or conn_id attributes not defined!");
             }
             else if (conn_id->type == mqi_integer &&
-                    conn_id->value.unsignd < 1) {
+                    conn_id->value.integer < 1) {
                 /* this connection is not already managed by GAM */
                 need_to_register = TRUE;
             }
