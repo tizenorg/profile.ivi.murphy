@@ -5,6 +5,7 @@
 #include <murphy/core.h>
 #include <murphy/core/domain.h>
 #include <murphy/resource/client-api.h>
+#include <murphy/resource/manager-api.h>
 
 typedef struct gamctl_s gamctl_t;
 
@@ -56,33 +57,31 @@ static void resctl_event_cb(uint32_t seq, mrp_resource_set_t *set,
 }
 
 
-static int resctl_create(gamctl_t *gam, uint16_t source, uint16_t sink,
-                         uint16_t connid, uint16_t connno)
+static mrp_resource_set_t *resctl_create(gamctl_t *gam, uint16_t source,
+                                         uint16_t sink, uint16_t connid,
+                                         uint16_t connno)
 {
     mrp_resource_client_t *rsc    = gam->rsc;
+    uint32_t               seq    = gam->seq++;
     const char            *zone   = "driver";
     const char            *cls    = "player";
     const char            *play   = "audio_playback";
-    const char            *rec    = "audio_recording";
     uint32_t               prio   = 0;
     bool                   ar     = false;
     bool                   nowait = false;
     mrp_resource_set_t    *set;
-    mrp_attr_t             attrs[16], *attrp;;
+    mrp_attr_t             attrs[16], *attrp;
 
-    mrp_log_info("Creating and acquiring resource set for Genivi Audio Manager "
-                 "connection %u (%u -> %u, #%u).", connid, source, sink,
-                 connno);
+    mrp_log_info("Creating resource set for Genivi Audio Manager connection "
+                 "%u (%u -> %u, #%u).", connid, source, sink, connno);
 
     set = mrp_resource_set_create(rsc, ar, nowait, prio, resctl_event_cb, gam);
 
     if (set == NULL) {
-        mrp_log_error("Failed to create resource set for "
-                      "Genivi Audio Manager connection %u (%u -> %u).",
-                      connid, source, sink);
+        mrp_log_error("Failed to create resource set for Genivi Audio Manager "
+                      "connection %u (%u -> %u).", connid, source, sink);
         goto fail;
     }
-
 
     attrs[0].type          = mqi_integer;
     attrs[0].name          = "source_id";
@@ -100,32 +99,31 @@ static int resctl_create(gamctl_t *gam, uint16_t source, uint16_t sink,
 
     attrp = &attrs[0];
 
-    /*
-     * XXX TODO: adding audio_recording should be done only for connections
-     * from/to certain sources/sinks
-     */
-    if (mrp_resource_set_add_resource(set, play, false, attrp, true) < 0 ||
-        mrp_resource_set_add_resource(set, rec , false, attrp, true) < 0) {
-        mrp_log_error("Failed to add resource (%s or %s) to Genivi Audio "
-                      "Manager resource set.", play, rec);
+    if (mrp_resource_set_add_resource(set, play, true, attrp, true) < 0) {
+        mrp_log_error("Failed to add resource %s to Genivi Audio "
+                      "Manager resource set.", play);
         goto fail;
     }
 
-    if (mrp_application_class_add_resource_set(cls, zone, set, 0) != 0) {
+    if (mrp_application_class_add_resource_set(cls, zone, set, seq) != 0) {
         mrp_log_error("Failed to add Genivi Audio Manager resource set "
                       "to application class %s in zone %s.", cls, zone);
         goto fail;
     }
 
-    mrp_resource_set_acquire(set, gam->seq++);
-
-    return TRUE;
+    return set;
 
  fail:
     if (set != NULL)
         mrp_resource_set_destroy(set);
 
-    return FALSE;
+    return NULL;
+}
+
+
+static void resctl_acquire(gamctl_t *gam, mrp_resource_set_t *set)
+{
+    mrp_resource_set_acquire(set, gam->seq++);
 }
 
 
@@ -168,10 +166,11 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
                            uint32_t *nout, mrp_domctl_arg_t *outs,
                            void *user_data)
 {
-    gamctl_t     *gam = (gamctl_t *)user_data;
-    const char   *error;
-    uint16_t      source, sink, *path, *route;
-    size_t        len, i;
+    gamctl_t           *gam = (gamctl_t *)user_data;
+    uint16_t            source, sink, *path, *route;
+    const char         *error;
+    size_t              len, i;
+    mrp_resource_set_t *set;
 
     if (narg < 2) {
         error = "invalid number of arguments (expecting >= 2)";
@@ -203,7 +202,8 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
         goto error;
     }
 
-    resctl_create(gam, source, sink, -1, 0);
+    if ((set = resctl_create(gam, source, sink, -1, 0)) != NULL)
+        resctl_acquire(gam, set);
 
     path = mrp_allocz(len * sizeof(path[0]));
 
@@ -228,6 +228,20 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
     outs[0].str  = mrp_strdup(error);
 
     return -1;
+}
+
+
+static void gamctl_recalc_resources(gamctl_t *gam, int zoneid)
+{
+    uint32_t z;
+
+    MRP_UNUSED(gam);
+
+    if (zoneid >= 0)
+        mrp_resource_owner_recalc(zoneid);
+    else
+        for (z = 0; z < mrp_zone_count(); z++)
+            mrp_resource_owner_recalc(z);
 }
 
 
