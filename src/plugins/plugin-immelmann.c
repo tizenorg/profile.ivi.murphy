@@ -343,8 +343,8 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
 {
     const char *source;
     const char *sink;
-    uint32_t sink_id, source_id;
-    mrp_domctl_arg_t args[2];
+    uint32_t sink_id, source_id, rset_id;
+    mrp_domctl_arg_t args[3];
     domain_data_t *d;
 
     if (!strcmp(appid, "t8j6HTRpuz.MediaPlayer"))
@@ -361,11 +361,12 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
         sink = ctx->default_sink;
     }
 
+    rset_id = mrp_get_resource_set_id(rset);
     source_id = get_source_id(ctx, source);
     sink_id = get_sink_id(ctx, sink);
 
     mrp_log_info("immelmann: register rset %u with GAM! (%s(%u) -> %s(%u))",
-            rset->id, source, source_id, sink, sink_id);
+            rset_id, source, source_id, sink, sink_id);
 
     /*
         calling GAM:
@@ -378,6 +379,9 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
 
     args[1].type = MRP_DOMCTL_UINT16;
     args[1].u16 = sink_id;
+
+    args[2].type = MRP_DOMCTL_UINT32;
+    args[2].u32 = rset_id;
 
     /* TODO: do proper error handling */
 
