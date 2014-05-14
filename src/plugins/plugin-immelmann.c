@@ -165,7 +165,7 @@ uint32_t get_node_id(immelmann_t *ctx, const char *name, bool sink)
     if (ret < 0 || ret == BUFLEN)
         goto end;
 
-    result = mql_exec_string(mql_result_string, cmdbuf);
+    result = mql_exec_string(mql_result_rows, cmdbuf);
 
     if (!mql_result_is_success(result))
         goto end;
@@ -221,7 +221,7 @@ bool is_sink_available(immelmann_t *ctx, const char *sink)
     if (ret < 0 || ret == BUFLEN)
         goto end;
 
-    result = mql_exec_string(mql_result_string, cmdbuf);
+    result = mql_exec_string(mql_result_rows, cmdbuf);
 
     if (!mql_result_is_success(result))
         goto end;
