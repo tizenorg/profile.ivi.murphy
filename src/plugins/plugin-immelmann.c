@@ -49,8 +49,8 @@
 #include <murphy/resource/application-class.h>
 
 #define PRIORITY_CLASS MRP_LUA_CLASS_SIMPLE(routing_sink_priority)
-#define CONN_ID_ATTRIBUTE "conn_id"
-#define SOURCE_ATTRIBUTE  "source"
+#define CONNID_ATTRIBUTE "connid"
+#define APPID_ATTRIBUTE  "appid"
 
 /* Listen for new resource sets. When one appears, check if it already has
  * attributes "sink" and "connection_id" set. If it has, the request has come
@@ -128,7 +128,7 @@ void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
     mrp_zone_t *zone;
 
     conn_id_attr = mrp_resource_set_get_attribute_by_name(rset,
-            resource, CONN_ID_ATTRIBUTE);
+            resource, CONNID_ATTRIBUTE);
 
     if (conn_id_attr && conn_id_attr->type == mqi_unsignd) {
         conn_id_attr->value.unsignd = conn_id;
@@ -339,12 +339,18 @@ end:
 }
 
 void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
-        const char *source)
+        const char *appid)
 {
+    const char *source;
     const char *sink;
     uint32_t sink_id, source_id;
     mrp_domctl_arg_t args[2];
     domain_data_t *d;
+
+    if (!strcmp(appid, "t8j6HTRpuz.MediaPlayer"))
+        source = "wrtApplication";
+    else
+        source = "icoApplication";
 
     /* ask GAM for the connection via control interface */
 
@@ -443,26 +449,26 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
         }
 
         if (audio_playback) {
-            mrp_attr_t *source; /* the application itself */
+            mrp_attr_t *app_id; /* the application itself */
             mrp_attr_t *conn_id;
 
-            source = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_playback", SOURCE_ATTRIBUTE);
+            app_id = mrp_resource_set_get_attribute_by_name(rset,
+                    "audio_playback", APPID_ATTRIBUTE);
             conn_id = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_playback", CONN_ID_ATTRIBUTE);
+                    "audio_playback", CONNID_ATTRIBUTE);
 
-            if (!source || !conn_id) {
+            if (!app_id || !conn_id) {
                 /* what is this? */
                 mrp_log_error("source or conn_id attributes not defined!");
             }
-            else if (conn_id->type != mqi_unsignd ||
-                    source->type != mqi_string) {
-                mrp_log_error("source or conn_id types don't match!");
+            else if (conn_id->type != mqi_integer ||
+                    app_id->type != mqi_string) {
+                mrp_log_error("appid or connid types don't match!");
             }
-            else if (conn_id->value.unsignd == 0) {
-                /* this connection is not already managed by GAM */
+            else if (conn_id->value.unsignd < 1) {
+                /* this connection is not yet managed by GAM */
 
-                register_sink_with_gam(ctx, rset, source->value.string);
+                register_sink_with_gam(ctx, rset, app_id->value.string);
             }
         }
 
@@ -470,20 +476,20 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
         /* TODO: think properly about audio recording */
 
         if (audio_recording) {
-            mrp_attr_t *sink; /* the application itself */
+            mrp_attr_t *app_id; /* the application itself */
             mrp_attr_t *conn_id;
 
-            sink = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_recording", "sink");
+            app_id = mrp_resource_set_get_attribute_by_name(rset,
+                    "audio_recording", APPID_ATTRIBUTE);
             conn_id = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_recording", "conn_id");
+                    "audio_recording", CONNID_ATTRIBUTE);
 
-            if (!sink || !conn_id) {
+            if (!app_id || !conn_id) {
                 /* what is this? */
                 mrp_log_error("sink or conn_id attributes not defined!");
             }
-            else if (conn_id->type == mqi_unsignd &&
-                    conn_id->value.unsignd == 0) {
+            else if (conn_id->type == mqi_integer &&
+                    conn_id->value.unsignd < 1) {
                 /* this connection is not already managed by GAM */
                 need_to_register = TRUE;
             }

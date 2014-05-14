@@ -359,6 +359,8 @@ static bool sink_status_changed_cb(mrp_resmgr_t *resmgr)
         return false;
     }
 
+    printf("=== got %d rows\n", n);
+
     if (n == 0)
         return false;
 
