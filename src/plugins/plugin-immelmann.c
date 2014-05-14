@@ -301,31 +301,31 @@ void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
     mrp_resource_set_t *rset;
 
     if (error || retval == 0) {
-        mrp_log_error("connect call to GAM failed: %d", error);
+        mrp_log_error("immelmann: connect call to GAM failed: %d", error);
         goto end;
     }
 
     if (narg != 1) {
-        mrp_log_error("unexpected number (%d) of return values", narg);
+        mrp_log_error("immelmann: unexpected number (%d) of return values", narg);
         goto end;
     }
 
     if (args[0].type != MRP_DOMCTL_UINT32) {
-        mrp_log_error("wrong type for return argument");
+        mrp_log_error("immelmann: wrong type for return argument");
         goto end;
     }
 
     connid = args[0].u32;
 
     if (connid == 0) {
-        mrp_log_error("error doing the GAM connection");
+        mrp_log_error("immelmann: error doing the GAM connection");
         goto end;
     }
 
     rset = mrp_resource_set_find_by_id(d->rset_id);
 
     if (!rset) {
-        mrp_log_error("no resource set matching id (%u)", d->rset_id);
+        mrp_log_error("immelmann: no resource set matching id (%u)", d->rset_id);
         goto end;
     }
 
@@ -357,14 +357,14 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
     sink = get_default_sink(ctx, rset);
 
     if (!sink) {
-        mrp_log_error("error finding default sink, using global default");
+        mrp_log_error("immelmann: error finding default sink, using global default");
         sink = ctx->default_sink;
     }
 
     source_id = get_source_id(ctx, source);
     sink_id = get_sink_id(ctx, sink);
 
-    mrp_log_info("register rset %u with GAM! (%s(%u) -> %s(%u))",
+    mrp_log_info("immelmann: register rset %u with GAM! (%s(%u) -> %s(%u))",
             rset->id, source, source_id, sink, sink_id);
 
     /*
@@ -384,14 +384,14 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
     d = mrp_allocz(sizeof(domain_data_t));
 
     if (!d) {
-        mrp_log_error("memory allocation error");
+        mrp_log_error("immelmann: memory allocation error");
         return;
     }
 
     /* TODO: resource names from config */
     d->resource = mrp_strdup("audio_playback");
     if (!d->resource) {
-        mrp_log_error("memory allocation error");
+        mrp_log_error("immelmann: memory allocation error");
         mrp_free(d);
         return;
     }
@@ -416,12 +416,12 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
 
     mrp_msg_get(event_data, MRP_MSG_TAG_UINT32(tag, &rset_id), NULL);
 
-    mrp_log_info("resource set event '%d' for '%u' received!", id, rset_id);
+    mrp_log_info("immelmann: resource set event '%d' for '%u' received!", id, rset_id);
 
     if (id == ctx->events[CREATED]) {
         mrp_resource_set_t *rset = mrp_resource_set_find_by_id(rset_id);
 
-        mrp_log_info("Resource set %u (%p) was created", rset_id, rset);
+        mrp_log_info("immelmann: Resource set %u (%p) was created", rset_id, rset);
     }
     else if (id == ctx->events[ACQUIRE]) {
         mrp_resource_set_t *rset = mrp_resource_set_find_by_id(rset_id);
@@ -459,11 +459,11 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
 
             if (!app_id || !conn_id) {
                 /* what is this? */
-                mrp_log_error("source or conn_id attributes not defined!");
+                mrp_log_error("immelmann: source or conn_id attributes not defined!");
             }
             else if (conn_id->type != mqi_integer ||
                     app_id->type != mqi_string) {
-                mrp_log_error("appid or connid types don't match!");
+                mrp_log_error("immelmann: appid or connid types don't match!");
             }
             else if (conn_id->value.unsignd < 1) {
                 /* this connection is not yet managed by GAM */
@@ -486,7 +486,7 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
 
             if (!app_id || !conn_id) {
                 /* what is this? */
-                mrp_log_error("sink or conn_id attributes not defined!");
+                mrp_log_error("immelmann: sink or conn_id attributes not defined!");
             }
             else if (conn_id->type == mqi_integer &&
                     conn_id->value.unsignd < 1) {
@@ -496,15 +496,15 @@ void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
         }
 #endif
 
-        mrp_log_info("Resource set %u (%p) was acquired", rset_id, rset);
+        mrp_log_info("immelmann: Resource set %u (%p) was acquired", rset_id, rset);
     }
     else if (id == ctx->events[RELEASE]) {
         mrp_resource_set_t *rset = mrp_resource_set_find_by_id(rset_id);
 
-        mrp_log_info("Resource set %u (%p) was released", rset_id, rset);
+        mrp_log_info("immelmann: Resource set %u (%p) was released", rset_id, rset);
     }
     else if (id == ctx->events[DESTROYED]) {
-        mrp_log_info("Resource set %u was destroyed", rset_id);
+        mrp_log_info("immelmann: Resource set %u was destroyed", rset_id);
     }
 }
 
@@ -569,7 +569,7 @@ static int priority_create(lua_State *L)
             }
         }
         else {
-            mrp_log_error("Immelmann config: unknown field");
+            mrp_log_error("immelmann: unknown field");
         }
     }
 
@@ -584,7 +584,7 @@ static int priority_create(lua_State *L)
         luaL_error(L, "invalid or duplicate application_class '%s'", name);
     else {
         prio->name = name;
-        mrp_log_info("application class priority object '%s' created", name);
+        mrp_log_info("immelmann: application class priority object '%s' created", name);
     }
 
     prio->sinks = priority_queue;
