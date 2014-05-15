@@ -196,7 +196,7 @@ static mrp_attr_def_t audio_attrs[] = {
     ATTRIBUTE( "source_id"  , integer,  0             ),
     ATTRIBUTE( "sink_name"  , string ,  "<undefined>" ),
     ATTRIBUTE( "sink_id"    , integer,  0             ),
-    ATTRIBUTE( "connid"     , integer, -1             ),
+    ATTRIBUTE( "connid"     , integer,  0             ),
     ATTRIBUTE( "connno"     , integer,  0             ),
     ATTRIBUTE( "stamp"      , integer,  0             ),
     ATTRIBUTE( "decision"   , string ,  "<not yet>"   ),
