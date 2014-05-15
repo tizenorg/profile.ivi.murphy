@@ -404,7 +404,7 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
     d->ctx = ctx;
     d->rset_id = rset->id; /* use id to escape a race condition */
 
-    mrp_invoke_domain(ctx->mrp_ctx, "audio-manager", "connect", 2, args,
+    mrp_invoke_domain(ctx->mrp_ctx, "audio-manager", "connect", 3, args,
             connect_cb, d);
 
     return;
