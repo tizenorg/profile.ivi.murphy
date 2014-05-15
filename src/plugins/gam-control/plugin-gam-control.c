@@ -25,6 +25,7 @@ typedef struct route_s  route_t;
 struct gamctl_s {
     mrp_plugin_t          *self;         /* us, this plugin */
     mrp_resource_client_t *rsc;          /* resource client */
+    mrp_htbl_t            *rstbl;        /* resource sets */
     uint32_t               seq;          /* request sequence number */
     uint32_t               sourcef;      /* source table fingerprint (stamp) */
     uint32_t               sinkf;        /* sink table fingerprint (stamp) */
@@ -76,6 +77,9 @@ static void gamctl_exit(mrp_plugin_t *plugin);
 static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
                            uint32_t *nout, mrp_domctl_arg_t *outs,
                            void *user_data);
+static int gamctl_disconnect_cb(int narg, mrp_domctl_arg_t *args,
+                                uint32_t *nout, mrp_domctl_arg_t *outs,
+                                void *user_data);
 
 static char *route_dump(gamctl_t *gam, char *buf, size_t size,
                         route_t *r, int verbose);
@@ -299,8 +303,34 @@ static int resolve_routes(gamctl_t *gam)
 }
 
 
+static int connid_cmp(const void *key1, const void *key2)
+{
+    return key2 - key1;
+}
+
+
+static uint32_t connid_hash(const void *key)
+{
+    uint16_t connid = (uint16_t)(ptrdiff_t)key;
+
+    return connid;
+}
+
+
 static int resctl_init(gamctl_t *gam)
 {
+    mrp_htbl_config_t hcfg;
+
+    mrp_clear(&hcfg);
+    hcfg.comp  = connid_cmp;
+    hcfg.hash  = connid_hash;
+    hcfg.free  = NULL;
+
+    gam->rstbl = mrp_htbl_create(&hcfg);
+
+    if (gam->rstbl == NULL)
+        return FALSE;
+
     gam->seq = 1;
     gam->rsc = mrp_resource_client_create("genivi-audio-manager", gam);
 
@@ -380,7 +410,12 @@ static mrp_resource_set_t *resctl_create(gamctl_t *gam, uint16_t source,
         goto fail;
     }
 
-    return set;
+    if (mrp_htbl_insert(gam->rstbl, (void *)(ptrdiff_t)connid, set))
+        return set;
+    else
+        mrp_log_error("Failed to associate resource set with connection %u.",
+                      connid);
+    /* fallthru */
 
  fail:
     if (set != NULL)
@@ -433,6 +468,21 @@ static void resctl_acquire(gamctl_t *gam, mrp_resource_set_t *set)
 }
 
 
+static int resctl_destroy(gamctl_t *gam, uint16_t connid)
+{
+    mrp_resource_set_t *rset;
+
+    rset = mrp_htbl_remove(gam->rstbl, (void *)(ptrdiff_t)connid, FALSE);
+
+    if (rset != NULL) {
+        mrp_resource_set_destroy(rset);
+        return TRUE;
+    }
+    else
+        return FALSE;
+}
+
+
 static void resctl_recalc(gamctl_t *gam, int zoneid)
 {
     uint32_t z;
@@ -474,10 +524,15 @@ static void resctl_schedule_recalc(gamctl_t *gam)
 
 static void resctl_exit(gamctl_t *gam)
 {
-    if (gam != NULL && gam->rsc != NULL) {
-        mrp_log_info("Destroying Genivi Audio Manager resource client.");
-        mrp_resource_client_destroy(gam->rsc);
-        gam->rsc = NULL;
+    if (gam != NULL) {
+        if (gam->rsc != NULL) {
+            mrp_log_info("Destroying Genivi Audio Manager resource client.");
+            mrp_resource_client_destroy(gam->rsc);
+            gam->rsc = NULL;
+        }
+
+        mrp_htbl_destroy(gam->rstbl, FALSE);
+        gam->rstbl = NULL;
     }
 }
 
@@ -600,7 +655,8 @@ static int domctl_init(gamctl_t *gam)
 {
     mrp_context_t           *ctx           = gam->self->ctx;
     mrp_domain_method_def_t  gam_methods[] = {
-        { "request_route", 32, gamctl_route_cb, gam },
+        { "request_route"    , 32, gamctl_route_cb     , gam },
+        { "notify_disconnect",  8, gamctl_disconnect_cb, gam },
     };
     size_t                   gam_nmethod   = MRP_ARRAY_SIZE(gam_methods);
 
@@ -664,7 +720,7 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
     conn   = args[1].u16;
     rsetid = args[2].u32;
 
-    mrp_log_info("Got routing request for connection #%d:%u -> %u "
+    mrp_log_info("Got routing request for connection #%u:%u -> %u "
                  "(rset 0x%x) with %d possible routes.", conn, source, sink,
                  rsetid, narg - 3);
 
@@ -711,6 +767,40 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
     outs[0].str  = mrp_strdup(error);
 
     return -1;
+}
+
+
+static int gamctl_disconnect_cb(int narg, mrp_domctl_arg_t *args,
+                                uint32_t *nout, mrp_domctl_arg_t *outs,
+                                void *user_data)
+{
+    gamctl_t   *gam = (gamctl_t *)user_data;
+    const char *error;
+    uint16_t    conn;
+
+    if (narg != 1) {
+        error = "too few disconnect notification arguments (need connid)";
+        goto error;
+    }
+
+    if (args[0].type != MRP_DOMCTL_UINT16) {
+        error = "invalid disconnect connid (arg #0), uint16_t expected";
+        goto error;
+    }
+
+    conn = args[0].u16;
+
+    mrp_log_info("Got disconnect request for connection #%u.", conn);
+
+    resctl_destroy(gam, conn);
+    return TRUE;
+
+ error:
+    *nout = 1;
+    outs[0].type = MRP_DOMCTL_STRING;
+    outs[0].str  = mrp_strdup(error);
+
+    return FALSE;
 }
 
 
