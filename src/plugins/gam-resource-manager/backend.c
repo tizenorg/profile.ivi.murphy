@@ -157,6 +157,9 @@ static bool resource_register_by_id(mrp_resmgr_backend_t *,
 static mrp_resmgr_resource_t *resource_lookup_by_pointer(mrp_resmgr_backend_t*,
                                                          mrp_resource_t *);
 
+static size_t resource_print_name(mrp_resmgr_source_t *,uint32_t,char *,size_t);
+
+
 static void make_decisions(mrp_resmgr_backend_t *);
 static void commit_decisions(mrp_resmgr_backend_t *);
 static size_t print_decision(mrp_resmgr_resource_t *, char *, size_t);
@@ -708,12 +711,7 @@ static void resource_create(mrp_resmgr_backend_t *backend,
     if (!type)
         return;
 
-    if (connno < 2)
-        snprintf(name, sizeof(name), "%s", mrp_resmgr_source_get_name(src));
-    else {
-        snprintf(name, sizeof(name), "%s%d", mrp_resmgr_source_get_name(src),
-                 connno);
-    }
+    resource_print_name(src, connno, name, sizeof(name));
 
 
     if (!(ar = mrp_allocz(sizeof(mrp_resmgr_resource_t))))
@@ -861,18 +859,97 @@ static mrp_resmgr_resource_t *resource_lookup_by_pointer(mrp_resmgr_backend_t *b
     return mrp_htbl_lookup(htbl, res);
 }
 
+static size_t resource_print_name(mrp_resmgr_source_t *src,
+                                  uint32_t connno,
+                                  char *name,
+                                  size_t len)
+{
+    size_t ret;
+
+    if (!src)
+        ret = snprintf(name, len, "<invalid>");
+    else if (connno < 2)
+        ret = snprintf(name, len, "%s", mrp_resmgr_source_get_name(src));
+    else {
+        ret = snprintf(name, len, "%s%d", mrp_resmgr_source_get_name(src),
+                       connno);
+    }
+
+    return ret;
+}
+
+
 static int decision_cb(void *key, void *object, void *user_data)
 {
-    // mrp_resmgr_backend_t  *backend = (mrp_resmgr_backend_t *)user_data;
+    mrp_resmgr_backend_t  *backend = (mrp_resmgr_backend_t *)user_data;
     mrp_resmgr_resource_t *ar = (mrp_resmgr_resource_t *)object;
+    mrp_resmgr_t *resmgr;
+    mrp_resmgr_usecase_t *usecase;
     bool sink_available, source_available;
     int32_t decision_new, state_new;
+    mrp_attr_t attrs[ATTR_MAX+1];
+    uint16_t src_id, sink_id;
+    uint32_t connid;
+    mrp_resmgr_source_t *src;
+    bool need_update;
     char buf[512];
 
     MRP_UNUSED(key);
     MRP_UNUSED(user_data);
 
-    MRP_ASSERT(ar, "confused with data structures");
+    MRP_ASSERT(ar && ar->backend == backend, "confused with data structures");
+
+    if (!ar->sink || !ar->source || !ar->connno) {
+        memset(attrs, 0, sizeof(attrs));
+        need_update = false;
+
+        if (mrp_resource_read_all_attributes(ar->res, ATTR_MAX+1, attrs)) {
+            src_id = attrs[SRCID_ATTRIDX].value.integer;
+            sink_id = attrs[SINKID_ATTRIDX].value.integer;
+            connid = attrs[CONNID_ATTRIDX].value.integer;
+
+            if (!ar->source && src_id > 0) {
+                src = mrp_resmgr_source_find_by_id(backend->resmgr, src_id);
+
+                if (src && mrp_resmgr_source_add_resource(src,&ar->source_link)) {
+                    resource_print_name(src, ar->connno, buf, sizeof(buf));
+                    mrp_free(ar->name);
+
+                    ar->name = mrp_strdup(buf);
+                    ar->source = src;
+
+                    mrp_debug("update resource %s source to '%s'",
+                              ar->name, mrp_resmgr_source_get_name(src));
+
+                    need_update = true;
+                }
+            }
+
+            if (!ar->sink && sink_id > 0) {
+                ar->sink = mrp_resmgr_sink_find_by_gam_id(backend->resmgr,
+                                                          sink_id);
+                mrp_debug("update resource %s sink to '%s'",
+                          ar->name, mrp_resmgr_sink_get_name(ar->sink));
+
+                need_update = true;
+            }
+
+            if (!ar->connid && connid > 0) {
+                ar->connid = connid;
+                mrp_debug("update resource %s connid to %u",
+                          ar->name, connid);
+
+                need_update = true;
+            }
+
+            if (need_update) {
+                resmgr = backend->resmgr;
+
+                if ((usecase = mrp_resmgr_get_usecase(resmgr)))
+                    mrp_resmgr_usecase_update(usecase);
+            }
+        }
+    }
 
     source_available = mrp_resmgr_source_get_availability(ar->source);
     sink_available = mrp_resmgr_sink_get_availability(ar->sink);
@@ -913,14 +990,14 @@ static void make_decisions(mrp_resmgr_backend_t *backend)
 
 static int commit_cb(void *key, void *object, void *user_data)
 {
-    // mrp_resmgr_backend_t  *backend = (mrp_resmgr_backend_t *)user_data;
+    mrp_resmgr_backend_t  *backend = (mrp_resmgr_backend_t *)user_data;
     mrp_resmgr_resource_t *ar = (mrp_resmgr_resource_t *)object;
     char buf[256];
 
     MRP_UNUSED(key);
     MRP_UNUSED(user_data);
 
-    MRP_ASSERT(ar, "confused with data structures");
+    MRP_ASSERT(ar && ar->backend == backend, "confused with data structures");
 
     if (ar->source) {
         print_commit(ar, buf, sizeof(buf));

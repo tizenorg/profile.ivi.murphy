@@ -333,7 +333,7 @@ bool mrp_resmgr_source_add_resource(mrp_resmgr_source_t *src,
     mrp_list_hook_t *insert_after;
     bool success;
 
-    MRP_ASSERT(src && ar_source_link, "invalid atgument");
+    MRP_ASSERT(src && ar_source_link, "invalid argument");
 
     ar = mrp_resmgr_backend_resource_list_entry(ar_source_link);
     connno = mrp_resmgr_backend_get_resource_connno(ar);
