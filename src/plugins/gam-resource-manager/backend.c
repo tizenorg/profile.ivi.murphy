@@ -920,15 +920,17 @@ static int commit_cb(void *key, void *object, void *user_data)
     MRP_UNUSED(key);
     MRP_UNUSED(user_data);
 
-    MRP_ASSERT(ar && ar->source, "confused with data structures");
+    MRP_ASSERT(ar, "confused with data structures");
 
-    print_commit(ar, buf, sizeof(buf));
-    mrp_debug("   %s", buf);
+    if (ar->source) {
+        print_commit(ar, buf, sizeof(buf));
+        mrp_debug("   %s", buf);
 
-    ar->decision.current = ar->decision.new;
-    ar->state.current = ar->state.new;
+        ar->decision.current = ar->decision.new;
+        ar->state.current = ar->state.new;
 
-    set_resource_decision(ar->res, ar->decision.current);
+        set_resource_decision(ar->res, ar->decision.current);
+    }
 
     return MRP_HTBL_ITER_MORE;
 }
