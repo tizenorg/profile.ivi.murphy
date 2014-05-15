@@ -329,7 +329,8 @@ void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
         goto end;
     }
 
-    set_connection_id(d->ctx, rset, d->resource, connid);
+    /* gam-control will do this */
+    /*set_connection_id(d->ctx, rset, d->resource, connid);*/
 
 end:
     mrp_free(d->resource);
