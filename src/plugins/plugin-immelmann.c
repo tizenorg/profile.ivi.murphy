@@ -305,6 +305,7 @@ void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
         goto end;
     }
 
+#if 0
     if (narg != 1) {
         mrp_log_error("immelmann: unexpected number (%d) of return values", narg);
         goto end;
@@ -316,6 +317,9 @@ void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
     }
 
     connid = args[0].u32;
+#else
+    connid = retval;
+#endif
 
     if (connid == 0) {
         mrp_log_error("immelmann: error doing the GAM connection");
@@ -328,6 +332,9 @@ void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
         mrp_log_error("immelmann: no resource set matching id (%u)", d->rset_id);
         goto end;
     }
+
+    mrp_log_info("immelmann: got connection id %u for resource set %u",
+                 connid, d->rset_id);
 
     /* gam-control will do this */
     /*set_connection_id(d->ctx, rset, d->resource, connid);*/
