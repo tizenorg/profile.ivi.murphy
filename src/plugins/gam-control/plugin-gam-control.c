@@ -531,7 +531,7 @@ static void resctl_schedule_recalc(gamctl_t *gam)
 {
     mrp_log_info("Scheduling resource recalculation.");
 
-    if (gam->recalc != NULL)
+    if (gam->recalc == NULL)
         gam->recalc = mrp_add_deferred(gam->self->ctx->ml, recalc_cb, gam);
     else
         mrp_enable_deferred(gam->recalc);
