@@ -208,6 +208,15 @@ static int exec_mql(mql_result_type_t type, mql_result_t **resultp,
 }
 
 
+static void reset_nodes(node_t *nodes)
+{
+    node_t *node;
+
+    for (node = nodes; node->name != NULL; node++)
+        node->id = 0;
+}
+
+
 static int resolve_nodes(const char *type, node_t *nodes,
                          const char *tbl, uint32_t *age)
 {
@@ -225,6 +234,8 @@ static int resolve_nodes(const char *type, node_t *nodes,
 
     if (!exec_mql(mql_result_rows, &r, "select id,name from %s", tbl))
         return FALSE;
+
+    reset_nodes(nodes);
 
     if (r == NULL)
         return FALSE;
@@ -272,8 +283,10 @@ static int resolve_routes(gamctl_t *gam)
     path_t     *p;
     uint16_t    id;
     size_t      i;
+    int         incomplete;
 
     for (r = gam->routes, p = paths; r->nhop; r++, p++) {
+        incomplete = FALSE;
         for (i = 0; i < r->nhop; i++) {
             node = p->hops[i];
 
@@ -287,16 +300,19 @@ static int resolve_routes(gamctl_t *gam)
             }
 
             if (!id) {
-                mrp_log_error("Can't resolve routes, have no id for %s '%s'.",
-                              type, node);
-                return FALSE;
+                mrp_log_warning("Unresolved %s '%s').",type, node);
+                incomplete = TRUE;
             }
 
             r->hops[i] = id;
         }
 
-        mrp_log_info("Resolved route: %s",
-                     route_dump(gam, route, sizeof(route), r, TRUE));
+        if (!incomplete)
+            mrp_log_info("Resolved route: %s",
+                         route_dump(gam, route, sizeof(route), r, TRUE));
+        else
+            mrp_log_warning("Unresolvable route: %s",
+                            route_dump(gam, route, sizeof(route), r, TRUE));
     }
 
     return TRUE;
@@ -624,6 +640,18 @@ static char *route_dump(gamctl_t *gam, char *buf, size_t size,
 }
 
 
+static int route_incomplete(route_t *r)
+{
+    size_t h;
+
+    for (h = 0; h < r->nhop; h++)
+        if (!r->hops[h])
+            return TRUE;
+
+    return FALSE;
+}
+
+
 static route_t *route_connection(gamctl_t *gam, uint16_t source, uint16_t sink)
 {
     uint32_t  sourcef = gam->sourcef;
@@ -641,9 +669,16 @@ static route_t *route_connection(gamctl_t *gam, uint16_t source, uint16_t sink)
 
     for (r = gam->routes; r->source; r++) {
         if (r->hops[0] == source && r->hops[r->nhop - 1] == sink) {
-            mrp_log_info("Chosen route for connection: %s",
-                         route_dump(gam, route, sizeof(route), r, TRUE));
-            return r;
+            if (!route_incomplete(r)) {
+                mrp_log_info("Chosen route for connection: %s",
+                             route_dump(gam, route, sizeof(route), r, TRUE));
+                return r;
+            }
+            else {
+                mrp_log_error("Route %u -> %u is unresolved/incomplete.",
+                              source, sink);
+                return NULL;
+            }
         }
     }
 
