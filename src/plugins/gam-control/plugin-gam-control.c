@@ -444,8 +444,11 @@ static mrp_resource_set_t *resctl_create(gamctl_t *gam, uint16_t source,
 static int resctl_update(gamctl_t *gam, uint32_t rsetid,
                          uint16_t source, uint16_t sink, uint16_t conn)
 {
-    mrp_resource_set_t *rset = mrp_resource_set_find_by_id(rsetid);
-    mrp_attr_t          attrs[8];
+    static int srcidx = -1, sinkidx = -1, connidx = -1;
+
+    mrp_resource_set_t *rset  = mrp_resource_set_find_by_id(rsetid);
+    mrp_attr_t         *attrs = NULL, *a;
+    int                 i, status;
 
     MRP_UNUSED(gam);
 
@@ -455,25 +458,46 @@ static int resctl_update(gamctl_t *gam, uint32_t rsetid,
         return FALSE;
     }
 
-    attrs[0].type          = mqi_integer;
-    attrs[0].name          = "source_id";
-    attrs[0].value.integer = source;
-    attrs[1].type          = mqi_integer;
-    attrs[1].name          = "sink_id";
-    attrs[1].value.integer = sink;
-    attrs[2].type          = mqi_integer;
-    attrs[2].name          = "connid";
-    attrs[2].value.integer = conn;
-    attrs[3].name          = NULL;
+    attrs = mrp_resource_set_read_all_attributes(rset, "audio_playback", 0,NULL);
 
-    if (mrp_resource_set_write_attributes(rset, "audio_playback", attrs) < 0) {
-        mrp_log_error("Failed to update resource set attributes.");
+    if (attrs == NULL) {
+        mrp_log_error("Failed to read resource set attribute list.");
         return FALSE;
     }
-    else {
-        mrp_log_info("Resource set attributes updated.");
-        return TRUE;
+
+    if (srcidx >= 0 && sinkidx >= 0 && connidx >= 0) {
+        attrs[srcidx].value.integer  = source;
+        attrs[sinkidx].value.integer = sink;
+        attrs[connidx].value.integer = conn;
     }
+    else {
+        for (a = attrs, i = 0; a->name != NULL; a++, i++) {
+            if (a->type != mqi_integer)
+                continue;
+
+            if (!strcmp(a->name, "source_id")) {
+                a->value.integer = source;
+                srcidx = i;
+            }
+            else if (!strcmp(a->name, "sink_id")) {
+                a->value.integer = sink;
+                sinkidx = i;
+            }
+            else if (!strcmp(a->name, "connid")) {
+                a->value.integer = conn;
+                connidx = i;
+            }
+        }
+    }
+
+    status = mrp_resource_set_write_attributes(rset, "audio_playback", attrs);
+
+    if (status < 0)
+        mrp_log_error("Failed to update resource set attributes.");
+    else
+        mrp_log_info("Resource set attributes updated.");
+
+    return status;
 }
 
 
@@ -505,7 +529,7 @@ static void resctl_recalc(gamctl_t *gam, int zoneid)
 
     MRP_UNUSED(gam);
 
-    mrp_log_info("Recaluclating resource set allocations.");
+    mrp_log_info("Recalculating resource set allocations.");
 
     if (zoneid >= 0)
         mrp_resource_owner_recalc(zoneid);
