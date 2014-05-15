@@ -200,6 +200,16 @@ Requires: %{name} = %{version}
 %endif
 %endif
 
+%package gam
+Summary: Murphy support for Genivi Audio Manager
+Group: System/Libraries
+Requires: %{name} = %{version}
+
+%package gam-devel
+Summary: Murphy support for Genivi Audio Manager development files
+Group: System/Libraries
+Requires: %{name}-gam = %{version}
+
 %package tests
 Summary: Various test binaries for Murphy
 Group: System/Testing
@@ -286,6 +296,12 @@ This package contains the Murphy IVI resource manager plugin.
 This package contains the Murphy IVI resource manager plugin.
 %endif
 
+%description gam
+This package contains Murphy GAM plugins.
+
+%description gam-devel
+This package contains development files for Murphy GAM plugins.
+
 %prep
 %setup -q
 
@@ -295,7 +311,7 @@ export CFLAGS="-O0 -g3"
 V="V=1"
 %endif
 
-CONFIG_OPTIONS=""
+CONFIG_OPTIONS="--enable-immelmann --enable-gam-control"
 DYNAMIC_PLUGINS="domain-control,system-controller,ivi-resource-manager"
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
@@ -682,6 +698,18 @@ fi
 %{_libdir}/libmurphy-qt.so
 %{_libdir}/pkgconfig/murphy-qt.pc
 %endif
+
+%files gam
+%defattr(-,root,root,-)
+%{_libdir}/libmurphy-decision-tree.so.*
+%{_libdir}/libmurphy-decision-tree.so.0.0.0
+%{_libdir}/murphy/plugins/plugin-gam-resource-manager.so
+
+%files gam-devel
+%defattr(-,root,root,-)
+%{_bindir}/decision-test
+%{_bindir}/pattern-generator
+%{_libdir}/libmurphy-decision-tree.so
 
 %files tests
 %defattr(-,root,root,-)
