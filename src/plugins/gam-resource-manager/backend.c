@@ -705,7 +705,7 @@ static void resource_create(mrp_resmgr_backend_t *backend,
     connid = get_resource_connid(res);
     connno = get_resource_connno(res);
 
-    if (!type || !src || !sink || connno < 0)
+    if (!type)
         return;
 
     if (connno < 2)
