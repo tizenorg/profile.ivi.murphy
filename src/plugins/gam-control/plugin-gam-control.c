@@ -300,7 +300,7 @@ static int resolve_routes(gamctl_t *gam)
             }
 
             if (!id) {
-                mrp_log_warning("Unresolved %s '%s').",type, node);
+                mrp_log_warning("Unresolved %s '%s'.",type, node);
                 incomplete = TRUE;
             }
 
