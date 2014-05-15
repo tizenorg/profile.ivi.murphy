@@ -14,6 +14,9 @@
 #define SOURCETBL "audio_manager_sources"
 #define SINKTBL   "audio_manager_sinks"
 
+typedef struct gamctl_s gamctl_t;
+typedef struct route_s  route_t;
+
 
 /*
  * plugin context/state
@@ -27,6 +30,7 @@ struct gamctl_s {
     uint32_t               sinkf;        /* sink table fingerprint (stamp) */
     route_t               *routes;       /* routing table */
     size_t                 nroute;       /* number of routing entries */
+    mrp_deferred_t        *recalc;       /* deferred resource recalculation */
 };
 
 
@@ -34,12 +38,12 @@ struct gamctl_s {
  * a route from source to sink
  */
 
-typedef struct {
+struct route_s {
     char     *source;                    /* source name */
     char     *sink;                      /* sink name */
     uint16_t *hops;                      /* routing hops */
     size_t    nhop;                      /* number of hops */
-} route_t;
+};
 
 
 /*
@@ -62,7 +66,6 @@ typedef struct {
 } path_t;
 
 
-typedef struct gamctl_s gamctl_t;
 
 static int  resctl_init(gamctl_t *gam);
 static void resctl_exit(gamctl_t *gam);
@@ -387,9 +390,85 @@ static mrp_resource_set_t *resctl_create(gamctl_t *gam, uint16_t source,
 }
 
 
+static int resctl_update(gamctl_t *gam, uint32_t rsetid,
+                         uint16_t source, uint16_t sink, uint16_t conn)
+{
+    mrp_resource_set_t *rset = mrp_resource_set_find_by_id(rsetid);
+    mrp_attr_t          attrs[8];
+
+    MRP_UNUSED(gam);
+
+    if (rset == NULL) {
+        mrp_log_error("Failed to update resource set, can't find set 0x%x.",
+                      rsetid);
+        return FALSE;
+    }
+
+    attrs[0].type          = mqi_integer;
+    attrs[0].name          = "source_id";
+    attrs[0].value.integer = source;
+    attrs[1].type          = mqi_integer;
+    attrs[1].name          = "sink_id";
+    attrs[1].value.integer = sink;
+    attrs[2].type          = mqi_integer;
+    attrs[2].name          = "connid";
+    attrs[2].value.integer = conn;
+    attrs[3].name          = NULL;
+
+    if (mrp_resource_set_write_attributes(rset, "audio_playback", attrs) < 0) {
+        mrp_log_error("Failed to update resource set attributes.");
+        return FALSE;
+    }
+    else {
+        mrp_log_info("Resource set attributes updated.");
+        return TRUE;
+    }
+}
+
+
 static void resctl_acquire(gamctl_t *gam, mrp_resource_set_t *set)
 {
+    mrp_log_info("Acquiring Genivi Audio Manager resource set.");
     mrp_resource_set_acquire(set, gam->seq++);
+}
+
+
+static void resctl_recalc(gamctl_t *gam, int zoneid)
+{
+    uint32_t z;
+
+    MRP_UNUSED(gam);
+
+    mrp_log_info("Recaluclating resource set allocations.");
+
+    if (zoneid >= 0)
+        mrp_resource_owner_recalc(zoneid);
+    else
+        for (z = 0; z < mrp_zone_count(); z++)
+            mrp_resource_owner_recalc(z);
+}
+
+
+static void recalc_cb(mrp_deferred_t *d, void *user_data)
+{
+    gamctl_t *gam = (gamctl_t *)user_data;
+
+    MRP_UNUSED(d);
+
+    mrp_disable_deferred(gam->recalc);
+
+    resctl_recalc(gam, -1);
+}
+
+
+static void resctl_schedule_recalc(gamctl_t *gam)
+{
+    mrp_log_info("Scheduling resource recalculation.");
+
+    if (gam->recalc != NULL)
+        gam->recalc = mrp_add_deferred(gam->self->ctx->ml, recalc_cb, gam);
+    else
+        mrp_enable_deferred(gam->recalc);
 }
 
 
@@ -453,22 +532,6 @@ static void route_exit(gamctl_t *gam)
         r->hops = NULL;
         r->nhop = 0;
     }
-}
-
-
-static int route_update(gamctl_t *gam)
-{
-    uint32_t sourcef = gam->sourcef;
-    uint32_t sinkf   = gam->sinkf;
-
-    if (!resolve_nodes("source", sources, SOURCETBL, &gam->sourcef) ||
-        !resolve_nodes("sink"  , sinks  , SINKTBL  , &gam->sinkf))
-        return FALSE;
-
-    if (sourcef != gam->sourcef || sinkf != gam->sinkf)
-        resolve_routes(gam);
-
-    return TRUE;
 }
 
 
@@ -563,34 +626,47 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
                            void *user_data)
 {
     gamctl_t           *gam = (gamctl_t *)user_data;
-    uint16_t            source, sink, *path;
+    uint16_t            source, sink, conn, *path;
+    uint32_t            rsetid;
     const char         *error;
     size_t              i;
-    mrp_resource_set_t *set;
+    mrp_resource_set_t *rset;
     route_t            *r;
 
-    if (narg < 2) {
-        error = "invalid number of arguments (expecting >= 2)";
+    if (narg < 4) {
+        error = "too few route request arguments (need route, conn, "
+            "rset and paths)";
         goto error;
     }
 
-    if (args[0].type != MRP_DOMCTL_ARRAY(UINT16) ||
-        args[1].type != MRP_DOMCTL_ARRAY(UINT16)) {
-        error = "invalid argument types (expecting arrays of uint16_t)";
+    if (args[0].type != MRP_DOMCTL_ARRAY(UINT16)) {
+        error = "invalid route (arg #0), array of uint16_t expected";
         goto error;
     }
 
     if (args[0].size != 2) {
-        error = "invalid route request (expecting array of 2 items)";
+        error = "invalid route (arg #0), 2 endpoints expected";
         goto error;
     }
 
-    mrp_log_info("Got routing request for %u -> %u with %d possible routes.",
-                 ((uint16_t *)args[0].arr)[0], ((uint16_t *)args[0].arr)[1],
-                 narg - 1);
+    if (args[1].type != MRP_DOMCTL_UINT16) {
+        error = "invalid connection id (arg #1), uint16_t expected";
+        goto error;
+    }
+
+    if (args[2].type != MRP_DOMCTL_UINT32) {
+        error = "invalid resource set id (arg #2), uint32_t expected";
+        goto error;
+    }
 
     source = ((uint16_t *)args[0].arr)[0];
     sink   = ((uint16_t *)args[0].arr)[1];
+    conn   = args[1].u16;
+    rsetid = args[2].u32;
+
+    mrp_log_info("Got routing request for connection #%d:%u -> %u "
+                 "(rset 0x%x) with %d possible routes.", conn, source, sink,
+                 rsetid, narg - 3);
 
     r = route_connection(gam, source, sink);
 
@@ -599,8 +675,18 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
         goto error;
     }
 
-    if ((set = resctl_create(gam, source, sink, -1, 0)) != NULL)
-        resctl_acquire(gam, set);
+    if (!rsetid) {
+        if ((rset = resctl_create(gam, source, sink, conn, 0)) == NULL) {
+            error = "failed to create resouce set";
+            goto error;
+        }
+
+        resctl_acquire(gam, rset);
+    }
+    else {
+        resctl_update(gam, rsetid, source, sink, conn);
+        resctl_schedule_recalc(gam);
+    }
 
     path = mrp_allocz(r->nhop * sizeof(path[0]));
 
@@ -625,20 +711,6 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
     outs[0].str  = mrp_strdup(error);
 
     return -1;
-}
-
-
-static void gamctl_recalc_resources(gamctl_t *gam, int zoneid)
-{
-    uint32_t z;
-
-    MRP_UNUSED(gam);
-
-    if (zoneid >= 0)
-        mrp_resource_owner_recalc(zoneid);
-    else
-        for (z = 0; z < mrp_zone_count(); z++)
-            mrp_resource_owner_recalc(z);
 }
 
 
