@@ -1699,9 +1699,9 @@ plugin_immelmann_la_SOURCES = $(IMMELMANN_PLUGIN_SOURCES)
 plugin_immelmann_la_CFLAGS  = $(IMMELMANN_PLUGIN_CFLAGS) $(MURPHY_CFLAGS) $(AM_CFLAGS)
 plugin_immelmann_la_LDFLAGS = -module -avoid-version
 plugin_immelmann_la_LIBADD  = $(IMMELMANN_PLUGIN_LIBS)
-endif
-endif
 plugin_LTLIBRARIES += plugin-immelmann.la
+endif
+endif
 endif
 
 # system-controller

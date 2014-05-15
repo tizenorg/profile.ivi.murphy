@@ -412,7 +412,7 @@ AC_ARG_ENABLE(gam-control,
               [  --enable-gam-control     enable Audio Manager control plugin],
 	      [enable_gam_control=$enableval], [enable_gam_control=no])
 
-if test "$enable_gam_control" != "yes"; then
+if test "$enable_gam_control" == "yes"; then
     AC_MSG_NOTICE([Genivi Audio Manager control plugin is enabled.])
 else
     AC_MSG_NOTICE([Genivi Audio Manager control plugin is disabled.])
