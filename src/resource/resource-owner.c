@@ -195,6 +195,7 @@ void mrp_resource_owner_update_zone(uint32_t zoneid,
     uint32_t replyid;
     uint32_t nevent, maxev;
     event_t *events, *ev, *lastev;
+    mqi_handle_t trans_handle;
 
     MRP_ASSERT(zoneid < MRP_ZONE_MAX, "invalid argument");
 
@@ -380,6 +381,8 @@ void mrp_resource_owner_update_zone(uint32_t zoneid,
 
     mrp_free(events);
 
+    trans_handle = MQI_HANDLE_INVALID;
+
     for (rid = 0;  rid < rcnt;  rid++) {
         owner = get_owner(zoneid, rid);
         old   = oldowners + rid;
@@ -388,6 +391,9 @@ void mrp_resource_owner_update_zone(uint32_t zoneid,
             owner->rset  != old->rset  ||
             owner->res   != old->res     )
         {
+            if (trans_handle == MQI_HANDLE_INVALID)
+                trans_handle = MQI_BEGIN;
+
             if (!owner->res)
                delete_resource_owner(zone,old->res);
             else if (!old->res)
@@ -396,6 +402,9 @@ void mrp_resource_owner_update_zone(uint32_t zoneid,
                update_resource_owner(zone,owner->class,owner->rset,owner->res);
         }
     }
+
+    if (trans_handle != MQI_HANDLE_INVALID)
+        MQI_COMMIT(trans_handle);
 }
 
 int mrp_resource_owner_print(char *buf, int len)
