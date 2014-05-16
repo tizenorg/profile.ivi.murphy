@@ -121,7 +121,8 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
-void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
+#if 0
+static void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
         const char *resource, uint32_t conn_id)
 {
     mrp_attr_t *conn_id_attr;
@@ -142,9 +143,10 @@ void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
     if (zone)
         mrp_resource_owner_recalc(zone->id);
 }
+#endif
 
 #define BUFLEN 1024
-uint32_t get_node_id(immelmann_t *ctx, const char *name, bool sink)
+static uint32_t get_node_id(immelmann_t *ctx, const char *name, bool sink)
 {
     char cmdbuf[BUFLEN];
     int ret;
@@ -184,19 +186,19 @@ end:
 }
 #undef BUFLEN
 
-uint32_t get_source_id(immelmann_t *ctx, const char *source)
+static uint32_t get_source_id(immelmann_t *ctx, const char *source)
 {
     return get_node_id(ctx, source, FALSE);
 }
 
-uint32_t get_sink_id(immelmann_t *ctx, const char *sink)
+static uint32_t get_sink_id(immelmann_t *ctx, const char *sink)
 {
     return get_node_id(ctx, sink, TRUE);
 }
 
 
 #define BUFLEN 1024
-bool is_sink_available(immelmann_t *ctx, const char *sink)
+static bool is_sink_available(immelmann_t *ctx, const char *sink)
 {
     char cmdbuf[BUFLEN];
     int ret;
@@ -246,7 +248,7 @@ end:
 }
 #undef BUFLEN
 
-void create_priority_class(immelmann_t *ctx)
+static void create_priority_class(immelmann_t *ctx)
 {
     lua_State *L = mrp_lua_get_lua_state();
 
@@ -255,7 +257,7 @@ void create_priority_class(immelmann_t *ctx)
     mrp_lua_create_object_class(L, PRIORITY_CLASS);
 }
 
-mrp_list_hook_t *get_priorities_for_application_class(immelmann_t *ctx,
+static mrp_list_hook_t *get_priorities_for_application_class(immelmann_t *ctx,
         const char *name)
 {
     priority_t *prio = mrp_htbl_lookup(ctx->pqs, (char *) name);
@@ -267,7 +269,7 @@ mrp_list_hook_t *get_priorities_for_application_class(immelmann_t *ctx,
     return NULL;
 }
 
-const char *get_default_sink(immelmann_t *ctx, mrp_resource_set_t *rset)
+static const char *get_default_sink(immelmann_t *ctx, mrp_resource_set_t *rset)
 {
     mrp_list_hook_t *pq = NULL;
     mrp_list_hook_t *p, *n;
@@ -293,33 +295,23 @@ const char *get_default_sink(immelmann_t *ctx, mrp_resource_set_t *rset)
     return NULL;
 }
 
-void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
+static void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
              void *user_data)
 {
     uint32_t connid;
     domain_data_t *d = (domain_data_t *) user_data;
     mrp_resource_set_t *rset;
 
+    MRP_UNUSED(narg);
+    MRP_UNUSED(args);
+
     if (error || retval == 0) {
-        mrp_log_error("immelmann: connect call to GAM failed: %d", error);
+        mrp_log_error("immelmann: connect call to GAM failed: %d / %d", error,
+                retval);
         goto end;
     }
 
-#if 0
-    if (narg != 1) {
-        mrp_log_error("immelmann: unexpected number (%d) of return values", narg);
-        goto end;
-    }
-
-    if (args[0].type != MRP_DOMCTL_UINT32) {
-        mrp_log_error("immelmann: wrong type for return argument");
-        goto end;
-    }
-
-    connid = args[0].u32;
-#else
     connid = retval;
-#endif
 
     if (connid == 0) {
         mrp_log_error("immelmann: error doing the GAM connection");
@@ -336,8 +328,10 @@ void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
     mrp_log_info("immelmann: got connection id %u for resource set %u",
                  connid, d->rset_id);
 
+#if 0
     /* gam-control will do this */
-    /*set_connection_id(d->ctx, rset, d->resource, connid);*/
+    set_connection_id(d->ctx, rset, d->resource, connid);
+#endif
 
 end:
     mrp_free(d->resource);
@@ -346,7 +340,7 @@ end:
     /* TODO: what to do to the resource set in the error case? */
 }
 
-void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
+static void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
         const char *appid)
 {
     const char *source;
@@ -417,7 +411,7 @@ void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
     return;
 }
 
-void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
+static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
         void *user_data)
 {
     immelmann_t *ctx = (immelmann_t *) user_data;
@@ -748,8 +742,8 @@ static void plugin_exit(mrp_plugin_t *plugin)
     global_ctx = NULL;
 }
 
-#define DEFAULT_ZONE    "driver"
-#define DEFAULT_SINK    "speakers"
+#define DEFAULT_ZONE       "driver"
+#define DEFAULT_SINK       "speakers"
 
 #define PLUGIN_DESCRIPTION "Plugin to add PA streams to GAM (with resource support)"
 #define PLUGIN_HELP        "Help coming later."
