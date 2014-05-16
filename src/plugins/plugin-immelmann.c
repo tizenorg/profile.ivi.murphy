@@ -68,6 +68,8 @@ typedef struct {
 
     char *zone;
     char *default_sink;
+    mrp_json_t *mapping;
+    char *app_default;
 
     mrp_htbl_t *pqs; /* "application_class" -> priority_t */
 
@@ -93,6 +95,8 @@ static immelmann_t *global_ctx;
 enum {
     ARG_ZONE,
     ARG_DEFAULT_SINK,
+    ARG_APP_DEFAULT,
+    ARG_APP_MAPPING,
 };
 
 enum {
@@ -349,10 +353,11 @@ static void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
     mrp_domctl_arg_t args[3];
     domain_data_t *d;
 
-    if (!strcmp(appid, "t8j6HTRpuz.MediaPlayer"))
-        source = "wrtApplication";
-    else
-        source = "icoApplication";
+    /* map the appid to sources as defined in configuration */
+
+    if (ctx->mapping == NULL ||
+            !mrp_json_get_string(ctx->mapping, appid, &source))
+        source = ctx->app_default;
 
     /* ask GAM for the connection via control interface */
 
@@ -659,6 +664,8 @@ static int plugin_init(mrp_plugin_t *plugin)
 
     ctx->zone = mrp_strdup(plugin->args[ARG_ZONE].str);
     ctx->default_sink = mrp_strdup(plugin->args[ARG_DEFAULT_SINK].str);
+    ctx->app_default = mrp_strdup(plugin->args[ARG_APP_DEFAULT].str);
+    ctx->mapping = plugin->args[ARG_APP_MAPPING].obj.json;
 
     if (!ctx->zone || !ctx->default_sink)
         goto error;
@@ -717,7 +724,10 @@ error:
         mrp_htbl_destroy(ctx->pqs, FALSE);
 
     mrp_free(ctx->default_sink);
+    mrp_free(ctx->app_default);
     mrp_free(ctx->zone);
+    if (ctx->mapping)
+        mrp_json_unref(ctx->mapping);
     mrp_free(ctx);
 
     global_ctx = NULL;
@@ -742,8 +752,10 @@ static void plugin_exit(mrp_plugin_t *plugin)
     global_ctx = NULL;
 }
 
-#define DEFAULT_ZONE       "driver"
-#define DEFAULT_SINK       "speakers"
+#define DEFAULT_ZONE        "driver"
+#define DEFAULT_SINK        "speakers"
+#define DEFAULT_APP_DEFAULT "icoApplication"
+#define DEFAULT_APP_MAPPING "{}"
 
 #define PLUGIN_DESCRIPTION "Plugin to add PA streams to GAM (with resource support)"
 #define PLUGIN_HELP        "Help coming later."
@@ -753,6 +765,8 @@ static void plugin_exit(mrp_plugin_t *plugin)
 static mrp_plugin_arg_t plugin_args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ZONE, STRING, "zone", DEFAULT_ZONE),
     MRP_PLUGIN_ARGIDX(ARG_DEFAULT_SINK, STRING, "default_sink", DEFAULT_SINK),
+    MRP_PLUGIN_ARGIDX(ARG_APP_DEFAULT, STRING, "app_default", DEFAULT_APP_DEFAULT),
+    MRP_PLUGIN_ARGIDX(ARG_APP_MAPPING, OBJECT, "app_mapping", DEFAULT_APP_MAPPING),
 };
 
 MURPHY_REGISTER_PLUGIN("immelmann",
