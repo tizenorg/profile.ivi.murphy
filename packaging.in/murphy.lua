@@ -50,11 +50,16 @@ else
     m:info("No glib plugin found...")
 end
 
+m:load_plugin('gam-resource-manager', {
+    config_dir = '/etc/murphy/gam',
+    decision_names = 'gam-wrtApplication-4',
+    max_active = 4
+})
 m:load_plugin('immelmann')
 m:load_plugin('gam-control')
 
 -- load the AMB plugin
-if m:plugin_exists('amb') then
+if m:plugin_exists('amb') and false then
     m:try_load_plugin('amb')
 
     if builtin.method.amb_initiate and
@@ -195,7 +200,8 @@ zone {
 
 -- define resource classes
 if not m:plugin_exists('ivi-resource-manager') and
-   not with_system_controller
+   not with_system_controller and
+   not m:plugin_exists('gam-resource-manager')
 then
    resource.class {
         name = "audio_playback",
@@ -204,21 +210,23 @@ then
             role = { mdb.string, "music", "rw" },
             pid = { mdb.string, "<unknown>", "rw" },
             policy = { mdb.string, "relaxed", "rw" },
-            source = { mdb.string, "paplay", "rw" },
+            source = { mdb.string, "webkit", "rw" },
             conn_id = { mdb.unsigned, 0, "rw" }
         }
    }
 end
 
-resource.class {
-     name = "audio_recording",
-     shareable = true,
-     attributes = {
-         role   = { mdb.string, "music"    , "rw" },
-         pid    = { mdb.string, "<unknown>", "rw" },
-         policy = { mdb.string, "relaxed"  , "rw" }
-     }
-}
+if not m:plugin_exists('gam-resource-manager') then
+    resource.class {
+        name = "audio_recording",
+        shareable = true,
+        attributes = {
+             role   = { mdb.string, "music"    , "rw" },
+             pid    = { mdb.string, "<unknown>", "rw" },
+             policy = { mdb.string, "relaxed"  , "rw" }
+         }
+    }
+end
 
 resource.class {
      name = "video_playback",
@@ -241,13 +249,14 @@ resource.class {
 }
 
 phone_priorities = {
-    "bluetooth", "headset"
+    "USB Headset", "wiredHeadset"
 }
 
 general_priorities = {
-    "headset", "bluetooth", "speakers"
+    "USB Headset", "wiredHeadset", "speakers"
 }
 
+if m:plugin_loaded("immelmann") then
 routing_sink_priority {
     application_class = "player",
     priority_queue = general_priorities
@@ -277,6 +286,7 @@ routing_sink_priority {
     application_class = "event",
     priority_queue = phone_priorities
 }
+end
 
 if not m:plugin_exists('ivi-resource-manager') and
    not with_system_controller
