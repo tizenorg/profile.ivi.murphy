@@ -55,7 +55,13 @@ m:load_plugin('gam-resource-manager', {
     decision_names = 'gam-wrtApplication-4',
     max_active = 4
 })
-m:load_plugin('immelmann')
+m:load_plugin('immelmann', {
+    app_mapping = {
+        ['t8j6HTRpuz.MediaPlayer'] = 'wrtApplication',
+        ['pacat'] = 'icoApplication'
+    },
+    app_default = 'icoApplication'
+})
 m:load_plugin('gam-control')
 
 -- load the AMB plugin
