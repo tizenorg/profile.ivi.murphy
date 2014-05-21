@@ -235,6 +235,20 @@ resource.class {
      shareable = true
 }
 
+-- PulseAudio volume context
+mdb.table {
+    name = "volume_context",
+    index = { "id" },
+    create = true,
+    columns = {
+        { "id", mdb.unsigned },
+        { "value", mdb.string, 64 },
+    }
+}
+
+-- put default volume context to the table
+mdb.table.volume_context:insert({ id = 1, value = "default" })
+
 if not m:plugin_exists('ivi-resource-manager') and
    not with_system_controller
 then
