@@ -1,3 +1,8 @@
+* Mon May 26 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.52
+- system-monitor: allow optional cgroup entries missing
+- packaging: disabled ICO system-controller plugin
+- config: added volume context table for PA
+
 * Fri Mar 21 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.51
 - system-monitor: cgroup handling fixes
 - system-monitor: avoid infinite loop for multiply opened cgroups.
