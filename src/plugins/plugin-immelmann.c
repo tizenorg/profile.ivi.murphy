@@ -36,6 +36,7 @@
 #include <murphy/core/event.h>
 #include <murphy/core/lua-bindings/murphy.h>
 #include <murphy/core/lua-utils/object.h>
+#include <murphy/core/lua-utils/funcbridge.h>
 #include <murphy/core/domain.h>
 
 #include <murphy-db/mqi.h>
@@ -59,7 +60,7 @@
 
 typedef struct {
     char *name;
-    mrp_list_hook_t *sinks;
+    mrp_funcbridge_t *get_sinks;
 } priority_t;
 
 typedef struct {
@@ -70,6 +71,8 @@ typedef struct {
     char *default_sink;
     mrp_json_t *mapping;
     char *app_default;
+    char *playback_resource;
+    char *recording_resource;
 
     mrp_htbl_t *pqs; /* "application_class" -> priority_t */
 
@@ -97,6 +100,8 @@ enum {
     ARG_DEFAULT_SINK,
     ARG_APP_DEFAULT,
     ARG_APP_MAPPING,
+    ARG_PLAYBACK_RESOURCE,
+    ARG_RECORDING_RESOURCE,
 };
 
 enum {
@@ -124,30 +129,6 @@ MRP_LUA_CLASS_DEF_SIMPLE (
         MRP_LUA_OVERRIDE_SETFIELD   (priority_setfield)
     )
 );
-
-#if 0
-static void set_connection_id(immelmann_t *ctx, mrp_resource_set_t *rset,
-        const char *resource, uint32_t conn_id)
-{
-    mrp_attr_t *conn_id_attr;
-    mrp_zone_t *zone;
-
-    conn_id_attr = mrp_resource_set_get_attribute_by_name(rset,
-            resource, CONNID_ATTRIBUTE);
-
-    if (conn_id_attr && conn_id_attr->type == mqi_unsignd) {
-        conn_id_attr->value.unsignd = conn_id;
-    }
-
-    /* GAM domains map in some sense to Murphy zones, so we'll play only
-     * in some default GAM zone for the recalculation. */
-
-    zone = mrp_zone_find_by_name(ctx->zone);
-
-    if (zone)
-        mrp_resource_owner_recalc(zone->id);
-}
-#endif
 
 #define BUFLEN 1024
 static uint32_t get_node_id(immelmann_t *ctx, const char *name, bool sink)
@@ -265,11 +246,107 @@ static mrp_list_hook_t *get_priorities_for_application_class(immelmann_t *ctx,
         const char *name)
 {
     priority_t *prio = mrp_htbl_lookup(ctx->pqs, (char *) name);
+    mrp_list_hook_t *priorities;
+    int i;
+    mrp_funcbridge_value_t ret;
+    char t;
+    mrp_funcbridge_value_t args[1] = { { .pointer = prio } };
+    lua_State *L = mrp_lua_get_lua_state();
+    char **arr;
 
-    if (prio) {
-        return prio->sinks;
+    if (!prio->get_sinks)
+        return NULL;
+
+    priorities = mrp_allocz(sizeof(mrp_list_hook_t));
+
+    if (!priorities) {
+        goto error;
     }
 
+    mrp_list_init(priorities);
+
+    /* run the sink evaluation function and return the result */
+
+    if (!mrp_funcbridge_call_from_c(L, prio->get_sinks, "o", args, &t,
+        &ret)) {
+        mrp_log_error("immelmann: failed to call priorities function (%s)",
+                ret.string);
+        mrp_free((void *) ret.string); /* error msg string or NULL */
+        goto error;
+    }
+
+    if (t != MRP_FUNCBRIDGE_ARRAY) {
+        mrp_log_error("immelmann: priorities with wrong return type (%c)",
+                t);
+        goto error;
+    }
+
+    if (!ret.array.type == MRP_FUNCBRIDGE_STRING) {
+        mrp_log_error("immelmann: priorities aren't strings (%c)",
+                ret.array.type);
+        goto error;
+    }
+
+    arr = (char **) ret.array.items;
+
+    for (i = 0; i < ret.array.nitem; i++) {
+
+        routing_target_t *target = mrp_allocz(sizeof(routing_target_t));
+
+        if (!target) {
+            mrp_log_error("immelmann: out of memory");
+            goto error;
+        }
+
+        mrp_list_init(&target->hook);
+
+        if (!arr[i]) {
+            mrp_log_error("immelmann: array missing elements");
+            goto error;
+        }
+
+        target->name = mrp_strdup(arr[i]);
+        if (!target->name) {
+            mrp_log_error("immelmann: out of memory");
+            mrp_free(target);
+            goto error;
+        }
+
+        /* free the memory while we go */
+
+        mrp_free(arr[i]);
+        arr[i] = NULL;
+
+        mrp_list_append(priorities, &target->hook);
+    }
+
+    mrp_free(ret.array.items);
+
+    return priorities;
+
+error:
+    arr = (char **) ret.array.items;
+    if (arr) {
+        for (; i < ret.array.nitem; i++) {
+            mrp_free(arr[i]);
+        }
+
+        mrp_free(arr);
+    }
+
+    if (priorities) {
+        mrp_list_hook_t *p, *n;
+
+        mrp_list_foreach(priorities, p, n) {
+            routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
+
+            mrp_list_delete(&t->hook);
+            mrp_free(t->name);
+            mrp_free(t);
+        }
+
+        mrp_free(priorities);
+    }
     return NULL;
 }
 
@@ -277,6 +354,7 @@ static const char *get_default_sink(immelmann_t *ctx, mrp_resource_set_t *rset)
 {
     mrp_list_hook_t *pq = NULL;
     mrp_list_hook_t *p, *n;
+    const char *name = NULL;
 
     /* get the priority list from Murphy configuration for this particular
      * application class */
@@ -292,11 +370,23 @@ static const char *get_default_sink(immelmann_t *ctx, mrp_resource_set_t *rset)
         routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
 
         if (is_sink_available(ctx, t->name)) {
-            return t->name;
+            name = t->name;
+            break;
         }
     }
 
-    return NULL;
+    /* free the data */
+    mrp_list_foreach(pq, p, n) {
+        routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
+        mrp_list_delete(&t->hook);
+        mrp_free(t->name);
+        mrp_free(t);
+    }
+    mrp_free(pq);
+
+    mrp_log_info("default sink: %s", name ? name : "null");
+
+    return name;
 }
 
 static void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
@@ -332,11 +422,6 @@ static void connect_cb(int error, int retval, int narg, mrp_domctl_arg_t *args,
     mrp_log_info("immelmann: got connection id %u for resource set %u",
                  connid, d->rset_id);
 
-#if 0
-    /* gam-control will do this */
-    set_connection_id(d->ctx, rset, d->resource, connid);
-#endif
-
 end:
     mrp_free(d->resource);
     mrp_free(d);
@@ -344,7 +429,7 @@ end:
     /* TODO: what to do to the resource set in the error case? */
 }
 
-static void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
+static bool register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
         const char *appid)
 {
     const char *source;
@@ -396,24 +481,29 @@ static void register_sink_with_gam(immelmann_t *ctx, mrp_resource_set_t *rset,
 
     if (!d) {
         mrp_log_error("immelmann: memory allocation error");
-        return;
+        return false;
     }
 
     /* TODO: resource names from config */
-    d->resource = mrp_strdup("audio_playback");
+    d->resource = mrp_strdup(ctx->playback_resource);
     if (!d->resource) {
         mrp_log_error("immelmann: memory allocation error");
         mrp_free(d);
-        return;
+        return false;
     }
 
     d->ctx = ctx;
     d->rset_id = rset->id; /* use id to escape a race condition */
 
-    mrp_invoke_domain(ctx->mrp_ctx, "audio-manager", "connect", 3, args,
-            connect_cb, d);
+    if (!mrp_invoke_domain(ctx->mrp_ctx, "audio-manager", "connect", 3, args,
+            connect_cb, d)) {
+        mrp_log_error("immmelmann: failed to send connect request to GAM");
+        mrp_free(d->resource);
+        mrp_free(d);
+        return false;
+    }
 
-    return;
+    return true;
 }
 
 static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
@@ -449,10 +539,10 @@ static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_da
 
             name = mrp_resource_get_name(resource);
 
-            if (strcmp(name, "audio_playback") == 0)
+            if (strcmp(name, ctx->playback_resource) == 0)
                 audio_playback = resource;
 
-            else if (strcmp(name, "audio_recording") == 0)
+            else if (strcmp(name, ctx->recording_resource) == 0)
                 audio_recording = resource;
 
             if (audio_playback && audio_recording)
@@ -464,9 +554,9 @@ static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_da
             mrp_attr_t *conn_id;
 
             app_id = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_playback", APPID_ATTRIBUTE);
+                    ctx->playback_resource, APPID_ATTRIBUTE);
             conn_id = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_playback", CONNID_ATTRIBUTE);
+                    ctx->playback_resource, CONNID_ATTRIBUTE);
 
             if (!app_id || !conn_id) {
                 /* what is this? */
@@ -483,29 +573,7 @@ static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_da
             }
         }
 
-#if 0
-        /* TODO: think properly about audio recording */
-
-        if (audio_recording) {
-            mrp_attr_t *app_id; /* the application itself */
-            mrp_attr_t *conn_id;
-
-            app_id = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_recording", APPID_ATTRIBUTE);
-            conn_id = mrp_resource_set_get_attribute_by_name(rset,
-                    "audio_recording", CONNID_ATTRIBUTE);
-
-            if (!app_id || !conn_id) {
-                /* what is this? */
-                mrp_log_error("immelmann: sink or conn_id attributes not defined!");
-            }
-            else if (conn_id->type == mqi_integer &&
-                    conn_id->value.integer < 1) {
-                /* this connection is not already managed by GAM */
-                need_to_register = TRUE;
-            }
-        }
-#endif
+        /* TODO: think properly about hos to handle audio recording */
 
         mrp_log_info("immelmann: Resource set %u (%p) was acquired", rset_id, rset);
     }
@@ -519,12 +587,14 @@ static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_da
     }
 }
 
+
 static int priority_create(lua_State *L)
 {
     priority_t *prio;
     size_t fldnamlen;
     const char *fldnam;
     char *name = NULL;
+    mrp_funcbridge_t *get_sinks = NULL;
     mrp_list_hook_t *priority_queue;
     immelmann_t *ctx = global_ctx;
 
@@ -551,32 +621,9 @@ static int priority_create(lua_State *L)
             name = mrp_strdup(luaL_checkstring(L, -1));
         }
         else if (strncmp(fldnam, "priority_queue", fldnamlen) == 0) {
-
-            if (lua_istable(L, -1)) {
-
-                /* push NIL to stack as the first key */
-                lua_pushnil(L);
-
-                while (lua_next(L, -2)) {
-                    const char *sink_name;
-
-                    /* only string values are accepted */
-                    if (lua_isstring(L, -1)) {
-                        routing_target_t *sink;
-
-                        sink_name = lua_tostring(L, -1);
-
-                        sink = mrp_allocz(sizeof(routing_target_t));
-
-                        sink->name = mrp_strdup(sink_name);
-                        mrp_list_init(&sink->hook);
-
-                        mrp_list_append(priority_queue, &sink->hook);
-                    }
-
-                    /* remove the value, keep key */
-                    lua_pop(L, 1);
-                }
+            if (lua_isfunction(L, -1)) {
+                /* store the function to a function pointer */
+                get_sinks = mrp_funcbridge_create_luafunc(L, -1);
             }
         }
         else {
@@ -595,10 +642,9 @@ static int priority_create(lua_State *L)
         luaL_error(L, "invalid or duplicate application_class '%s'", name);
     else {
         prio->name = name;
+        prio->get_sinks = get_sinks;
         mrp_log_info("immelmann: application class priority object '%s' created", name);
     }
-
-    prio->sinks = priority_queue;
 
     if (ctx) {
         mrp_htbl_insert(ctx->pqs, name, prio);
@@ -635,16 +681,8 @@ static void priority_destroy(void *data)
 
     mrp_free(prio->name);
 
-    mrp_list_foreach(prio->sinks, p, n) {
-        routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
-
-        mrp_list_delete(&t->hook);
-        mrp_free(t->name);
-        mrp_free(t);
-    }
-
-    mrp_free(prio->sinks);
-    prio->sinks = NULL;
+    mrp_funcbridge_unref(mrp_lua_get_lua_state(), prio->get_sinks);
+    prio->get_sinks = NULL;
     prio->name = NULL;
 
     MRP_LUA_LEAVE_NOARG;
@@ -665,6 +703,9 @@ static int plugin_init(mrp_plugin_t *plugin)
     ctx->zone = mrp_strdup(plugin->args[ARG_ZONE].str);
     ctx->default_sink = mrp_strdup(plugin->args[ARG_DEFAULT_SINK].str);
     ctx->app_default = mrp_strdup(plugin->args[ARG_APP_DEFAULT].str);
+    ctx->playback_resource = mrp_strdup(plugin->args[ARG_PLAYBACK_RESOURCE].str);
+    ctx->recording_resource = mrp_strdup(plugin->args[ARG_RECORDING_RESOURCE].str);
+
     ctx->mapping = plugin->args[ARG_APP_MAPPING].obj.json;
 
     if (!ctx->zone || !ctx->default_sink)
@@ -725,6 +766,8 @@ error:
 
     mrp_free(ctx->default_sink);
     mrp_free(ctx->app_default);
+    mrp_free(ctx->playback_resource);
+    mrp_free(ctx->recording_resource);
     mrp_free(ctx->zone);
     if (ctx->mapping)
         mrp_json_unref(ctx->mapping);
@@ -752,10 +795,12 @@ static void plugin_exit(mrp_plugin_t *plugin)
     global_ctx = NULL;
 }
 
-#define DEFAULT_ZONE        "driver"
-#define DEFAULT_SINK        "speakers"
-#define DEFAULT_APP_DEFAULT "icoApplication"
-#define DEFAULT_APP_MAPPING "{}"
+#define DEFAULT_ZONE                "driver"
+#define DEFAULT_SINK                "speakers"
+#define DEFAULT_APP_DEFAULT         "icoApplication"
+#define DEFAULT_APP_MAPPING         "{}"
+#define DEFAULT_PLAYBACK_RESOURCE   "audio_playback"
+#define DEFAULT_RECORDING_RESOURCE  "audio_recording"
 
 #define PLUGIN_DESCRIPTION "Plugin to add PA streams to GAM (with resource support)"
 #define PLUGIN_HELP        "Help coming later."
@@ -767,6 +812,8 @@ static mrp_plugin_arg_t plugin_args[] = {
     MRP_PLUGIN_ARGIDX(ARG_DEFAULT_SINK, STRING, "default_sink", DEFAULT_SINK),
     MRP_PLUGIN_ARGIDX(ARG_APP_DEFAULT, STRING, "app_default", DEFAULT_APP_DEFAULT),
     MRP_PLUGIN_ARGIDX(ARG_APP_MAPPING, OBJECT, "app_mapping", DEFAULT_APP_MAPPING),
+    MRP_PLUGIN_ARGIDX(ARG_PLAYBACK_RESOURCE, STRING, "playback_resource", DEFAULT_PLAYBACK_RESOURCE),
+    MRP_PLUGIN_ARGIDX(ARG_RECORDING_RESOURCE, STRING, "recording_resource", DEFAULT_RECORDING_RESOURCE),
 };
 
 MURPHY_REGISTER_PLUGIN("immelmann",

@@ -262,35 +262,45 @@ general_priorities = {
     "USB Headset", "wiredHeadset", "speakers"
 }
 
+function get_general_priorities(self)
+    print("*** get_general_priorities\n")
+    return { "USB Headset", "wiredHeadset", "speakers" }
+end
+
+function get_phone_priorities(self)
+    print("*** get_phone_priorities\n")
+    return { "wiredHeadset", "USB Headset" }
+end
+
 if m:plugin_loaded("immelmann") then
 routing_sink_priority {
     application_class = "player",
-    priority_queue = general_priorities
+    priority_queue = get_general_priorities
 }
 
 routing_sink_priority {
     application_class = "game",
-    priority_queue = general_priorities
+    priority_queue = get_general_priorities
 }
 
 routing_sink_priority {
     application_class = "implicit",
-    priority_queue = general_priorities
+    priority_queue = get_general_priorities
 }
 
 routing_sink_priority {
     application_class = "phone",
-    priority_queue = phone_priorities
+    priority_queue = get_phone_priorities
 }
 
 routing_sink_priority {
     application_class = "basic",
-    priority_queue = phone_priorities
+    priority_queue = get_phone_priorities
 }
 
 routing_sink_priority {
     application_class = "event",
-    priority_queue = phone_priorities
+    priority_queue = get_phone_priorities
 }
 end
 
