@@ -1320,8 +1320,7 @@ PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES = 				    \
 		plugins/ivi-resource-manager/audio.c                        \
 		plugins/ivi-resource-manager/appid.c
 PLUGIN_IVI_RESOURCE_MANAGER_SOURCES = 					    \
-		$(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)		    \
-                plugin-ivi-resource-manager-func-info.c
+		$(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)
 PLUGIN_IVI_RESOURCE_MANAGER_CFLAGS =					    \
 		$(LUA_CFLAGS)
 
@@ -1338,13 +1337,6 @@ plugin_ivi_resource_manager_la_LDFLAGS = -module -avoid-version
 plugin_ivi_resource_manager_la_LIBADD  = $(PLUGIN_IVI_RESOURCE_MANAGER_LIBS)
 
 plugin_LTLIBRARIES += plugin-ivi-resource-manager.la
-
-# debug file:line-function mapping generation
-plugin-ivi-resource-manager-func-info.c: $(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)
-	$(QUIET_GEN)$(top_builddir)/build-aux/gen-debug-table -o $@ $^
-
-clean-func-infos::
-	-rm plugin-ivi-resource-manager-func-info.c
 endif
 
 
