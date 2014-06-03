@@ -1268,8 +1268,7 @@ endif
 
 # dlog plugin
 DLOG_PLUGIN_REGULAR_SOURCES = plugins/plugin-dlog.c
-DLOG_PLUGIN_SOURCES         = $(DLOG_PLUGIN_REGULAR_SOURCES) \
-			      plugin-dlog-func-info.c
+DLOG_PLUGIN_SOURCES         = $(DLOG_PLUGIN_REGULAR_SOURCES)
 DLOG_PLUGIN_CFLAGS  	    = $(DLOG_CFLAGS)
 DLOG_PLUGIN_LIBS    	    = $(DLOG_LIBS)
 
@@ -1289,13 +1288,6 @@ plugin_dlog_la_LIBADD  = $(DLOG_PLUGIN_LIBS)
 plugin_LTLIBRARIES    += plugin-dlog.la
 endif
 endif
-
-# debug file:line-function mapping generation
-plugin-dlog-func-info.c: $(DLOG_PLUGIN_REGULAR_SOURCES)
-	$(QUIET_GEN)$(top_builddir)/build-aux/gen-debug-table -o $@ $^
-
-clean-func-infos::
-	-rm plugin-dlog-func-info.c
 endif
 
 # native resource plugin
