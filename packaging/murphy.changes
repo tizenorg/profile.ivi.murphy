@@ -1,3 +1,8 @@
+* Mon May 26 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.53
+- build-sys: stop generating file:line->function mapping tables.
+- common,daemon,console: removed support for listing debug sites.
+- common: removed unused arguments from debug macros.
+
 * Mon May 26 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.52
 - system-monitor: allow optional cgroup entries missing
 - packaging: disabled ICO system-controller plugin
