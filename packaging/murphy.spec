@@ -7,6 +7,8 @@
 # squashing the -core and -plugins-base packages into the base
 # murphy package.
 
+%define _with_icosyscon 1
+
 %{!?_with_debug:%{!?_without_debug:%define _without_debug 0}}
 %{!?_with_lua:%{!?_without_lua:%define _with_lua 1}}
 %{!?_with_pulse:%{!?_without_pulse:%define _with_pulse 1}}
@@ -19,6 +21,7 @@
 %{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
 %{!?_with_smack:%{!?_without_smack:%define _with_smack 1}}
 %{!?_with_icosyscon:%{!?_without_icosyscon:%define _without_icosyscon 1}}
+%{!?_with_icoweston:%{!?_without_icoweston:%define _without_icoweston 1}}
 %{!?_with_sysmon:%{!?_without_sysmon:%define _with_sysmon 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
@@ -113,6 +116,8 @@ BuildRequires: pkgconfig(libsmack)
 %if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
 #%if %{_with_icosyscon} # gbs can't, so don't bother...
 BuildRequires: ico-uxf-weston-plugin-devel
+BuildRequires: weston-ivi-shell-devel
+BuildRequires: genivi-shell-devel
 BuildRequires: pkgconfig(ail)
 BuildRequires: pkgconfig(aul)
 BuildRequires: libxml2-devel
