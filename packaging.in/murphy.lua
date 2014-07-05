@@ -925,7 +925,7 @@ wmgr = window_manager {
   output_order = { 1, 0 },
 
   outputs = { { name  = "Mid",
-                id    = 0,
+                id    = 1,
                 zone  = "driver",
                 areas = { Full = {
                               id     = 20,
@@ -951,7 +951,7 @@ wmgr = window_manager {
                         }
                },
                { name  = "Center",
-                 id    = 1,
+                 id    = 4,
                  zone  = "driver",
                  areas = { Status = {
                               id     = 0,
@@ -1040,6 +1040,7 @@ wmgr = window_manager {
                         }
               }
   },
+             --    id  name             type
   layers = { {      0, "Background"   , 1 },
              {      1, "Application"  , 2 },
              {      2, "Softkeyboard" , 4 },

@@ -196,4 +196,3 @@ MRP_CDECL_END
 
 
 #endif /* __MURPHY_LIST_H__ */
-
