@@ -289,7 +289,10 @@ static int input_manager_create(lua_State *L)
     inpmgr->input_update = input_update;
     inpmgr->code_update = code_update;
 
+#ifdef WESTON_ICO_PLUGINS
     mrp_ico_input_manager_register(wl);
+#else
+#endif
 
     mrp_wayland_register_input_manager_update_callback(wl,
                                                    manager_update_callback);
