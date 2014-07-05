@@ -1493,6 +1493,7 @@ endif
 # system-controller
 if SYSTEMCTL_ENABLED
 SYSTEMCTL_DIR = plugins/system-controller
+
 SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/plugin-system-controller.c                    \
 	$(SYSTEMCTL_DIR)/resource-manager/resource-manager.c           \
@@ -1515,7 +1516,6 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/wayland/animation.c                           \
 	$(SYSTEMCTL_DIR)/wayland/input.c                               \
 	$(SYSTEMCTL_DIR)/wayland/code.c                                \
-	$(SYSTEMCTL_DIR)/wayland/ico-window-manager.c                  \
 	$(SYSTEMCTL_DIR)/wayland/scripting-wayland.c                   \
 	$(SYSTEMCTL_DIR)/wayland/scripting-window-manager.c            \
 	$(SYSTEMCTL_DIR)/wayland/scripting-animation.c                 \
@@ -1523,19 +1523,38 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/wayland/scripting-output.c                    \
 	$(SYSTEMCTL_DIR)/wayland/scripting-area.c                      \
 	$(SYSTEMCTL_DIR)/wayland/scripting-layer.c                     \
-	$(SYSTEMCTL_DIR)/wayland/ico-input-manager.c                   \
 	$(SYSTEMCTL_DIR)/wayland/scripting-input-manager.c             \
 	$(SYSTEMCTL_DIR)/wayland/scripting-input.c                     \
 	$(SYSTEMCTL_DIR)/wayland/scripting-code.c
 
+if WESTON_ICO_PLUGINS
+SYSTEMCTL_PLUGIN_SOURCES +=                                            \
+	$(SYSTEMCTL_DIR)/wayland/ico-window-manager.c                  \
+	$(SYSTEMCTL_DIR)/wayland/ico-input-manager.c
+
 SYSTEMCTL_PLUGIN_CFLAGS  = \
-			$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
-			$(AUL_CFLAGS) $(AIL_CFLAGS) \
-			-Iico-uxf-weston-plugin \
-                        -I$(top_builddir)/src/$(SYSTEMCTL_DIR)
+	$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
+	$(AUL_CFLAGS) $(AIL_CFLAGS) \
+	-DWESTON_ICO_PLUGINS \
+	-Iico-uxf-weston-plugin \
+        -I$(top_builddir)/src/$(SYSTEMCTL_DIR)
 SYSTEMCTL_PLUGIN_LIBS    = \
-			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) $(LIBXML2_LIBS) $(AUL_LIBS) \
-			$(AIL_CFLAGS) -lico-uxf-weston-plugin $(TZCONFIG_LIBS)
+	$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) $(LIBXML2_LIBS) $(AUL_LIBS) \
+	$(AIL_CFLAGS) -lico-uxf-weston-plugin $(TZCONFIG_LIBS)
+else
+SYSTEMCTL_PLUGIN_SOURCES +=                                            \
+	$(SYSTEMCTL_DIR)/wayland/glm-window-manager.c                  \
+	$(SYSTEMCTL_DIR)/wayland/glm-input-manager.c
+SYSTEMCTL_PLUGIN_CFLAGS  = \
+	$(WEBSOCKETS_CFLAGS) $(WAYLAND_CLIENT_CFLAGS) $(LIBXML2_CFLAGS) \
+	$(IVI_EXTENSION_PROTOCOL_CFLAGS) \
+	$(AUL_CFLAGS) $(AIL_CFLAGS) \
+        -I$(top_builddir)/src/$(SYSTEMCTL_DIR)
+SYSTEMCTL_PLUGIN_LIBS    = \
+	$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) $(LIBXML2_LIBS) \
+	$(IVI_EXTENSION_PROTOCOL_CFLAGS) \
+	$(AUL_LIBS) $(AIL_CFLAGS)
+endif
 
 SYSTEMCTL_PLUGIN_LOADER  = linkedin-system-controller-loader.c
 
@@ -1604,7 +1623,7 @@ SYSMON_PLUGIN_SOURCES =						\
 
 
 SYSMON_PLUGIN_CFLAGS  = -I$(top_builddir)/src/plugins/system-monitor
-SYSTEMCTL_PLUGIN_LIBS = -lm
+SYSMON_PLUGIN_LIBS    = -lm
 
 SYSMON_PLUGIN_LOADER  = linkedin-system-monitor-loader.c
 
