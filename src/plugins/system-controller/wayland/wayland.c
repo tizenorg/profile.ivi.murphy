@@ -753,7 +753,8 @@ static void object_create(mrp_wayland_interface_t *wif,
         }
     }
 
-    /* TODO: register the object by name */
+    mrp_list_append(&wif->object_list, &obj->interface_link);
+    /* TODO: register the object by name as well*/
 
     mrp_debug("object %u/'%s' on display '%s' created", name, wif->name,
               get_display_name(wl));
