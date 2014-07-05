@@ -51,7 +51,12 @@
 #include "output.h"
 #include "area.h"
 #include "window-manager.h"
+
+#ifdef WESTON_ICO_PLUGINS
 #include "ico-window-manager.h"
+#else
+#include "glm-window-manager.h"
+#endif
 
 #define WINDOW_MANAGER_CLASS   MRP_LUA_CLASS_SIMPLE(window_manager)
 
@@ -306,6 +311,7 @@ static int window_manager_create(lua_State *L)
 #ifdef WESTON_ICO_PLUGINS
     mrp_ico_window_manager_register(wl);
 #else
+    mrp_glm_window_manager_register(wl);
 #endif
 
     mrp_wayland_register_window_manager_update_callback(wl,
