@@ -524,17 +524,28 @@ if test "$enable_systemctl" = "yes"; then
     AC_DEFINE([SYSTEMCTL_ENABLED], 1, [Enable system-controller support ?])
     PKG_CHECK_MODULES(WAYLAND_CLIENT, wayland-client)
     PKG_CHECK_MODULES(LIBXML2, libxml-2.0)
-    AC_CHECK_HEADER([ico-uxf-weston-plugin/ico_input_mgr-client-protocol.h])
+    AC_CHECK_HEADER(
+        [ico-uxf-weston-plugin/ico_input_mgr-client-protocol.h],
+        [weston_ico_plugins=yes], [weston_ico_plugins=false]
+    )
+    if test "$weston_ico_plugins" = "yes"; then
+        AC_MSG_NOTICE([System-controller uses ICO weston plugins.])
+    else
+        PKG_CHECK_MODULES(IVI_EXTENSION_PROTOCOL, ivi-extension-protocol)
+    fi
     PKG_CHECK_MODULES(AIL, ail)
-
 else
     AC_MSG_NOTICE([System-controller support is disabled.])
 fi
 
 AM_CONDITIONAL(SYSTEMCTL_ENABLED, [test "$enable_systemctl" = "yes"])
+AM_CONDITIONAL(WESTON_ICO_PLUGINS,[test "$weston_ico_plugins" = "yes"])
 AC_SUBST(SYSTEMCTL_ENABLED)
+AC_SUBST(WESTON_ICO_PLUGINS)
 AC_SUBST(WAYLAND_CLIENT_CFLAGS)
 AC_SUBST(WAYLAND_CLIENT_LIBS)
+AC_SUBST(IVI_EXTENSION_PROTOCOL_CFLAGS)
+AC_SUBST(IVI_EXTENSION_PROTOCOL_LIBS)
 AC_SUBST(LIBXML2_CFLAGS)
 AC_SUBST(LIBXML2_LIBS)
 AC_SUBST(AIL_CFLAGS)
