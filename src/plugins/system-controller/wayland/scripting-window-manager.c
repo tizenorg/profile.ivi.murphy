@@ -303,7 +303,10 @@ static int window_manager_create(lua_State *L)
     winmgr->window_update = window_update;
 
     mrp_wayland_output_register(wl);
+#ifdef WESTON_ICO_PLUGINS
     mrp_ico_window_manager_register(wl);
+#else
+#endif
 
     mrp_wayland_register_window_manager_update_callback(wl,
                                                    manager_update_callback);
