@@ -170,9 +170,13 @@ struct mrp_wayland_s {
     struct wl_registry_listener registry_listener;
 
     mrp_htbl_t *interfaces;
-    mrp_htbl_t *outputs;
     mrp_htbl_t *windows;
     mrp_htbl_t *areas;
+
+    struct {
+        mrp_htbl_t *by_index;
+        mrp_htbl_t *by_id;
+    } outputs;
 
     struct {
         mrp_htbl_t *by_id;
