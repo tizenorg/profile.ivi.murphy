@@ -88,6 +88,7 @@ struct layer_def_s {
     int32_t id;
     const char *name;
     int32_t type;
+    const char *output;
 };
 
 struct request_def_s {
@@ -330,14 +331,16 @@ static int window_manager_create(lua_State *L)
 
     if (layers) {
         memset(&lu, 0, sizeof(lu));
-        lu.mask = MRP_WAYLAND_LAYER_LAYERID_MASK |
-                  MRP_WAYLAND_LAYER_NAME_MASK    |
-                  MRP_WAYLAND_LAYER_TYPE_MASK    ;
+        lu.mask = MRP_WAYLAND_LAYER_LAYERID_MASK    |
+                  MRP_WAYLAND_LAYER_NAME_MASK       |
+                  MRP_WAYLAND_LAYER_TYPE_MASK       |
+                  MRP_WAYLAND_LAYER_OUTPUTNAME_MASK ;
 
         for (l = layers;  l->name;  l++) {
             lu.layerid = l->id;
             lu.name = l->name;
             lu.type = l->type;
+            lu.outputname = l->output;
             mrp_wayland_layer_create(wl, &lu);
         }
 
@@ -571,10 +574,11 @@ static layer_def_t *layer_def_check(lua_State *L, int t)
                 lua_gettable(L, -2);
 
                 switch (j) {
-                case 0:    l->id = lua_tointeger(L, -1);               break;
-                case 1:    l->name = mrp_strdup(lua_tostring(L, -1));  break;
-                case 2:    l->type = lua_tointeger(L, -1);             break;
-                default:   goto error;
+                case 0:   l->id = lua_tointeger(L, -1);                 break;
+                case 1:   l->name = mrp_strdup(lua_tostring(L, -1));    break;
+                case 2:   l->type = lua_tointeger(L, -1);               break;
+                case 3:   l->output = mrp_strdup(lua_tostring(L, -1));  break;
+                default:  goto error;
                 }
 
                 lua_pop(L, 1);
@@ -582,7 +586,7 @@ static layer_def_t *layer_def_check(lua_State *L, int t)
 
             lua_pop(L, 1);
 
-            if (!l->name || l->id < 0 || l->id > 0x10000)
+            if (!l->name || l->id < 0 || l->id > 0x10000 || !l->output)
                 goto error;
         }
     }
@@ -600,8 +604,10 @@ static void layer_def_free(layer_def_t *layers)
     layer_def_t *l;
 
     if (layers) {
-        for (l = layers;  l->name;  l++)
+        for (l = layers;  l->name;  l++) {
             mrp_free((void *)l->name);
+            mrp_free((void *)l->output);
+        }
         mrp_free((void *)layers);
     }
 }
