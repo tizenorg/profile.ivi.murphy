@@ -359,7 +359,7 @@ int mrp_resmgr_screen_disable(mrp_resmgr_screen_t *screen,
         oit.name = output_name;
 
         mrp_wayland_foreach(w, i) {
-            mrp_htbl_foreach(w->outputs, output_find_cb, &oit);
+            mrp_htbl_foreach(w->outputs.by_index, output_find_cb, &oit);
 
             if ((o = oit.out)) {
                 wl = w;

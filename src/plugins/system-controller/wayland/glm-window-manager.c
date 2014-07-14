@@ -68,6 +68,7 @@ typedef struct ctrl_screen_s            ctrl_screen_t;
 typedef struct app_surface_s            app_surface_t;
 typedef struct application_s            application_t;
 typedef struct constructor_s            constructor_t;
+typedef struct layer_iterator_s         layer_iterator_t;
 
 struct mrp_glm_window_manager_s {
     MRP_WAYLAND_WINDOW_MANAGER_COMMON;
@@ -135,6 +136,12 @@ struct constructor_s {
 enum match_e {
     DOES_NOT_MATCH = 0,
     DOES_MATCH = 1
+};
+
+struct layer_iterator_s {
+    mrp_glm_window_manager_t *wm;
+    mrp_wayland_output_t *out;
+    ctrl_screen_t *scr;
 };
 
 
@@ -348,43 +355,12 @@ static bool window_manager_constructor(mrp_wayland_t *wl,
 static int layer_iterator_cb(void *key, void *object, void *user_data)
 {
     mrp_wayland_layer_t *layer = (mrp_wayland_layer_t *)object;
-    ctrl_screen_t *s = (ctrl_screen_t *)user_data;
-
-    mrp_glm_window_manager_t *wm;
- 
-    MRP_UNUSED(key);
-
-    if (!(wm = (mrp_glm_window_manager_t *)layer->wm)) {
-        mrp_log_error("system-controller: phase error (layer %s does not know "
-                      "anything about window manager)", layer->name);
-    }
-    else {
-        // if (s->id == layer->outputid) {
-            layer_create(wm, layer, s);
-        //}
-    }
-
-    return MRP_HTBL_ITER_MORE;
-}
-
-static int output_iterator_cb(void *key, void *object, void *user_data)
-{
-    mrp_wayland_output_t *output = (mrp_wayland_output_t *)object;
-    ctrl_screen_t *s = (ctrl_screen_t *)user_data;
+    layer_iterator_t *it = (layer_iterator_t *)user_data;
 
     MRP_UNUSED(key);
 
-    if (s->id == output->outputid) {
-        mrp_debug("link screen %d to output '%s'", s->id, output->outputname);
-
-        s->output_index = output->index;
-        s->width = output->width;
-        s->height = output->height;
-
-        mrp_htbl_foreach(s->wl->layers.by_type, layer_iterator_cb, s);
-
-        return MRP_HTBL_ITER_STOP;
-    }
+    if (!strcmp(layer->outputname, it->out->outputname))
+        layer_create(it->wm, layer, it->scr);
 
     return MRP_HTBL_ITER_MORE;
 }
@@ -396,7 +372,9 @@ static void ctrl_screen_callback(void *data,
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)data;
     mrp_wayland_t *wl;
+    mrp_wayland_output_t *output;
     ctrl_screen_t *s;
+    layer_iterator_t it;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
@@ -406,27 +384,36 @@ static void ctrl_screen_callback(void *data,
 
     mrp_debug("id_screen=%u screen=%p", id_screen, screen);
 
-    if (!(s = mrp_allocz(sizeof(ctrl_screen_t))))
-        mrp_log_error("system-controller: can't allocate memory for screen");
-    else {
-        s->wl = wl;
-        s->ctrl_screen = screen;
-        s->id = id_screen;
-        s->output_index = INVALID_INDEX;
-
-        mrp_htbl_foreach(wl->outputs, output_iterator_cb, s);
-
-        if (s->output_index != INVALID_INDEX) {
-            mrp_htbl_insert(wm->screens, &s->output_index, s);
-            mrp_wayland_flush(wl);
-        }
-        else {
-            mrp_log_warning("system-controller: can't find output for "
-                            "screen %u", id_screen);
-            mrp_free(s);
-            s = NULL;
-        }
+    if (!(output = mrp_wayland_output_find_by_id(wl, id_screen))) {
+        mrp_log_warning("system-controller: can't find output for screen %u",
+                        id_screen);
+        return;
     }
+
+    if (!output->name || output->width <= 0 || output->height <= 0) {
+        mrp_log_warning("system-controller: incomplete output (id %u)",
+                        id_screen);
+        return;
+    }
+
+    if (!(s = mrp_allocz(sizeof(ctrl_screen_t)))) {
+        mrp_log_error("system-controller: can't allocate memory for screen");
+        return;
+    }
+
+    s->wl = wl;
+    s->ctrl_screen = screen;
+    s->id = id_screen;
+    s->output_index = output->index;
+    s->width = output->width;
+    s->height = output->height;
+    
+    it.wm = wm;
+    it.out = output;
+    it.scr = s;
+    mrp_htbl_foreach(wl->layers.by_type, layer_iterator_cb, &it);
+
+    mrp_wayland_flush(wl);
 }
 
 static void ctrl_layer_callback(void *data,

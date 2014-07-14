@@ -67,7 +67,7 @@ static size_t ninstance;
 mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
 {
     mrp_wayland_t *wl;
-    mrp_htbl_config_t icfg, ocfg, wcfg, licfg, ltcfg, acfg, dncfg, dicfg;
+    mrp_htbl_config_t icfg, oxcfg,oicfg, wcfg, licfg,ltcfg, acfg, dncfg,dicfg;
     size_t i;
 
     MRP_ASSERT(ml, "invalid argument");
@@ -87,12 +87,6 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
         icfg.comp = mrp_string_comp;
         icfg.hash = mrp_string_hash;
         icfg.nbucket = MRP_WAYLAND_INTERFACE_BUCKETS;
-
-        memset(&ocfg, 0, sizeof(ocfg));
-        ocfg.nentry = MRP_WAYLAND_OUTPUT_MAX;
-        ocfg.comp = id_compare;
-        ocfg.hash = oid_hash;
-        ocfg.nbucket = MRP_WAYLAND_OUTPUT_BUCKETS;
 
         memset(&wcfg, 0, sizeof(wcfg));
         wcfg.nentry = MRP_WAYLAND_WINDOW_MAX;
@@ -118,6 +112,18 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
         acfg.hash = mrp_string_hash;
         acfg.nbucket = MRP_WAYLAND_AREA_BUCKETS;
 
+        memset(&oxcfg, 0, sizeof(oxcfg));
+        oxcfg.nentry = MRP_WAYLAND_OUTPUT_MAX;
+        oxcfg.comp = id_compare;
+        oxcfg.hash = oid_hash;
+        oxcfg.nbucket = MRP_WAYLAND_OUTPUT_BUCKETS;
+
+        memset(&oicfg, 0, sizeof(oicfg));
+        oicfg.nentry = MRP_WAYLAND_OUTPUT_MAX;
+        oicfg.comp = id_compare;
+        oicfg.hash = oid_hash;
+        oicfg.nbucket = MRP_WAYLAND_OUTPUT_BUCKETS;
+
         memset(&dncfg, 0, sizeof(dncfg));
         dncfg.nentry = MRP_WAYLAND_DEVICE_MAX;
         dncfg.comp = mrp_string_comp;
@@ -137,9 +143,11 @@ mrp_wayland_t *mrp_wayland_create(const char *display_name, mrp_mainloop_t *ml)
         wl->registry_listener.global_remove = global_remove_callback;
 
         wl->interfaces = mrp_htbl_create(&icfg);
-        wl->outputs = mrp_htbl_create(&ocfg);
         wl->windows = mrp_htbl_create(&wcfg);
         wl->areas = mrp_htbl_create(&acfg);
+
+        wl->outputs.by_index = mrp_htbl_create(&oxcfg);
+        wl->outputs.by_id = mrp_htbl_create(&oicfg);
 
         wl->devices.by_name = mrp_htbl_create(&dncfg);
         wl->devices.by_id = mrp_htbl_create(&dicfg);
