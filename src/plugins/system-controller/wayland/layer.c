@@ -47,12 +47,17 @@ static mrp_wayland_layer_update_mask_t update(mrp_wayland_layer_t *,
 mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
                                               mrp_wayland_layer_update_t *u)
 {
+    mrp_wayland_layer_update_mask_t mandatory_bits =
+        MRP_WAYLAND_LAYER_LAYERID_MASK    |
+        MRP_WAYLAND_LAYER_TYPE_MASK       |
+        MRP_WAYLAND_LAYER_OUTPUTNAME_MASK ;
+
     mrp_wayland_layer_t *layer;
     mrp_wayland_layer_update_mask_t mask;
     char buf[2048];
 
-    MRP_ASSERT(wl && u && (u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK) &&
-               (u->mask & MRP_WAYLAND_LAYER_TYPE_MASK), "invalid argument");
+    MRP_ASSERT(wl && u && (u->mask & mandatory_bits) == mandatory_bits,
+               "invalid argument");
 
     if (!(layer = mrp_allocz(sizeof(mrp_wayland_layer_t)))) {
         mrp_log_error("system-controller: failed to create layer %d: "
@@ -64,6 +69,7 @@ mrp_wayland_layer_t *mrp_wayland_layer_create(mrp_wayland_t *wl,
     layer->wm = wl->wm;
     layer->layerid = u->layerid;
     layer->type = u->type;
+    layer->outputname = mrp_strdup(u->outputname);
 
     if (!mrp_htbl_insert(wl->layers.by_id, &layer->layerid, layer)) {
         mrp_log_error("system-controller: failed to create layer: "
@@ -117,6 +123,7 @@ void mrp_wayland_layer_destroy(mrp_wayland_layer_t *layer)
         wl->layer_update_callback(wl, MRP_WAYLAND_LAYER_DESTROY, 0, layer);
 
     mrp_free(layer->name);
+    mrp_free(layer->outputname);
     vl = (void *)layer;
 
     if (vl != mrp_htbl_remove(wl->layers.by_id, &layer->layerid, false) ||
@@ -220,6 +227,8 @@ size_t mrp_wayland_layer_print(mrp_wayland_layer_t *layer,
         PRINT("name: '%s'", layer->name);
     if ((mask & MRP_WAYLAND_LAYER_TYPE_MASK))
         PRINT("type: %s", mrp_wayland_layer_type_str(layer->type));
+    if ((mask & MRP_WAYLAND_LAYER_OUTPUTNAME_MASK))
+        PRINT("outputname: %s", layer->outputname ? layer->outputname : "???");
     if ((mask & MRP_WAYLAND_LAYER_VISIBLE_MASK))
         PRINT("visible: %s", layer->visible ? "yes" : "no");
 
@@ -260,11 +269,12 @@ const char *
 mrp_wayland_layer_update_mask_str(mrp_wayland_layer_update_mask_t mask)
 {
     switch (mask) {
-    case MRP_WAYLAND_LAYER_LAYERID_MASK:   return "layerid";
-    case MRP_WAYLAND_LAYER_NAME_MASK:      return "name";
-    case MRP_WAYLAND_LAYER_TYPE_MASK:      return "type";
-    case MRP_WAYLAND_LAYER_VISIBLE_MASK:   return "visible";
-    default:                               return "<unknown>";
+    case MRP_WAYLAND_LAYER_LAYERID_MASK:     return "layerid";
+    case MRP_WAYLAND_LAYER_NAME_MASK:        return "name";
+    case MRP_WAYLAND_LAYER_TYPE_MASK:        return "type";
+    case MRP_WAYLAND_LAYER_OUTPUTNAME_MASK:  return "outputname";
+    case MRP_WAYLAND_LAYER_VISIBLE_MASK:     return "visible";
+    default:                                 return "<unknown>";
     }
 }
 

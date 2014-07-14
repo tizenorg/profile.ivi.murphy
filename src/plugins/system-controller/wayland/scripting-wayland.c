@@ -197,7 +197,7 @@ int mrp_wayland_json_output_copy(mrp_wayland_t *wl, void *uval,
 
     index = mrp_json_integer_value(jval);
 
-    if (!(out = mrp_wayland_output_find(wl, index)))
+    if (!(out = mrp_wayland_output_find_by_index(wl, index)))
         return 0;
 
     *(mrp_wayland_output_t **)uval = out;
@@ -577,6 +577,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
         case 'k':
             if (!strcmp(name, "keep_ratio"))
                 return KEEPRATIO;
+            break;
+        case 'o':
+            if (!strcmp(name, "outputname"))
+                return OUTPUTNAME;
             break;
         case 's':
             if (!strcmp(name, "send_input"))
