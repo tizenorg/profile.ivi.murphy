@@ -1040,24 +1040,24 @@ wmgr = window_manager {
                         }
               }
   },
-             --    id  name             type
-  layers = { {      0, "Background"   , 1 },
-             {      1, "Application"  , 2 },
-             {      2, "Softkeyboard" , 4 },
-             {      3, "HomeScreen"   , 2 },
-             {      4, "ControlBar"   , 2 },
-             {      5, "InterruptApp" , 2 },
-             {      6, "OnScreen"     , 2 },
-             {    101, "Input"        , 3 },
-             {    102, "Cursor"       , 5 },
-             {    103, "Startup"      , 6 },
-             { 0x1000, "Background"   , 1 },
-             { 0x2000, "Normal"       , 2 },
-             { 0x3000, "Fullscreen"   , 7 },
-             { 0x4000, "InputPanel"   , 3 },
-             { 0xA000, "Touch"        , 4 },
-             { 0xB000, "Cursor"       , 5 },
-             { 0xC000, "Startup"      , 6 }
+             --    id   name            type  output
+  layers = { {      0, "Background"   ,    1, "Center" },
+             {      1, "Application"  ,    2, "Center" },
+             {      2, "Softkeyboard" ,    4, "Center" },
+             {      3, "HomeScreen"   ,    2, "Center" },
+             {      4, "ControlBar"   ,    2, "Center" },
+             {      5, "InterruptApp" ,    2, "Center" },
+             {      6, "OnScreen"     ,    2, "Center" },
+             {    101, "Input"        ,    3, "Center" },
+             {    102, "Cursor"       ,    5, "Center" },
+             {    103, "Startup"      ,    6, "Center" },
+             { 0x1000, "Background"   ,    1, "Center" },
+             { 0x2000, "Normal"       ,    2, "Center" },
+             { 0x3000, "Fullscreen"   ,    7, "Center" },
+             { 0x4000, "InputPanel"   ,    3, "Center" },
+             { 0xA000, "Touch"        ,    4, "Center" },
+             { 0xB000, "Cursor"       ,    5, "Center" },
+             { 0xC000, "Startup"      ,    6, "Center" }
   },
 
 
