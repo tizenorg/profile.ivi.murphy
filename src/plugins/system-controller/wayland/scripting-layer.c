@@ -251,6 +251,10 @@ static int layer_getfield(lua_State *L)
         case LAYERTYPE:
             lua_pushstring(L, mrp_wayland_layer_type_str(layer->type));
             break;
+
+        case OUTPUTNAME:
+            lua_pushstring(L, layer->outputname ? layer->outputname : "");
+            break;
                                                            
         case VISIBLE:
             lua_pushboolean(L, layer->visible);
@@ -485,8 +489,9 @@ static scripting_layer_mask_t *layer_mask_check(lua_State *L, int idx)
 static uint32_t get_layer_mask(mrp_wayland_scripting_field_t fld)
 {
     switch (fld) {
-    case LAYER:     return MRP_WAYLAND_LAYER_LAYERID_MASK;
-    case VISIBLE:   return MRP_WAYLAND_LAYER_VISIBLE_MASK;
-    default:        return 0;
+    case LAYER:      return MRP_WAYLAND_LAYER_LAYERID_MASK;
+    case VISIBLE:    return MRP_WAYLAND_LAYER_VISIBLE_MASK;
+    case OUTPUTNAME: return MRP_WAYLAND_LAYER_OUTPUTNAME_MASK;
+    default:         return 0;
     }
 }
