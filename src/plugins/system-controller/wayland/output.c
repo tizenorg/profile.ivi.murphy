@@ -73,11 +73,21 @@ bool mrp_wayland_output_register(mrp_wayland_t *wl)
     return true;
 }
 
-mrp_wayland_output_t *mrp_wayland_output_find(mrp_wayland_t *wl,uint32_t index)
+mrp_wayland_output_t *mrp_wayland_output_find_by_index(mrp_wayland_t *wl,
+                                                       uint32_t index)
 {    
     MRP_ASSERT(wl, "invalid argument");
 
-    return (mrp_wayland_output_t *)mrp_htbl_lookup(wl->outputs, &index);
+    return (mrp_wayland_output_t *)mrp_htbl_lookup(wl->outputs.by_index,
+                                                   &index);
+}
+
+mrp_wayland_output_t *mrp_wayland_output_find_by_id(mrp_wayland_t *wl,
+                                                    int32_t id)
+{    
+    MRP_ASSERT(wl, "invalid argument");
+
+    return (mrp_wayland_output_t *)mrp_htbl_lookup(wl->outputs.by_id, &id);
 }
 
 void mrp_wayland_output_request(mrp_wayland_t *wl,
@@ -85,12 +95,13 @@ void mrp_wayland_output_request(mrp_wayland_t *wl,
 {
     mrp_wayland_output_t *out;
     mrp_wayland_output_update_mask_t mask;
+    int32_t old_id;
     char buf[4096];
 
     MRP_ASSERT(wl && u, "invalid arguments");
 
     if (!(u->mask & MRP_WAYLAND_OUTPUT_INDEX_MASK) ||
-        !(out = mrp_wayland_output_find(wl, u->index)))
+        !(out = mrp_wayland_output_find_by_index(wl, u->index)))
     {
         mrp_debug("can't find output %u: request rejected", u->index);
         return;
@@ -103,13 +114,23 @@ void mrp_wayland_output_request(mrp_wayland_t *wl,
 
     if ((u->mask & MRP_WAYLAND_OUTPUT_OUTPUTID_MASK)) {
         if (u->outputid < 0) {
-            mrp_log_error("system-controller: refuse to set output ID %d",
-                          u->outputid);
+            mrp_log_error("system-controller: refuse to set output ID %d "
+                          "(invalid id)", u->outputid);
         }
         else {
             if (u->outputid != out->outputid) {
                 mask |= MRP_WAYLAND_OUTPUT_OUTPUTID_MASK;
+
+                if ((old_id = out->outputid) >= 0)
+                    mrp_htbl_remove(wl->outputs.by_id, &out->outputid, false);
+
                 out->outputid = u->outputid;
+
+                if (!mrp_htbl_insert(wl->outputs.by_id, &out->outputid, out)) {
+                    mrp_log_error("system-controller: refuse to set output ID "
+                                  "%d (duplicate)", out->outputid);
+                    out->outputid = old_id;
+                }
             }
         }
     }
@@ -152,7 +173,7 @@ static bool output_constructor(mrp_wayland_t *wl, mrp_wayland_object_t *obj)
     out->outputid = -1;
     out->outputname = mrp_strdup(name);
 
-    if (!mrp_htbl_insert(wl->outputs, &out->index, out)) {
+    if (!mrp_htbl_insert(wl->outputs.by_index, &out->index, out)) {
         mrp_log_error("failed to create output: already exists");
         mrp_free(out);
         return NULL;
