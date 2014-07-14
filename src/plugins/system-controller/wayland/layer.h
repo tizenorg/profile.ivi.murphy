@@ -61,6 +61,7 @@ struct mrp_wayland_layer_s {
     int32_t layerid;
     char *name;
     mrp_wayland_layer_type_t type;
+    char *outputname;
     bool visible;
 
     void *scripting_data;
@@ -68,12 +69,13 @@ struct mrp_wayland_layer_s {
 
 
 enum mrp_wayland_layer_update_mask_e {
-    MRP_WAYLAND_LAYER_LAYERID_MASK   = 0x0001,
-    MRP_WAYLAND_LAYER_NAME_MASK      = 0x0002,
-    MRP_WAYLAND_LAYER_TYPE_MASK      = 0x0004,
-    MRP_WAYLAND_LAYER_VISIBLE_MASK   = 0x0008,
+    MRP_WAYLAND_LAYER_LAYERID_MASK    = 0x0001,
+    MRP_WAYLAND_LAYER_NAME_MASK       = 0x0002,
+    MRP_WAYLAND_LAYER_TYPE_MASK       = 0x0004,
+    MRP_WAYLAND_LAYER_OUTPUTNAME_MASK = 0x0008,
+    MRP_WAYLAND_LAYER_VISIBLE_MASK    = 0x0010,
 
-    MRP_WAYLAND_LAYER_END_MASK       = 0x0010
+    MRP_WAYLAND_LAYER_END_MASK        = 0x0020
 };
 
 
@@ -82,6 +84,7 @@ struct mrp_wayland_layer_update_s {
     int32_t layerid;
     const char *name;
     mrp_wayland_layer_type_t type;
+    char *outputname;
     bool visible;
 };
 
