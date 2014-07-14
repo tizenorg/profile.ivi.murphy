@@ -102,8 +102,10 @@ struct mrp_wayland_output_update_s {
 
 bool mrp_wayland_output_register(mrp_wayland_t *wl);
 
-mrp_wayland_output_t *mrp_wayland_output_find(mrp_wayland_t *wl,
-                                              uint32_t index);
+mrp_wayland_output_t *mrp_wayland_output_find_by_index(mrp_wayland_t *wl,
+                                                       uint32_t index);
+mrp_wayland_output_t *mrp_wayland_output_find_by_id(mrp_wayland_t *wl,
+                                                    int32_t id);
 
 void mrp_wayland_output_request(mrp_wayland_t *wl,
                                 mrp_wayland_output_update_t *u);
