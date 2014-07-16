@@ -48,7 +48,7 @@
 #include "area.h"
 
 #define MAX_COORDINATE                  16383
-#define CONSTRUCTOR_TIMEOUT             2000 /* ms */
+#define CONSTRUCTOR_TIMEOUT             10000 /* ms */
 
 #define INVALID_INDEX                   (~(uint32_t)0)
 
@@ -967,7 +967,7 @@ static void surface_stats_callback(void *data,
               redraw_count, frame_count, update_count, pid,
               process_name ? process_name : "<null>");
 
-    if (sf->pid != pid) {
+    if (sf->pid != (int32_t)pid) {
         mrp_debug("confused with data structures (mismatching pids)");
         return;
     }
@@ -1347,34 +1347,32 @@ static void shell_info_callback(void *data,
         return;
     }
 
-    mrp_list_foreach(&wm->constructors, c, n) {
-        entry = mrp_list_entry(c, constructor_t, link);
+    if (!title || *title == '\0')
+        mrp_debug("creating incomplete constructor");
+    else {
+        mrp_list_foreach(&wm->constructors, c, n) {
+            entry = mrp_list_entry(c, constructor_t, link);
 
-        if (pid == entry->pid) {
-            if (entry->state == CONSTRUCTOR_INCOMPLETE) {
-                /* title has not been set for this entry */
-                if (!title || *title == '\0') {
-                    mrp_debug("nothing to do "
-                              "(already have an incomplete entry)");
+            if (pid == entry->pid) {
+                if (entry->state == CONSTRUCTOR_INCOMPLETE) {
+                    /* title has not been set for this entry */
+                    mrp_debug("setting title for incomplete constructor");
+                    entry->state = CONSTRUCTOR_TITLED;
+                    entry->title = mrp_strdup(title);
+                    
+                    entry->id_surface = surface_id_generate();
+                    mrp_debug("got surface_id %u for constructor");
+                    
+                    constructor_issue_next_request(wm);
+                    
                     return;
                 }
-
-                mrp_debug("setting title for incomplete constructor");
-                entry->state = CONSTRUCTOR_TITLED;
-                entry->title = mrp_strdup(title);
-
-                entry->id_surface = surface_id_generate();
-                mrp_debug("got surface_id %u for constructor");
-
-                constructor_issue_next_request(wm);
-
-                return;
-            }
-            else {
-                /* the title is already set for this entry */
-                if (title && !strcmp(entry->title, title)) {
-                    mrp_debug("nothing to do (same title)");
-                    return;
+                else {
+                    /* the title is already set for this entry */
+                    if (title && !strcmp(entry->title, title)) {
+                        mrp_debug("nothing to do (same title)");
+                        return;
+                    }
                 }
             }
         }
@@ -1410,9 +1408,14 @@ static bool surface_id_is_ours(uint32_t id)
 
 static char *surface_id_print(uint32_t id, char *buf, size_t len)
 {
-    snprintf(buf, len, "%u(%s-id-%u)", id,
-             surface_id_is_ours(id) ? "our":"native",
-             (id & SURFACE_ID_MAX));
+    if (!id)
+        snprintf(buf, len, "<not set>");
+    else {
+        snprintf(buf, len, "%u(%s-id-%u)", id,
+                 surface_id_is_ours(id) ? "our":"native",
+                 (id & SURFACE_ID_MAX));
+    }
+
     return buf;
 }
 
@@ -1474,6 +1477,10 @@ static void constructor_timeout(mrp_timer_t *timer, void *user_data)
 
     MRP_ASSERT(timer && c && c->wm, "invalid argument");
     MRP_ASSERT(timer == c->timer, "confused with data structures");
+
+    mrp_debug("pid=%d title='%s' id_surface=%u state=%s",
+              c->pid, c->title ? c->title : "", c->id_surface,
+              constructor_state_str(c->state));
 
     wm = c->wm;
 
