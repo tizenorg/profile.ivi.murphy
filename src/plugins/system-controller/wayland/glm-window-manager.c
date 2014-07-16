@@ -117,7 +117,6 @@ enum constructor_state_e {
     CONSTRUCTOR_INCOMPLETE,     /* pid is set but title is missing */
     CONSTRUCTOR_TITLED,         /* pid and title set */
     CONSTRUCTOR_REQUESTED,      /* native handle was requested */
-    CONSTRUCTOR_HANDLED,        /* got native handle */
     CONSTRUCTOR_BOUND,          /* got native handle and ivi surface created */
 };
 
@@ -153,11 +152,10 @@ static void ctrl_layer_callback(void *, struct ivi_controller *, uint32_t);
 static void ctrl_surface_callback(void *, struct ivi_controller *, uint32_t);
 static void ctrl_error_callback(void *, struct ivi_controller *, int32_t,
                                 int32_t, int32_t, const char *);
-static void ctrl_handle_callback(void *, struct ivi_controller *,
-                                 struct wl_surface *);
+static void ctrl_native_handle_callback(void *, struct ivi_controller *,
+                                        struct wl_surface *);
 
 static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *,
-                                      struct ivi_controller *,
                                       constructor_t *);
 static void surface_destroy(mrp_glm_window_manager_t *, ctrl_surface_t *);
 static ctrl_surface_t *surface_find(mrp_glm_window_manager_t *, uint32_t);
@@ -287,7 +285,7 @@ static bool window_manager_constructor(mrp_wayland_t *wl,
         .layer         = ctrl_layer_callback,
         .surface       = ctrl_surface_callback,
         .error         = ctrl_error_callback,
-        .native_handle = ctrl_handle_callback
+        .native_handle = ctrl_native_handle_callback
     };
 
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)obj;
@@ -452,6 +450,7 @@ static void ctrl_surface_callback(void *data,
 
     mrp_debug("id_surface=%s", surface_id_print(id_surface, buf,sizeof(buf)));
 
+#if 0
     mrp_list_foreach(&wm->constructors, c, n) {
         entry = mrp_list_entry(c, constructor_t, link);
         
@@ -465,7 +464,7 @@ static void ctrl_surface_callback(void *data,
 
             if (constructor_bind_ivi_surface(wm, entry)) {
                 entry->state = CONSTRUCTOR_BOUND;
-                surface_create(wm, ivi_controller, entry);
+                surface_create(wm, entry);
             }
 
             constructor_destroy(entry);
@@ -485,6 +484,7 @@ static void ctrl_surface_callback(void *data,
 
         break;
     }
+#endif
 }
 
 
@@ -564,9 +564,9 @@ static void ctrl_error_callback(void *data,
     }
 }
 
-static void ctrl_handle_callback(void *data,
-                                 struct ivi_controller *ivi_controller,
-                                 struct wl_surface *wl_surface)
+static void ctrl_native_handle_callback(void *data,
+                                        struct ivi_controller *ivi_controller,
+                                        struct wl_surface *wl_surface)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)data;
     mrp_wayland_t *wl;
@@ -622,27 +622,18 @@ static void ctrl_handle_callback(void *data,
         /* create an ivi-surface and bind it to wl_surface */
         reqsurf->wl_surface = wl_surface;
 
-        if (!reqsurf->id_surface) {
-            mrp_debug("id is unknown => set state handled "
-                      "(postpone ivi-surface creation)");
-
-            reqsurf->state = CONSTRUCTOR_HANDLED;
+        if (constructor_bind_ivi_surface(wm, reqsurf)) {
+            reqsurf->state = CONSTRUCTOR_BOUND;
+            surface_create(wm, reqsurf);
         }
-        else {
-            if (constructor_bind_ivi_surface(wm, reqsurf)) {
-                reqsurf->state = CONSTRUCTOR_BOUND;
-                surface_create(wm, ivi_controller, reqsurf);
-            }
 
-            constructor_destroy(reqsurf);
-            constructor_issue_next_request(wm);
-        }
+        constructor_destroy(reqsurf);
+        constructor_issue_next_request(wm);
     }
 }
 
 
 static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
-                                      struct ivi_controller *ctrl,
                                       constructor_t *c)
 {
     static struct ivi_controller_surface_listener listener =  {
@@ -661,15 +652,17 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     };
 
     mrp_wayland_t *wl;
+    struct ivi_controller *ctrl;
     struct ivi_controller_surface *ctrl_surface;
     ctrl_surface_t *sf;
     char id_str[256];
     int sts;
 
-    MRP_ASSERT(wm && wm->interface && wm->interface->wl && ctrl && c,
+    MRP_ASSERT(wm && wm->interface && wm->interface->wl && c,
                "invalid argument");
 
     wl = wm->interface->wl;
+    ctrl = (struct ivi_controller *)wm->proxy;
 
     surface_id_print(c->id_surface, id_str, sizeof(id_str));
 
@@ -1370,6 +1363,9 @@ static void shell_info_callback(void *data,
                 entry->state = CONSTRUCTOR_TITLED;
                 entry->title = mrp_strdup(title);
 
+                entry->id_surface = surface_id_generate();
+                mrp_debug("got surface_id %u for constructor");
+
                 constructor_issue_next_request(wm);
 
                 return;
@@ -1599,7 +1595,6 @@ static char *constructor_state_str(constructor_state_t state)
     case CONSTRUCTOR_INCOMPLETE:  return "incomplete";
     case CONSTRUCTOR_TITLED:      return "titled";
     case CONSTRUCTOR_REQUESTED:   return "requested";
-    case CONSTRUCTOR_HANDLED:     return "handled";
     case CONSTRUCTOR_BOUND:       return "bound";
     default:                      return "<unknown>";
     }
