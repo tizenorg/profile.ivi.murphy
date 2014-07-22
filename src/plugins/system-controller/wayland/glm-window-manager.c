@@ -27,10 +27,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <libgen.h>
 #include <string.h>
 #include <errno.h>
 
@@ -38,6 +43,8 @@
 
 #include <genivi-shell/ivi-controller-client-protocol.h>
 #include <genivi-shell/ivi-application-client-protocol.h>
+
+#include <aul/aul.h>
 
 #include "glm-window-manager.h"
 #include "layer.h"
@@ -48,6 +55,8 @@
 #include "area.h"
 
 #define MAX_COORDINATE                  16383
+
+#define SURFACELESS_TIMEOUT             1000  /* ms */
 #define CONSTRUCTOR_TIMEOUT             10000 /* ms */
 
 #define INVALID_INDEX                   (~(uint32_t)0)
@@ -83,10 +92,14 @@ struct ctrl_surface_s {
     mrp_wayland_t *wl;
     struct ivi_controller_surface *ctrl_surface;
     struct wl_surface *wl_surface;
+    int32_t nodeid;
     uint32_t id;
     int32_t pid;
+    char *appid;
     char *title;
-    bool ready;
+    int32_t x, y;
+    int32_t width, height;
+    mrp_wayland_window_t *win;
 };
 
 struct ctrl_layer_s {
@@ -116,6 +129,7 @@ enum constructor_state_e {
     CONSTRUCTOR_FAILED = 0,     /* handle request failed */
     CONSTRUCTOR_INCOMPLETE,     /* pid is set but title is missing */
     CONSTRUCTOR_TITLED,         /* pid and title set */
+    CONSTRUCTOR_SURFACELESS,    /* needs an ivi surface created by us */
     CONSTRUCTOR_REQUESTED,      /* native handle was requested */
     CONSTRUCTOR_BOUND,          /* got native handle and ivi surface created */
 };
@@ -128,8 +142,10 @@ struct constructor_s {
     uint32_t id_surface;
     struct wl_surface *wl_surface;
     constructor_state_t state;
-    bool multisurface;
-    mrp_timer_t *timer;
+    struct {
+        mrp_timer_t *timeout;
+        mrp_timer_t *surfaceless;
+    } timer;
 };
 
 enum match_e {
@@ -149,14 +165,16 @@ static bool window_manager_constructor(mrp_wayland_t *,mrp_wayland_object_t *);
 static void ctrl_screen_callback(void *, struct ivi_controller *, uint32_t,
                                  struct ivi_controller_screen *);
 static void ctrl_layer_callback(void *, struct ivi_controller *, uint32_t);
-static void ctrl_surface_callback(void *, struct ivi_controller *, uint32_t);
+static void ctrl_surface_callback(void *, struct ivi_controller *, uint32_t,
+                                  int32_t, const char *);
 static void ctrl_error_callback(void *, struct ivi_controller *, int32_t,
                                 int32_t, int32_t, const char *);
 static void ctrl_native_handle_callback(void *, struct ivi_controller *,
                                         struct wl_surface *);
 
 static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *,
-                                      constructor_t *);
+                                      uint32_t, int32_t, const char *,
+                                      struct wl_surface *);
 static void surface_destroy(mrp_glm_window_manager_t *, ctrl_surface_t *);
 static ctrl_surface_t *surface_find(mrp_glm_window_manager_t *, uint32_t);
 
@@ -191,6 +209,7 @@ static void surface_content_callback(void *, struct ivi_controller_surface *,
 static void surface_input_focus_callback(void *,
                                  struct ivi_controller_surface *,
                                  int32_t);
+static bool surface_is_ready(mrp_glm_window_manager_t *, ctrl_surface_t *);
 
 static ctrl_layer_t *layer_create(mrp_glm_window_manager_t *,
                                   mrp_wayland_layer_t *, ctrl_screen_t *);
@@ -221,18 +240,23 @@ static char *surface_id_print(uint32_t, char *, size_t);
 static bool application_manager_constructor(mrp_wayland_t *,
                                             mrp_wayland_object_t *);
 static void shell_info_callback(void *, struct ivi_application *,
-                                int32_t, const char *);
+                                int32_t, const char *, uint32_t);
 
 static constructor_t *constructor_create(mrp_glm_window_manager_t *,
                                          constructor_state_t,
-                                         int32_t, const char *);
+                                         int32_t, const char *, uint32_t);
 static void constructor_destroy(constructor_t *);
 static void constructor_timeout(mrp_timer_t *, void *);
+static void constructor_surfaceless(mrp_timer_t *, void *);
 static constructor_t *constructor_find_first(mrp_glm_window_manager_t *,
                                              match_t,
                                              constructor_state_t);
+static constructor_t *constructor_find_surface(mrp_glm_window_manager_t *,
+                                               uint32_t);
 static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *,
                                              uint32_t);
+static void constructor_set_title(mrp_glm_window_manager_t *,
+                                  constructor_t *, const char *);
 static void constructor_issue_next_request(mrp_glm_window_manager_t *);
 static bool constructor_bind_ivi_surface(mrp_glm_window_manager_t *,
                                          constructor_t *);
@@ -256,6 +280,8 @@ static uint32_t sid_hash(const void *);
 static uint32_t lid_hash(const void *);
 static uint32_t oid_hash(const void *);
 static int id_compare(const void *, const void *);
+
+static void get_appid(int32_t, char *, int);
 
 
 bool mrp_glm_window_manager_register(mrp_wayland_t *wl)
@@ -432,59 +458,51 @@ static void ctrl_layer_callback(void *data,
 
 static void ctrl_surface_callback(void *data,
                                   struct ivi_controller *ivi_controller,
-                                  uint32_t id_surface)
+                                  uint32_t id_surface,
+                                  int32_t pid,
+                                  const char *title)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)data;
     mrp_wayland_t *wl;
     ctrl_surface_t *sf;
-    mrp_list_hook_t *c, *n;
-    constructor_t *entry;
+    constructor_t *c;
     struct ivi_surface *ivi_surface;
+    struct wl_surface *wl_surface;
     char buf[256];
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
-    
+
     wl = wm->interface->wl;
 
-    mrp_debug("id_surface=%s", surface_id_print(id_surface, buf,sizeof(buf)));
+    mrp_debug("id_surface=%s pid=%d title='%s'",
+              surface_id_print(id_surface, buf,sizeof(buf)),
+              pid, title ? title:"<null>");
 
-#if 0
-    mrp_list_foreach(&wm->constructors, c, n) {
-        entry = mrp_list_entry(c, constructor_t, link);
-        
-        if (entry->state == CONSTRUCTOR_FAILED)
-            continue;
-        
-        if (entry->state == CONSTRUCTOR_HANDLED) {
-            mrp_debug("found handled constructor entry");
+    wl_surface = NULL;
 
-            entry->id_surface = id_surface;
+    if ((c = constructor_find_surface(wm, id_surface))) {
+        switch (c->state) {
+            
+        case CONSTRUCTOR_BOUND:
+            wl_surface = c->wl_surface;
+            /* intentional fall over */
+            
+        case CONSTRUCTOR_TITLED:
+        case CONSTRUCTOR_REQUESTED:
+            if (!title || !title[0])
+                title = c->title;
+            break;
 
-            if (constructor_bind_ivi_surface(wm, entry)) {
-                entry->state = CONSTRUCTOR_BOUND;
-                surface_create(wm, entry);
-            }
-
-            constructor_destroy(entry);
-            constructor_issue_next_request(wm);
+        default:
             break;
         }
 
-        if  (entry->state == CONSTRUCTOR_REQUESTED) {
-            mrp_debug("found requested constructor");
-
-            entry->id_surface = id_surface;
-
-            break;
-        }
-
-        mrp_debug("ignoring surface handle");
-
-        break;
+        constructor_destroy(c);
     }
-#endif
+
+    surface_create(wm, id_surface, pid, title, wl_surface);
 }
 
 
@@ -500,7 +518,6 @@ static void ctrl_error_callback(void *data,
     const char *type_str;
     mrp_list_hook_t *c, *n;
     constructor_t *entry;
-    bool request_already_removed;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
@@ -515,48 +532,22 @@ static void ctrl_error_callback(void *data,
     default:                                   type_str = "<unknown>";   break;
     }
 
-    mrp_debug("%s %d error %d: %s", type_str, object_id,
-              error_code, error_text ? error_text:"???");
+    if (!error_text)
+        error_text = "???";
+
+    mrp_debug("%s %d error %d: %s", type_str,object_id, error_code,error_text);
 
     switch (object_type) {
 
     case IVI_CONTROLLER_OBJECT_TYPE_SURFACE:
         if (error_code  == IVI_CONTROLLER_ERROR_CODE_NATIVE_HANDLE_END) {
-            mrp_debug("ignoring native_handle_list end marker");
-            return;
+            mrp_debug("native_handle_list end marker");
+            constructor_issue_next_request(wm);
         }
-
-        request_already_removed = false;
-
-        mrp_list_foreach(&wm->constructors, c, n) {
-            entry = mrp_list_entry(c, constructor_t, link);
-
-            switch (entry->state) {
-
-            case CONSTRUCTOR_REQUESTED:
-                if (request_already_removed) {
-                    mrp_log_error("system-controller: multiple requests "
-                                  "in surface queue");
-                }
-                else {
-                    constructor_destroy(entry);
-                    request_already_removed = true;
-                }
-                break;
-
-            case CONSTRUCTOR_TITLED:
-            case CONSTRUCTOR_FAILED:
-                /* nothing to do with these */
-                break;
-
-            default:
-                entry->state = CONSTRUCTOR_FAILED;
-                break;
-            }
-        }
-
-        constructor_issue_next_request(wm);
-        
+        else {
+            mrp_log_error("system-controller: surface error %d: %s",
+                          error_code, error_text);
+        }        
         break;
 
     default:
@@ -572,8 +563,7 @@ static void ctrl_native_handle_callback(void *data,
     mrp_wayland_t *wl;
     application_t *app;
     const char *type_str;
-    constructor_t *reqsurf, *appsurf;
-    int nappsurf;
+    constructor_t *reqsurf;
     mrp_list_hook_t *s, *n;
     constructor_t *entry;
     char buf[256];
@@ -594,47 +584,24 @@ static void ctrl_native_handle_callback(void *data,
 
     reqsurf = constructor_find_first(wm, DOES_MATCH, CONSTRUCTOR_REQUESTED);
 
-    if (!reqsurf) {
-        mrp_debug("confused: no pendig request");
-        return;
-    }
-
-    nappsurf = 0;
-
-    mrp_list_foreach(&wm->constructors, s, n) {
-        entry = mrp_list_entry(s, constructor_t, link);
-
-        if (entry != reqsurf && entry->pid == reqsurf->pid) {
-            nappsurf++;
-            appsurf = entry;
-        }
-    }
-
-    if (nappsurf == 1 && !reqsurf->multisurface && appsurf->id_surface != 0) {
-        /* title change */
-
-        // update name of appsurf
-
-        constructor_destroy(reqsurf);
-        constructor_issue_next_request(wm);
-    }
+    if (!reqsurf)
+        mrp_debug("no pendig request");
     else {
         /* create an ivi-surface and bind it to wl_surface */
+        reqsurf->id_surface = surface_id_generate();
         reqsurf->wl_surface = wl_surface;
 
-        if (constructor_bind_ivi_surface(wm, reqsurf)) {
+        if (constructor_bind_ivi_surface(wm, reqsurf))
             reqsurf->state = CONSTRUCTOR_BOUND;
-            surface_create(wm, reqsurf);
-        }
-
-        constructor_destroy(reqsurf);
-        constructor_issue_next_request(wm);
-    }
+   }
 }
 
 
 static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
-                                      constructor_t *c)
+                                      uint32_t id_surface,
+                                      int32_t pid,
+                                      const char *title,
+                                      struct wl_surface *wl_surface)
 {
     static struct ivi_controller_surface_listener listener =  {
         .visibility            =  surface_visibility_callback,
@@ -655,26 +622,29 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     struct ivi_controller *ctrl;
     struct ivi_controller_surface *ctrl_surface;
     ctrl_surface_t *sf;
+    char appid[1024];
     char id_str[256];
     int sts;
 
-    MRP_ASSERT(wm && wm->interface && wm->interface->wl && c,
-               "invalid argument");
+    MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
 
     wl = wm->interface->wl;
     ctrl = (struct ivi_controller *)wm->proxy;
 
-    surface_id_print(c->id_surface, id_str, sizeof(id_str));
+    surface_id_print(id_surface, id_str, sizeof(id_str));
+    get_appid(pid, appid, sizeof(appid));
 
-    mrp_debug("create surface %s ...", id_str);
+    mrp_debug("create surface "
+              "(id=%s pid=%d appid='%s' title='%s' wl_surface=%p)",
+              id_str, pid, appid, title ? title : "<null>", wl_surface);
 
-    if (surface_find(wm, c->id_surface)) {
+    if (surface_find(wm, id_surface)) {
         mrp_log_error("system-controller: attempt to create multiple times "
                       "surface %s", id_str);
         return NULL;
     }
 
-    if (!(ctrl_surface = ivi_controller_surface_create(ctrl, c->id_surface))) {
+    if (!(ctrl_surface = ivi_controller_surface_create(ctrl, id_surface))) {
         mrp_log_error("system-controller: failed to create controller "
                       "surface for surface %s", id_str);
         return NULL;
@@ -682,6 +652,7 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
 
     mrp_debug("ctrl_surface %p was created for surface %s",
               ctrl_surface, id_str);
+
 
     if (!(sf = mrp_allocz(sizeof(ctrl_surface_t)))) {
         mrp_log_error("system-controller: failed to allocate memory "
@@ -691,10 +662,13 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
 
     sf->wl = wl;
     sf->ctrl_surface = ctrl_surface;
-    sf->wl_surface  = c->wl_surface;
-    sf->id = c->id_surface;
-    sf->pid = c->pid;
-    sf->title = mrp_strdup(c->title ? c->title : "");
+    sf->wl_surface = wl_surface;
+    sf->id = id_surface;
+    sf->pid = pid;
+    sf->appid = mrp_strdup(appid);
+    sf->title = title ? mrp_strdup(title) : NULL;
+    sf->width = -1;
+    sf->height = -1;
 
     if (!mrp_htbl_insert(wm->surfaces, &sf->id, sf)) {
         mrp_log_error("system-controller: hashmap insertion error when "
@@ -709,6 +683,7 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
 
         mrp_htbl_remove(wm->surfaces, &sf->id, false);
 
+        mrp_free(sf->title);
         mrp_free(sf);
 
         return NULL;
@@ -734,6 +709,10 @@ static void surface_destroy(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
                           "(surface hashtable entry mismatch)");
         }
         else {
+            if (sf->win)
+                mrp_wayland_window_destroy(sf->win);
+
+            mrp_free(sf->appid);
             mrp_free(sf->title);
             mrp_free(sf);
         }
@@ -833,6 +812,7 @@ static void surface_destination_rectangle_callback(void *data,
     ctrl_surface_t *sf = (ctrl_surface_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
+    mrp_wayland_window_update_t u;
     char buf[256];
 
     MRP_ASSERT(sf && sf->wl, "invalid argument");
@@ -847,6 +827,24 @@ static void surface_destination_rectangle_callback(void *data,
     mrp_debug("ctrl_surface=%p (id=%s) x=%d y=%d width=%d height=%d",
               ctrl_surface, surface_id_print(sf->id, buf, sizeof(buf)),
               x, y, width, height);
+
+    sf->x = x;
+    sf->y = y;
+    sf->width = width;
+    sf->height = height;
+
+    if (surface_is_ready(wm, sf)) {
+        memset(&u, 0, sizeof(u));
+        u.mask   = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                   MRP_WAYLAND_WINDOW_POSITION_MASK  |
+                   MRP_WAYLAND_WINDOW_SIZE_MASK      ;
+        u.x      = sf->x;
+        u.y      = sf->y;
+        u.width  = sf->width;
+        u.height = sf->height;
+
+        mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
+    }
 }
 
 static void surface_configuration_callback(void *data,
@@ -1039,6 +1037,49 @@ static void surface_input_focus_callback(void *data,
 
     mrp_debug("ctrl_surface=%p (id=%s) enabled=%d", ctrl_surface,
               surface_id_print(sf->id, buf, sizeof(buf)), enabled);
+}
+
+static bool surface_is_ready(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
+{
+    mrp_wayland_t *wl;
+    mrp_wayland_window_update_t u;
+    bool ready;
+
+    ready = sf->win ? true : false;
+
+    if (!ready && wm->interface && wm->interface->wl) {
+        wl = wm->interface->wl;
+
+        if (sf->id     >  0 &&
+            sf->pid    >  0 &&
+            sf->appid       &&
+            sf->title       &&
+            sf->width  >= 0 &&
+            sf->height >= 0  )
+        {
+            memset(&u, 0, sizeof(u));
+            u.mask       =  MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                            MRP_WAYLAND_WINDOW_NAME_MASK      |
+                            MRP_WAYLAND_WINDOW_APPID_MASK     |
+                            MRP_WAYLAND_WINDOW_PID_MASK       |
+                            MRP_WAYLAND_WINDOW_NODEID_MASK    |
+                            MRP_WAYLAND_WINDOW_POSITION_MASK  |
+                            MRP_WAYLAND_WINDOW_SIZE_MASK      ;
+            u.surfaceid  =  sf->id;
+            u.name       =  sf->title;
+            u.appid      =  sf->appid;
+            u.pid        =  sf->pid;
+            u.nodeid     =  sf->nodeid;
+            u.x          =  sf->x;
+            u.y          =  sf->y;
+            u.width      =  sf->width;
+            u.height     =  sf->height;
+
+            sf->win = mrp_wayland_window_create(wl, &u);
+        }
+    }
+
+    return ready;
 }
 
 
@@ -1324,14 +1365,18 @@ static bool application_manager_constructor(mrp_wayland_t *wl,
 static void shell_info_callback(void *data,
                                 struct ivi_application *ivi_application,
                                 int32_t pid,
-                                const char *title)
+                                const char *title,
+                                uint32_t id_surface)
 {
     application_t *app = (application_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
+    ctrl_surface_t *sf;
     mrp_list_hook_t *c, *n;
-    constructor_t *entry;
+    constructor_t *entry, *found;
     constructor_state_t state;
+    bool has_title;
+    char buf[256];
 
     MRP_ASSERT(pid > 0 && title, "invalid argument");
     MRP_ASSERT(app && app->interface && app->interface->wl,"invalid argument");
@@ -1340,48 +1385,130 @@ static void shell_info_callback(void *data,
 
     wl = app->interface->wl;
 
-    mrp_debug("pid=%d title='%s'", pid, title ? title : "<null>");
+    mrp_debug("pid=%d title='%s' id_surface=%s",
+              pid, title ? title : "<null>",
+              surface_id_print(id_surface, buf, sizeof(buf)));
 
     if (!(wm = (mrp_glm_window_manager_t *)wl->wm)) {
         mrp_debug("controller interface is not ready");
         return;
     }
 
-    if (!title || *title == '\0')
-        mrp_debug("creating incomplete constructor");
-    else {
-        mrp_list_foreach(&wm->constructors, c, n) {
-            entry = mrp_list_entry(c, constructor_t, link);
+    has_title = (title && title[0]);
 
-            if (pid == entry->pid) {
-                if (entry->state == CONSTRUCTOR_INCOMPLETE) {
-                    /* title has not been set for this entry */
-                    mrp_debug("setting title for incomplete constructor");
-                    entry->state = CONSTRUCTOR_TITLED;
-                    entry->title = mrp_strdup(title);
-                    
-                    entry->id_surface = surface_id_generate();
-                    mrp_debug("got surface_id %u for constructor");
-                    
-                    constructor_issue_next_request(wm);
-                    
-                    return;
+    if (!id_surface) {
+        /* no surface ID */
+
+        if (!has_title)
+            constructor_create(wm, CONSTRUCTOR_INCOMPLETE, pid, NULL, 0);
+        else {
+            /* try to find an incomplete constructor with a matching pid */
+            found = NULL;
+
+            mrp_list_foreach(&wm->constructors, c, n) {
+                entry = mrp_list_entry(c, constructor_t, link);
+
+                if (pid == entry->pid) {
+                    if ((entry->state == CONSTRUCTOR_INCOMPLETE) ||
+                        (entry->state == CONSTRUCTOR_TITLED &&
+                         !strcmp(title, entry->title)          )  )
+                    {
+                        found = entry;
+                        break;
+                    }
+                }
+            }
+
+            if (!found)
+                constructor_create(wm, CONSTRUCTOR_TITLED, pid, title, 0);
+            else
+                constructor_set_title(wm, found, title);
+        }
+    }
+    else {
+        /* we have a surface ID */
+
+        if (!(sf = surface_find(wm, id_surface))) {
+            /* no surface found with the ID */
+
+            if (!(found = constructor_find_surface(wm, id_surface))) {
+                /* no constructor with the ID found;
+                   try to find a matching pid/title entry */
+                mrp_list_foreach(&wm->constructors, c, n) {
+                    entry = mrp_list_entry(c, constructor_t, link);
+
+                    if (pid == entry->pid) {
+                        if (!entry->title || !entry->title[0]) {
+                            found = entry;
+                            if (!has_title)
+                                break;
+                        }
+                        else if (has_title && !strcmp(title, entry->title)) {
+                            found = entry;
+                            break;
+                        }
+                    }
+                } /* mrp_list_foreach */
+
+                if (!found) {
+                    if (has_title)
+                        state = CONSTRUCTOR_TITLED;
+                    else
+                        state = CONSTRUCTOR_INCOMPLETE;
+
+                    constructor_create(wm, state, pid, title, id_surface);
                 }
                 else {
-                    /* the title is already set for this entry */
-                    if (title && !strcmp(entry->title, title)) {
+                    mrp_debug("found a constructor with matching pid/title. "
+                              "Updating it ...");
+
+                    found->id_surface = id_surface;
+
+                    if (found->timer.surfaceless) {
+                        mrp_del_timer(found->timer.surfaceless);
+                        found->timer.surfaceless = NULL;
+                    }
+
+                    if (has_title)
+                        constructor_set_title(wm, found, title);
+                }
+            }
+            else {
+                /* found a constructor with the ID */
+                if (pid != found->pid) {
+                    mrp_log_error("system-controller: confused with surface "
+                                  "constructors (mismatching PIDs: %d vs. %d)",
+                                  pid, found->pid);
+                }
+                else {
+                    if (has_title)
+                        constructor_set_title(wm, found, title);
+                }
+            }
+        }
+        else {
+            /* found a surface with the ID */
+            if (pid != sf->pid) {
+                mrp_log_error("system-controller: confused with control "
+                              "surfaces (mismatching PIDs: %d vs. %d)",
+                              pid, sf->pid);
+            }
+            else {
+                if (has_title) {
+                    if (sf->title && !strcmp(title, sf->title))
                         mrp_debug("nothing to do (same title)");
-                        return;
+                    else {
+                        mrp_debug("updating surface title");
+
+                        mrp_free(sf->title);
+                        sf->title = mrp_strdup(title);
+
+                        surface_is_ready(wm, sf);
                     }
                 }
             }
         }
     }
-
-    state = (title && *title) ? CONSTRUCTOR_TITLED : CONSTRUCTOR_INCOMPLETE;
-
-    constructor_create(wm, state, pid, title);
-    constructor_issue_next_request(wm);
 }
 
 
@@ -1422,10 +1549,12 @@ static char *surface_id_print(uint32_t id, char *buf, size_t len)
 static constructor_t *constructor_create(mrp_glm_window_manager_t *wm,
                                          constructor_state_t state,
                                          int32_t pid,
-                                         const char *title)
+                                         const char *title,
+                                         uint32_t id_surface)
 {
     mrp_wayland_t *wl;
     constructor_t *c;
+    char buf[256];
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
 
@@ -1433,7 +1562,9 @@ static constructor_t *constructor_create(mrp_glm_window_manager_t *wm,
 
     if (!(c = mrp_allocz(sizeof(constructor_t)))) {
         mrp_log_error("system-controller: can't allocate memory for surface"
-                      "(pid=%d title='%s')", pid, title ? title : "<null>");
+                      "(pid=%d title='%s' id_surface=%s)",
+                      pid, title ? title : "<null>",
+                      surface_id_print(id_surface, buf, sizeof(buf)));
         return NULL;
     }
 
@@ -1442,13 +1573,18 @@ static constructor_t *constructor_create(mrp_glm_window_manager_t *wm,
     c->state = state;
     c->pid = pid;
     c->title = title ? mrp_strdup(title) : NULL;
-    c->timer = mrp_add_timer(wl->ml, CONSTRUCTOR_TIMEOUT,
-                             constructor_timeout, c);
+    c->id_surface = id_surface;
+    c->timer.timeout = mrp_add_timer(wl->ml, CONSTRUCTOR_TIMEOUT,
+                                     constructor_timeout, c);
+
+    if (!id_surface)
+        c->timer.surfaceless = mrp_add_timer(wl->ml, SURFACELESS_TIMEOUT,
+                                             constructor_surfaceless, c);
 
     mrp_list_append(&wm->constructors, &c->link);
 
-    mrp_debug("constructor created (state=%s, pid=%d, title='%s')",
-              constructor_state_str(state), pid, title?title:"<null>");
+    mrp_debug("constructor created (state=%s, pid=%d, title='%s' id_surface=%u)",
+              constructor_state_str(state), pid, title?title:"<null>", id_surface);
 
     return c;
 }
@@ -1461,7 +1597,8 @@ static void constructor_destroy(constructor_t *c)
         mrp_debug("surface %s of application (pid=%d) destroyed",
                   surface_id_print(c->id_surface, buf, sizeof(buf)), c->pid);
 
-        mrp_del_timer(c->timer);
+        mrp_del_timer(c->timer.timeout);
+        mrp_del_timer(c->timer.surfaceless);
 
         mrp_list_delete(&c->link);
         mrp_free(c->title);
@@ -1474,17 +1611,39 @@ static void constructor_timeout(mrp_timer_t *timer, void *user_data)
 {
     constructor_t *c = (constructor_t *)user_data;
     mrp_glm_window_manager_t *wm;
+    char buf[256];
 
     MRP_ASSERT(timer && c && c->wm, "invalid argument");
-    MRP_ASSERT(timer == c->timer, "confused with data structures");
+    MRP_ASSERT(timer == c->timer.timeout, "confused with data structures");
 
     mrp_debug("pid=%d title='%s' id_surface=%u state=%s",
-              c->pid, c->title ? c->title : "", c->id_surface,
+              c->pid, c->title ? c->title : "",
+              surface_id_print(c->id_surface, buf, sizeof(buf)),
               constructor_state_str(c->state));
 
     wm = c->wm;
 
     constructor_destroy(c);
+    constructor_issue_next_request(wm);
+}
+
+static void constructor_surfaceless(mrp_timer_t *timer, void *user_data)
+{
+    constructor_t *c = (constructor_t *)user_data;
+    mrp_glm_window_manager_t *wm;
+
+    MRP_ASSERT(timer && c && c->wm, "invalid argument");
+    MRP_ASSERT(timer == c->timer.surfaceless, "confused with data structures");
+
+    mrp_debug("pid=%d title='%s' state=%s",
+              c->pid, c->title ? c->title : "",
+              constructor_state_str(c->state));
+
+    wm = c->wm;
+
+    mrp_del_timer(c->timer.surfaceless);
+
+    c->state = CONSTRUCTOR_SURFACELESS;
     constructor_issue_next_request(wm);
 }
 
@@ -1501,6 +1660,24 @@ static constructor_t *constructor_find_first(mrp_glm_window_manager_t *wm,
         if (( match && state == entry->state) ||
             (!match && state != entry->state))
             return entry;
+    }
+
+    return NULL;
+}
+
+static constructor_t *constructor_find_surface(mrp_glm_window_manager_t *wm,
+                                               uint32_t id_surface)
+{
+    mrp_list_hook_t *c, *n;
+    constructor_t *entry;
+
+    if (id_surface > 0) {
+        mrp_list_foreach(&wm->constructors, c, n) {
+            entry = mrp_list_entry(c, constructor_t, link);
+
+            if (id_surface == entry->id_surface)
+                return entry;
+        }
     }
 
     return NULL;
@@ -1525,6 +1702,25 @@ static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *wm,
     return NULL;
 }
 
+static void constructor_set_title(mrp_glm_window_manager_t *wm,
+                                  constructor_t *c,
+                                  const char *title)
+{
+    (void)wm;
+
+    if (title && title[0]) {
+        mrp_free((void *)c->title);
+        c->title = title ? mrp_strdup(title) : NULL;
+
+        mrp_debug("constructor title changed to '%s'", c->title);
+
+        if (c->state == CONSTRUCTOR_INCOMPLETE) {
+            c->state = CONSTRUCTOR_TITLED;
+            mrp_debug("constructor state changed to %s",
+                      constructor_state_str(c->state));
+        }
+    }
+}
 
 static void constructor_issue_next_request(mrp_glm_window_manager_t *wm)
 {
@@ -1538,7 +1734,7 @@ static void constructor_issue_next_request(mrp_glm_window_manager_t *wm)
 
         mrp_debug("   state %s", constructor_state_str(entry->state));
         
-        if (entry->state == CONSTRUCTOR_TITLED) {
+        if (entry->state == CONSTRUCTOR_SURFACELESS) {
             mrp_debug("      call ivi_controller_get_native_handle"
                       "(pid=%d title='%s')", entry->pid, entry->title);
             
@@ -1550,7 +1746,7 @@ static void constructor_issue_next_request(mrp_glm_window_manager_t *wm)
             return;
         }
         
-        if (entry->state != CONSTRUCTOR_FAILED)
+        if (entry->state == CONSTRUCTOR_REQUESTED)
             break;
     }
 
@@ -1569,7 +1765,7 @@ static bool constructor_bind_ivi_surface(mrp_glm_window_manager_t *wm,
 
     if (!c->id_surface) {
         mrp_log_error("system-controller: failed to create ivi-surface "
-                      "(id_surface not set)");
+                      "(id_surface is not set)");
         return false;
     }
 
@@ -1601,6 +1797,7 @@ static char *constructor_state_str(constructor_state_t state)
     case CONSTRUCTOR_FAILED:      return "failed";
     case CONSTRUCTOR_INCOMPLETE:  return "incomplete";
     case CONSTRUCTOR_TITLED:      return "titled";
+    case CONSTRUCTOR_SURFACELESS: return "surfaceless";
     case CONSTRUCTOR_REQUESTED:   return "requested";
     case CONSTRUCTOR_BOUND:       return "bound";
     default:                      return "<unknown>";
@@ -1876,4 +2073,90 @@ static int id_compare(const void *pkey1, const void *pkey2)
     int32_t key2 = *(int32_t *)pkey2;
 
     return (key1 == key2) ? 0 : ((key1 < key2) ? -1 : 1);
+}
+
+static int32_t get_parent_pid(int32_t pid)
+{
+    int fd;
+    char path[256];
+    char buf[1024];
+    ssize_t size;
+    char *ppid_line, *c, *e;
+    int32_t ppid;
+
+    snprintf(path, sizeof(path), "/proc/%d/status", pid);
+
+    if ((fd = open(path, O_RDONLY)) < 0)
+        return -1;
+
+    while ((size = read(fd, buf, sizeof(buf)-1)) <= 0) {
+        if (errno != EINTR) {
+            close(fd);
+            return -1;
+        }
+    }
+
+    close(fd);
+
+    buf[size] = 0;
+
+    if ((ppid_line = strstr(buf, "PPid:"))) {
+        for (c = ppid_line + 5; (*c == ' ' || *c == '\t');  c++)
+            ;
+
+        if ((ppid = strtol(c, &e, 10)) > 0 && e > c && *e == '\n')
+            return ppid;
+    }
+
+    return -1;
+}
+
+static void get_binary_basename(int32_t pid, char *buf, int len)
+{
+    int fd;
+    char path[256];
+    char cmdline[1024];
+    char *bnam;
+    ssize_t size;
+
+    snprintf(path, sizeof(path), "/proc/%d/cmdline", pid);
+
+    buf[0] = 0;
+
+    if ((fd = open(path, O_RDONLY)) < 0)
+        return;
+
+    while ((size = read(fd, cmdline, sizeof(cmdline))) <= 0) {
+        if (errno != EINTR) {
+            close(fd);
+            return;
+        }
+    }
+
+    close(fd);
+
+    cmdline[size] = 0;
+    bnam = basename(cmdline);
+
+    strncpy(buf, bnam, len-1);
+    buf[len-1] = 0;
+}
+
+static void get_appid(int32_t pid, char *buf, int len)
+{
+    int ppid;
+
+    if (!buf || len < 2)
+        return;
+
+    buf[0] = 0;
+
+    if ((ppid = pid) > 0) {
+        while (aul_app_get_appid_bypid(ppid, buf, len) != AUL_R_OK) {
+            if ((ppid = get_parent_pid(ppid)) <= 1) {
+                get_binary_basename(pid, buf, len);
+                break;
+            }
+        }
+    }
 }
