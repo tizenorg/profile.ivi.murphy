@@ -83,7 +83,7 @@ BuildRequires: pkgconfig(json)
 BuildRequires: pkgconfig(libsmack)
 %endif
 
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 BuildRequires: ico-uxf-weston-plugin-devel
 BuildRequires: pkgconfig(ail)
 BuildRequires: pkgconfig(aul)
@@ -214,7 +214,7 @@ Requires: %{name} = %{version}
 Summary: Murphy IVI resource manager plugin
 Group: System/Service
 
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 %package system-controller
 Summary: Murphy IVI System Controller plugin
 Group: System/Service
@@ -281,7 +281,7 @@ This package contains various test binaries for Murphy.
 %description ivi-resource-manager
 This package contains the Murphy IVI resource manager plugin.
 
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 %description system-controller
 This package contains the Murphy IVI resource manager plugin.
 %endif
@@ -353,7 +353,7 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-smack"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-smack"
 %endif
 
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-controller"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-controller"
@@ -423,7 +423,7 @@ cp packaging.in/murphyd.conf $RPM_BUILD_ROOT%{_tmpfilesdir}
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/user
 cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 cp packaging.in/ico-homescreen.service $RPM_BUILD_ROOT%{systemddir}/user
 cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir}/user
 %endif
@@ -449,7 +449,7 @@ cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-pulse.manifest
 %if %{?_with_ecore:1}%{!?_with_ecore:0}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ecore.manifest
 %endif
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-system-controller.manifest
 %endif
 
@@ -507,7 +507,7 @@ lfconfig
 ldconfig
 %endif
 
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 %post system-controller
 # prevent system controller from starting
 rm -f %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
@@ -697,7 +697,7 @@ fi
 %{_libdir}/murphy/plugins/plugin-ivi-resource-manager.so
 %manifest %{_datadir}/murphy-ivi-resource-manager.manifest
 
-%if %{_with_icosyscon}
+%if %{?_with_icosyscon:0}%{!?_with_icosyscon:1}
 %files system-controller
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-system-controller.so
