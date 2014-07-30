@@ -835,13 +835,14 @@ static void surface_destination_rectangle_callback(void *data,
 
     if (surface_is_ready(wm, sf)) {
         memset(&u, 0, sizeof(u));
-        u.mask   = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
-                   MRP_WAYLAND_WINDOW_POSITION_MASK  |
-                   MRP_WAYLAND_WINDOW_SIZE_MASK      ;
-        u.x      = sf->x;
-        u.y      = sf->y;
-        u.width  = sf->width;
-        u.height = sf->height;
+        u.mask      =  MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                       MRP_WAYLAND_WINDOW_POSITION_MASK  |
+                       MRP_WAYLAND_WINDOW_SIZE_MASK      ;
+        u.surfaceid =  sf->id;
+        u.x         =  sf->x;
+        u.y         =  sf->y;
+        u.width     =  sf->width;
+        u.height    =  sf->height;
 
         mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
     }
@@ -1910,6 +1911,55 @@ static bool set_window_layer(mrp_wayland_window_t *win,
     return true;
 }
 
+static bool set_window_geometry(mrp_wayland_window_t *win,
+                                mrp_wayland_window_update_mask_t passthrough,
+                                mrp_wayland_window_update_t *u)
+{
+    mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
+    mrp_wayland_window_update_mask_t mask = u->mask;
+    int32_t id_surface = win->surfaceid;
+    bool output_changed = false;
+    ctrl_surface_t *sf;
+    int32_t x,y;
+    int32_t w,h;
+    char buf[256];
+
+    if (!output_changed                                        &&
+        (!(mask & MRP_WAYLAND_WINDOW_POSITION_MASK) ||
+         (u->x == win->x && u->y == win->y)                  ) &&
+        (!(mask & MRP_WAYLAND_WINDOW_SIZE_MASK) ||
+         (u->width == win->width && u->height == win->height))  )
+    {
+        mrp_debug("nothing to do");
+        return false;
+    }
+
+    if (!(sf = surface_find(wm, id_surface))) {
+        mrp_debug("can't find surface %s",
+                  surface_id_print(id_surface, buf, sizeof(buf)));
+        return false;
+    }
+    
+    x = (mask & MRP_WAYLAND_WINDOW_X_MASK     )  ?  u->x      : win->x;
+    y = (mask & MRP_WAYLAND_WINDOW_Y_MASK     )  ?  u->y      : win->y;
+    w = (mask & MRP_WAYLAND_WINDOW_WIDTH_MASK )  ?  u->width  : win->width;
+    h = (mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK)  ?  u->height : win->height;
+
+    mrp_debug("calling ivi_controller_surface_set_source_rectangle"
+              "(ivi_controller_surface=%p, x=0, y=0, width=%d height=%d)",
+              sf->ctrl_surface, w,h);
+
+    ivi_controller_surface_set_source_rectangle(sf->ctrl_surface, 0,0, w,h);
+
+    mrp_debug("calling ivi_controller_surface_set_destination_rectangle"
+              "(ivi_controller_surface=%p, x=%d, y=%d, width=%d height=%d)",
+              sf->ctrl_surface, x,y, w,h);
+
+    ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface, x,y, w,h);
+
+    return true;
+}
+
 
 static bool set_window_visible(mrp_wayland_window_t *win,
                                mrp_wayland_window_update_mask_t passthrough,
@@ -1959,11 +2009,11 @@ static void window_request(mrp_wayland_window_t *win,
         MRP_WAYLAND_WINDOW_ACTIVE_MASK;
     static mrp_wayland_window_update_mask_t mapped_mask =
         MRP_WAYLAND_WINDOW_MAPPED_MASK;
+#endif
     static mrp_wayland_window_update_mask_t geometry_mask =
-        MRP_WAYLAND_WINDOW_NODEID_MASK   |
+        /* MRP_WAYLAND_WINDOW_NODEID_MASK   | */
         MRP_WAYLAND_WINDOW_POSITION_MASK |
         MRP_WAYLAND_WINDOW_SIZE_MASK     ;
-#endif
 
     static mrp_wayland_window_update_mask_t layer_mask =
         MRP_WAYLAND_WINDOW_LAYER_MASK;
@@ -2003,11 +2053,11 @@ static void window_request(mrp_wayland_window_t *win,
             changed |= set_window_area(win, passthrough, u);
             mask &= ~(area_mask | geometry_mask);
         }
+#endif
         else if ((mask & geometry_mask)) {
             changed |= set_window_geometry(win, passthrough, u);
             mask &= ~geometry_mask;
         }
-#endif
         else if ((mask & visible_mask)) {
             changed |= set_window_visible(win, passthrough, u);
             mask &= ~visible_mask;
