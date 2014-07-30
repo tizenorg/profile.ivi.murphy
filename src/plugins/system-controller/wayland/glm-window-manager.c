@@ -1964,11 +1964,13 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
     w = (mask & MRP_WAYLAND_WINDOW_WIDTH_MASK )  ?  u->width  : win->width;
     h = (mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK)  ?  u->height : win->height;
 
+#if 0
     mrp_debug("calling ivi_controller_surface_set_source_rectangle"
               "(ivi_controller_surface=%p, x=0, y=0, width=%d height=%d)",
               sf->ctrl_surface, w,h);
 
     ivi_controller_surface_set_source_rectangle(sf->ctrl_surface, 0,0, w,h);
+#endif
 
     mrp_debug("calling ivi_controller_surface_set_destination_rectangle"
               "(ivi_controller_surface=%p, x=%d, y=%d, width=%d height=%d)",
