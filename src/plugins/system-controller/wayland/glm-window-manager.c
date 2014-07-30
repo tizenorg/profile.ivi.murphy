@@ -1817,14 +1817,38 @@ static ctrl_layer_t *layer_find(mrp_glm_window_manager_t *wm, int32_t id_layer)
     return ly;
 }
 
+static bool set_layer_visibility(mrp_wayland_layer_t *layer,
+                                 mrp_wayland_layer_update_mask_t passthrough,
+                                 mrp_wayland_layer_update_t *u)
+{
+    mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)layer->wm;
+    ctrl_layer_t *ly;
+    uint32_t visibility;
+
+    if (!(ly = layer_find(wm, layer->layerid))) {
+        mrp_debug("can't find layer");
+        return false;
+    }
+
+    visibility = u->visible ? 1 : 0;
+
+    mrp_debug("call ivi_controller_layer_set_visibility"
+              "(ivi_controller_layer=%p, visibility=%u)",
+              ly->ctrl_layer, visibility);
+
+    ivi_controller_layer_set_visibility(ly->ctrl_layer, visibility);
+
+    return true;
+}
+
 static void layer_request(mrp_wayland_layer_t *layer,
                           mrp_wayland_layer_update_t *u)
 {
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     mrp_wayland_layer_update_mask_t mask;
-    //mrp_wayland_layer_update_mask_t passthrough;
-    ctrl_layer_t *l;
+    mrp_wayland_layer_update_mask_t passthrough;
+    bool changed;
     char buf[2048];
 
     MRP_ASSERT(layer && layer->wm && layer->wm->proxy &&
@@ -1833,33 +1857,28 @@ static void layer_request(mrp_wayland_layer_t *layer,
 
     wm = (mrp_glm_window_manager_t *)layer->wm;
     wl = wm->interface->wl;
-    //passthrough = wm->passthrough.layer_request;
+    passthrough = wm->passthrough.layer_request;
     mask = u->mask;
+    changed = false;
 
     mrp_wayland_layer_request_print(u, buf, sizeof(buf));
     mrp_debug("request for layer %d update:%s", layer->layerid, buf);
 
-    if (!(u->mask & MRP_WAYLAND_LAYER_LAYERID_MASK)) {
-        mrp_debug("can't find layer (layerid is not set in request)");
-        return;
-    }
-
-    if (!(l = layer_find(wm, u->layerid))) {
-        mrp_debug("can't find layer (not found)");
-        return;
-    }
-
-#if 0
     while (mask) {
         if ((mask & MRP_WAYLAND_LAYER_VISIBLE_MASK)) {
-            set_layer_visible(layer, passthrough, u);
+            changed |= set_layer_visibility(layer, passthrough, u);
             mask &= ~MRP_WAYLAND_LAYER_VISIBLE_MASK;
         }
         else {
             mask = 0;
         }
     }
-#endif
+
+
+    if (changed) {
+        mrp_debug("calling ivi_controller_commit_changes()");
+        ivi_controller_commit_changes((struct ivi_controller *)wm->proxy);
+    }
 
     mrp_wayland_flush(wl);
 }
@@ -1961,9 +1980,9 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
 }
 
 
-static bool set_window_visible(mrp_wayland_window_t *win,
-                               mrp_wayland_window_update_mask_t passthrough,
-                               mrp_wayland_window_update_t *u)
+static bool set_window_visibility(mrp_wayland_window_t *win,
+                                  mrp_wayland_window_update_mask_t passthrough,
+                                  mrp_wayland_window_update_t *u)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
     int32_t id_surface;
@@ -2059,7 +2078,7 @@ static void window_request(mrp_wayland_window_t *win,
             mask &= ~geometry_mask;
         }
         else if ((mask & visible_mask)) {
-            changed |= set_window_visible(win, passthrough, u);
+            changed |= set_window_visibility(win, passthrough, u);
             mask &= ~visible_mask;
         }
 #if 0
