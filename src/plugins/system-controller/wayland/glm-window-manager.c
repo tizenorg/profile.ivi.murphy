@@ -58,6 +58,7 @@
 
 #define SURFACELESS_TIMEOUT             1000  /* ms */
 #define CONSTRUCTOR_TIMEOUT             10000 /* ms */
+#define TITLE_TIMEOUT                   1500  /* ms */
 
 #define INVALID_INDEX                   (~(uint32_t)0)
 
@@ -100,6 +101,9 @@ struct ctrl_surface_s {
     int32_t x, y;
     int32_t width, height;
     mrp_wayland_window_t *win;
+    struct {
+        mrp_timer_t *title;
+    } timer;
 };
 
 struct ctrl_layer_s {
@@ -210,6 +214,10 @@ static void surface_input_focus_callback(void *,
                                  struct ivi_controller_surface *,
                                  int32_t);
 static bool surface_is_ready(mrp_glm_window_manager_t *, ctrl_surface_t *);
+static void surface_set_title(mrp_glm_window_manager_t *, ctrl_surface_t *,
+                              const char *);
+static void surface_titleless(mrp_timer_t *, void *);
+
 
 static ctrl_layer_t *layer_create(mrp_glm_window_manager_t *,
                                   mrp_wayland_layer_t *, ctrl_screen_t *);
@@ -653,6 +661,15 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     mrp_debug("ctrl_surface %p was created for surface %s",
               ctrl_surface, id_str);
 
+    if (surface_id_is_ours(id_surface)) {
+        /* The ivi surface was created by us meaning we already had
+           a surfaceless timeout. If title was not set during this
+           time it is pointless to set another timeout to wait for
+           the title. So, we set it to something to prevent furter
+           delays */
+        if (!title)
+            title = "";
+    }
 
     if (!(sf = mrp_allocz(sizeof(ctrl_surface_t)))) {
         mrp_log_error("system-controller: failed to allocate memory "
@@ -689,6 +706,11 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
         return NULL;
     }
 
+    if (!sf->title) {
+        sf->timer.title = mrp_add_timer(wl->ml, TITLE_TIMEOUT,
+                                        surface_titleless, sf);
+    }
+
     mrp_wayland_flush(wl);
 
     return sf;
@@ -709,6 +731,8 @@ static void surface_destroy(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
                           "(surface hashtable entry mismatch)");
         }
         else {
+            mrp_del_timer(sf->timer.title);
+
             if (sf->win)
                 mrp_wayland_window_destroy(sf->win);
 
@@ -1081,6 +1105,53 @@ static bool surface_is_ready(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
     }
 
     return ready;
+}
+
+static void surface_set_title(mrp_glm_window_manager_t *wm,
+                              ctrl_surface_t *sf,
+                              const char *title)
+{
+    mrp_wayland_window_update_t u;
+
+    mrp_debug("title='%s'", title);
+
+    mrp_del_timer(sf->timer.title);
+    sf->timer.title = NULL;
+
+    if (sf->title && !strcmp(title, sf->title))
+        mrp_debug("nothing to do (same title)");
+    else {
+        mrp_free(sf->title);
+        sf->title = mrp_strdup(title ? title : "");
+
+        if (surface_is_ready(wm, sf)) {
+            memset(&u, 0, sizeof(u));
+            u.mask      =  MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                           MRP_WAYLAND_WINDOW_NAME_MASK;
+            u.surfaceid =  sf->id;
+            u.name      =  sf->title;
+
+            mrp_wayland_window_update(sf->win,MRP_WAYLAND_WINDOW_NAMECHANGE,&u);
+        }
+    }
+}
+
+static void surface_titleless(mrp_timer_t *timer, void *user_data)
+{
+    ctrl_surface_t *sf = (ctrl_surface_t *)user_data;
+    mrp_glm_window_manager_t *wm;
+
+    MRP_ASSERT(timer && sf && sf->wl && sf->wl->wm, "invalid argument");
+    MRP_ASSERT(timer == sf->timer.title, "confused with data structures");
+
+    wm = (mrp_glm_window_manager_t *)sf->wl->wm;
+
+    mrp_debug("id=%u pid=%d appid='%s'", sf->id, sf->pid, sf->appid);
+
+    mrp_del_timer(sf->timer.title);
+    sf->timer.title = NULL;
+
+    surface_set_title(wm, sf, "");
 }
 
 
@@ -1495,18 +1566,8 @@ static void shell_info_callback(void *data,
                               pid, sf->pid);
             }
             else {
-                if (has_title) {
-                    if (sf->title && !strcmp(title, sf->title))
-                        mrp_debug("nothing to do (same title)");
-                    else {
-                        mrp_debug("updating surface title");
-
-                        mrp_free(sf->title);
-                        sf->title = mrp_strdup(title);
-
-                        surface_is_ready(wm, sf);
-                    }
-                }
+                if (has_title)
+                    surface_set_title(wm, sf, title);
             }
         }
     }
@@ -1578,9 +1639,10 @@ static constructor_t *constructor_create(mrp_glm_window_manager_t *wm,
     c->timer.timeout = mrp_add_timer(wl->ml, CONSTRUCTOR_TIMEOUT,
                                      constructor_timeout, c);
 
-    if (!id_surface)
+    if (!id_surface) {
         c->timer.surfaceless = mrp_add_timer(wl->ml, SURFACELESS_TIMEOUT,
                                              constructor_surfaceless, c);
+    }
 
     mrp_list_append(&wm->constructors, &c->link);
 
