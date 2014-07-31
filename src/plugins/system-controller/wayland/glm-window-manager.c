@@ -101,6 +101,7 @@ struct ctrl_surface_s {
     char *title;
     int32_t x, y;
     int32_t width, height;
+    bool visible;
     mrp_wayland_window_t *win;
     struct {
         mrp_timer_t *title;
@@ -770,6 +771,7 @@ static void surface_visibility_callback(void *data,
     ctrl_surface_t *sf = (ctrl_surface_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
+    mrp_wayland_window_update_t u;
     char buf[256];
 
     MRP_ASSERT(sf && sf->wl, "invalid argument");
@@ -783,6 +785,18 @@ static void surface_visibility_callback(void *data,
 
     mrp_debug("ctrl_surface=%p (id=%s) visibility=%d", ctrl_surface,
               surface_id_print(sf->id, buf, sizeof(buf)), visibility);
+
+    sf->visible = visibility ? true : false;
+
+    if (surface_is_ready(wm, sf)) {
+        memset(&u, 0, sizeof(u));
+        u.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                 MRP_WAYLAND_WINDOW_VISIBLE_MASK;
+        u.surfaceid = sf->id;
+        u.visible = sf->visible;
+        
+        mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_VISIBLE, &u);
+    }
 }
 
 static void surface_opacity_callback(void *data,
@@ -1160,6 +1174,17 @@ static bool surface_is_ready(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
             u.height     =  sf->height;
 
             sf->win = mrp_wayland_window_create(wl, &u);
+
+            if (sf->visible) {
+                memset(&u, 0, sizeof(u));
+                u.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                         MRP_WAYLAND_WINDOW_VISIBLE_MASK;
+                u.surfaceid = sf->id;
+                u.visible = sf->visible;
+        
+                mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_VISIBLE,
+                                          &u);
+            }
         }
     }
 
