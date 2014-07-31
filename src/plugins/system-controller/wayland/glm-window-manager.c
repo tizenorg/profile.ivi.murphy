@@ -78,7 +78,8 @@ typedef struct ctrl_screen_s            ctrl_screen_t;
 typedef struct app_surface_s            app_surface_t;
 typedef struct application_s            application_t;
 typedef struct constructor_s            constructor_t;
-typedef struct layer_iterator_s         layer_iterator_t;
+typedef struct screen_layer_iterator_s  screen_layer_iterator_t;
+typedef struct surface_layer_iterator_s surface_layer_iterator_t;
 
 struct mrp_glm_window_manager_s {
     MRP_WAYLAND_WINDOW_MANAGER_COMMON;
@@ -157,10 +158,15 @@ enum match_e {
     DOES_MATCH = 1
 };
 
-struct layer_iterator_s {
+struct screen_layer_iterator_s {
     mrp_glm_window_manager_t *wm;
     mrp_wayland_output_t *out;
     ctrl_screen_t *scr;
+};
+
+struct surface_layer_iterator_s {
+    struct ivi_controller_layer *ctrl_layer;
+    ctrl_layer_t *ly;
 };
 
 
@@ -384,10 +390,10 @@ static bool window_manager_constructor(mrp_wayland_t *wl,
     return true;
 }
 
-static int layer_iterator_cb(void *key, void *object, void *user_data)
+static int screen_layer_iterator_cb(void *key, void *object, void *user_data)
 {
     mrp_wayland_layer_t *layer = (mrp_wayland_layer_t *)object;
-    layer_iterator_t *it = (layer_iterator_t *)user_data;
+    screen_layer_iterator_t *it = (screen_layer_iterator_t *)user_data;
 
     MRP_UNUSED(key);
 
@@ -406,7 +412,7 @@ static void ctrl_screen_callback(void *data,
     mrp_wayland_t *wl;
     mrp_wayland_output_t *output;
     ctrl_screen_t *s;
-    layer_iterator_t it;
+    screen_layer_iterator_t it;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
@@ -443,7 +449,7 @@ static void ctrl_screen_callback(void *data,
     it.wm = wm;
     it.out = output;
     it.scr = s;
-    mrp_htbl_foreach(wl->layers.by_type, layer_iterator_cb, &it);
+    mrp_htbl_foreach(wl->layers.by_type, screen_layer_iterator_cb, &it);
 
     mrp_wayland_flush(wl);
 }
@@ -939,14 +945,34 @@ static void surface_pixelformat_callback(void *data,
               surface_id_print(sf->id, buf, sizeof(buf)), pixelformat);
 }
 
+static int surface_layer_iterator_cb(void *key, void *object, void *user_data)
+{
+    ctrl_layer_t *ly = (ctrl_layer_t *)object;
+    surface_layer_iterator_t *it = (surface_layer_iterator_t *)user_data;
+
+    MRP_UNUSED(key);
+
+    if (it->ctrl_layer == ly->ctrl_layer) {
+        it->ly = ly;
+        return MRP_HTBL_ITER_STOP;
+    }
+
+
+    return MRP_HTBL_ITER_MORE;
+}
+
 static void surface_added_to_layer_callback(void *data,
                                    struct ivi_controller_surface *ctrl_surface,
-                                   struct ivi_controller_layer *layer)
+                                   struct ivi_controller_layer *ctrl_layer)
 {
     ctrl_surface_t *sf = (ctrl_surface_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
-    char buf[256];
+    mrp_wayland_layer_t *layer;
+    surface_layer_iterator_t it;
+    ctrl_layer_t *ly;
+    mrp_wayland_window_update_t u;
+    char id_str[256];
 
     MRP_ASSERT(sf && sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
@@ -957,8 +983,40 @@ static void surface_added_to_layer_callback(void *data,
 
     MRP_ASSERT(wm, "data inconsitency");
 
-    mrp_debug("ctrl_surface=%p (id=%s) layer=%p", ctrl_surface,
-              surface_id_print(sf->id, buf, sizeof(buf)), layer);
+    surface_id_print(sf->id, id_str, sizeof(id_str));
+
+    mrp_debug("ctrl_surface=%p (id=%s) ctrl_layer=%p", ctrl_surface,
+              id_str, ctrl_layer);
+
+    memset(&it, 0, sizeof(it));
+    it.ctrl_layer = ctrl_layer;
+
+    mrp_htbl_foreach(wm->layers, surface_layer_iterator_cb, &it);
+
+    if (!(ly = it.ly)) {
+        mrp_log_error("system-controller: can't update layer of surface %s"
+                      "(ctrl_layer not found)", id_str);
+        return;
+    }
+
+    if (!(layer = mrp_wayland_layer_find_by_id(wl, ly->id))) {
+        mrp_log_error("system-controller: can't update layer of surface %s"
+                      "(layer %d not found)", id_str, ly->id);
+        return;
+    }
+
+    if (!surface_is_ready(wm, sf)) {
+        mrp_log_error("system-controller: attempt to update layer "
+                      "of non-ready surface %s", id_str);
+        return;
+    }
+
+    memset(&u, 0, sizeof(u));
+    u.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK | MRP_WAYLAND_WINDOW_LAYER_MASK;
+    u.surfaceid = sf->id;
+    u.layer = layer;
+
+    mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
 }
 
 static void surface_stats_callback(void *data,
@@ -1040,6 +1098,7 @@ static void surface_content_callback(void *data,
 
     mrp_debug("ctrl_surface=%p (id=%s) content_state=%d", ctrl_surface,
               surface_id_print(sf->id, buf, sizeof(buf)), content_state);
+
 }
 
 static void surface_input_focus_callback(void *data,
