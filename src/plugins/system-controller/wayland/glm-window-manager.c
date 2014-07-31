@@ -1637,7 +1637,7 @@ static void constructor_surfaceless(mrp_timer_t *timer, void *user_data)
     MRP_ASSERT(timer == c->timer.surfaceless, "confused with data structures");
 
     mrp_debug("pid=%d title='%s' state=%s",
-              c->pid, c->title ? c->title : "",
+              c->pid, c->title ? c->title : "<not set>",
               constructor_state_str(c->state));
 
     wm = c->wm;
@@ -1737,13 +1737,16 @@ static void constructor_issue_next_request(mrp_glm_window_manager_t *wm)
         
         if (entry->state == CONSTRUCTOR_SURFACELESS) {
             mrp_debug("      call ivi_controller_get_native_handle"
-                      "(pid=%d title='%s')", entry->pid, entry->title);
+                      "(pid=%d title='%s')", entry->pid,
+                      entry->title ? entry->title : "<not set>");
             
             ivi_controller_get_native_handle((struct ivi_controller*)wm->proxy,
                                              entry->pid, entry->title);
             
             entry->state = CONSTRUCTOR_REQUESTED;
 
+            mrp_wayland_flush(wm->interface->wl);
+            
             return;
         }
         
