@@ -102,6 +102,7 @@ struct ctrl_surface_s {
     int32_t x, y;
     int32_t width, height;
     bool visible;
+    int32_t layerid;
     mrp_wayland_window_t *win;
     struct {
         mrp_timer_t *title;
@@ -693,6 +694,7 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     sf->title = title ? mrp_strdup(title) : NULL;
     sf->width = -1;
     sf->height = -1;
+    sf->layerid = -1;
 
     if (!mrp_htbl_insert(wm->surfaces, &sf->id, sf)) {
         mrp_log_error("system-controller: hashmap insertion error when "
@@ -971,7 +973,6 @@ static int surface_layer_iterator_cb(void *key, void *object, void *user_data)
         return MRP_HTBL_ITER_STOP;
     }
 
-
     return MRP_HTBL_ITER_MORE;
 }
 
@@ -1002,27 +1003,35 @@ static void surface_added_to_layer_callback(void *data,
     mrp_debug("ctrl_surface=%p (id=%s) ctrl_layer=%p", ctrl_surface,
               id_str, ctrl_layer);
 
-    memset(&it, 0, sizeof(it));
-    it.ctrl_layer = ctrl_layer;
-
-    mrp_htbl_foreach(wm->layers, surface_layer_iterator_cb, &it);
-
-    if (!(ly = it.ly)) {
-        mrp_log_error("system-controller: can't update layer of surface %s"
-                      "(ctrl_layer not found)", id_str);
-        return;
+    if (!ctrl_layer) {
+        /* surface is removed from a layer */
+        sf->layerid = -1;
+        return;  /* do not send notification of removal for the time being */
     }
+    else {
+        /* surface is added/moved to a layer */
+        memset(&it, 0, sizeof(it));
+        it.ctrl_layer = ctrl_layer;
 
-    if (!(layer = mrp_wayland_layer_find_by_id(wl, ly->id))) {
-        mrp_log_error("system-controller: can't update layer of surface %s"
-                      "(layer %d not found)", id_str, ly->id);
-        return;
-    }
+        mrp_htbl_foreach(wm->layers, surface_layer_iterator_cb, &it);
 
-    if (!surface_is_ready(wm, sf)) {
-        mrp_log_error("system-controller: attempt to update layer "
-                      "of non-ready surface %s", id_str);
-        return;
+        if (!(ly = it.ly)) {
+            mrp_log_error("system-controller: can't update layer of surface %s"
+                          "(ctrl_layer not found)", id_str);
+            return;
+        }
+
+        if (!(layer = mrp_wayland_layer_find_by_id(wl, ly->id))) {
+            mrp_log_error("system-controller: can't update layer of surface %s"
+                          "(layer %d not found)", id_str, ly->id);
+            return;
+        }
+
+        if (!surface_is_ready(wm, sf)) {
+            mrp_log_error("system-controller: attempt to update layer "
+                          "of non-ready surface %s", id_str);
+            return;
+        }
     }
 
     memset(&u, 0, sizeof(u));
@@ -1075,6 +1084,7 @@ static void surface_destroyed_callback(void *data,
     ctrl_surface_t *sf = (ctrl_surface_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
+    ctrl_layer_t *ly;
     char buf[256];
 
     MRP_ASSERT(sf && sf->wl, "invalid argument");
@@ -1088,6 +1098,16 @@ static void surface_destroyed_callback(void *data,
 
     mrp_debug("ctrl_surface=%p (id=%s)", ctrl_surface,
               surface_id_print(sf->id, buf, sizeof(buf)));
+
+    if (sf->layerid >= 0 && (ly = layer_find(wm, sf->layerid))) {
+        mrp_debug("calling ivi_controller_layer_remove_surface"
+                  "(ivi_controller_layer=%p, surface=%p)",
+                  ly->ctrl_layer, sf->ctrl_surface);
+        ivi_controller_layer_remove_surface(ly->ctrl_layer, sf->ctrl_surface);
+
+        mrp_debug("calling ivi_controller_commit_changes()");
+        ivi_controller_commit_changes((struct ivi_controller *)wm->proxy);
+    }
 
     surface_destroy(wm, sf);
 }
@@ -2069,6 +2089,8 @@ static bool set_window_layer(mrp_wayland_window_t *win,
         mrp_debug("can't find layer %d", id_layer);
         return false;
     }
+
+    sf->layerid = id_layer;
 
     mrp_debug("calling ivi_controller_layer_add_surface"
               "(ivi_controller_layer=%p, surface=%p)",
