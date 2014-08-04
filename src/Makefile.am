@@ -60,7 +60,8 @@ libmurphy_common_la_HEADERS =		\
 		common/json.h		\
 		common/transport.h	\
 		common/tlv.h		\
-		common/native-types.h
+		common/native-types.h	\
+		common/process-watch.h
 
 libmurphy_common_la_REGULAR_SOURCES =		\
 		common/log.c			\
@@ -80,7 +81,8 @@ libmurphy_common_la_REGULAR_SOURCES =		\
 		common/internal-transport.c	\
 		common/dgram-transport.c	\
 		common/tlv.c			\
-		common/native-types.c
+		common/native-types.c		\
+		common/process-watch.c
 
 libmurphy_common_la_SOURCES =				\
 		$(libmurphy_common_la_REGULAR_SOURCES)
