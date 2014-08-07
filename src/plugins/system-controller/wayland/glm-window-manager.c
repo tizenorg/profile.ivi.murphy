@@ -68,6 +68,8 @@
 #define SURFACE_ID_OUR_FLAG             0x40000000
 #define SURFACE_ID_MAX                  0x00ffffff
 
+#define VISIBLE                         true
+#define HIDDEN                          false
 
 typedef enum constructor_state_e        constructor_state_t;
 typedef enum match_e                    match_t;
@@ -80,6 +82,7 @@ typedef struct application_s            application_t;
 typedef struct constructor_s            constructor_t;
 typedef struct screen_layer_iterator_s  screen_layer_iterator_t;
 typedef struct surface_layer_iterator_s surface_layer_iterator_t;
+typedef struct layer_defaults_s         layer_defaults_t;
 
 struct mrp_glm_window_manager_s {
     MRP_WAYLAND_WINDOW_MANAGER_COMMON;
@@ -165,11 +168,18 @@ struct screen_layer_iterator_s {
     mrp_glm_window_manager_t *wm;
     mrp_wayland_output_t *out;
     ctrl_screen_t *scr;
+    bool need_commit;
 };
 
 struct surface_layer_iterator_s {
     struct ivi_controller_layer *ctrl_layer;
     ctrl_layer_t *ly;
+};
+
+struct layer_defaults_s {
+    int32_t zorder;
+    double opacity;
+    bool visibility;
 };
 
 
@@ -303,6 +313,19 @@ static int id_compare(const void *, const void *);
 
 static void get_appid(int32_t, char *, int);
 
+static layer_defaults_t layer_defaults[MRP_WAYLAND_LAYER_TYPE_MAX] = {
+    /*         layer type                  zorder opacity   visibility */
+    /*---------------------------------------------------------------- */
+    [ MRP_WAYLAND_LAYER_TYPE_UNKNOWN ] = {      2,  0.750,  HIDDEN     },
+    [ MRP_WAYLAND_LAYER_BACKGROUND   ] = {      1,  0.000,  VISIBLE    },
+    [ MRP_WAYLAND_LAYER_APPLICATION  ] = {      3,  0.750,  HIDDEN,    },
+    [ MRP_WAYLAND_LAYER_INPUT        ] = {      4,  1.000,  HIDDEN     },
+    [ MRP_WAYLAND_LAYER_TOUCH        ] = {      5,  1.000,  VISIBLE    },
+    [ MRP_WAYLAND_LAYER_CURSOR       ] = {      6,  1.000,  VISIBLE    },
+    [ MRP_WAYLAND_LAYER_STARTUP      ] = {      7,  0.000,  HIDDEN     },
+    [ MRP_WAYLAND_LAYER_FULLSCREEN   ] = {      8,  0.750,  HIDDEN     },
+};
+
 
 bool mrp_glm_window_manager_register(mrp_wayland_t *wl)
 {
@@ -403,8 +426,10 @@ static int screen_layer_iterator_cb(void *key, void *object, void *user_data)
 
     MRP_UNUSED(key);
 
-    if (!strcmp(layer->outputname, it->out->outputname))
+    if (!strcmp(layer->outputname, it->out->outputname)) {
         layer_create(it->wm, layer, it->scr);
+        it->need_commit = true;
+    }
 
     return MRP_HTBL_ITER_MORE;
 }
@@ -455,7 +480,13 @@ static void ctrl_screen_callback(void *data,
     it.wm = wm;
     it.out = output;
     it.scr = s;
+    it.need_commit = false;
     mrp_htbl_foreach(wl->layers.by_type, screen_layer_iterator_cb, &it);
+
+    if (it.need_commit) {
+        mrp_debug("calling ivi_controller_commit_changes()");
+        ivi_controller_commit_changes((struct ivi_controller *)wm->proxy);
+    }
 
     mrp_wayland_flush(wl);
 }
@@ -1279,6 +1310,8 @@ static ctrl_layer_t *layer_create(mrp_glm_window_manager_t *wm,
 
     struct ivi_controller_layer *ctrl_layer;
     ctrl_layer_t *ly;
+    layer_defaults_t *def;
+    wl_fixed_t opacity;
 
     mrp_debug("create and link layer %s (id=0x%08x size=%dx%d) to screen %d",
               layer->name, layer->layerid, s->width, s->height, s->id);
@@ -1291,6 +1324,11 @@ static ctrl_layer_t *layer_create(mrp_glm_window_manager_t *wm,
                       "%s layer (0x%08x)", layer->name, layer->layerid);
         return NULL;
     }
+
+    if (layer->type < 0 || layer->type >= MRP_WAYLAND_LAYER_TYPE_MAX)
+        def = layer_defaults;
+    else
+        def = layer_defaults + layer->type;
 
     if (!(ly = mrp_allocz(sizeof(ctrl_layer_t)))) {
         mrp_log_error("system-controller: can't allocate memory for layer "
@@ -1319,6 +1357,20 @@ static ctrl_layer_t *layer_create(mrp_glm_window_manager_t *wm,
     }
 
     ivi_controller_screen_add_layer(s->ctrl_screen, ctrl_layer);
+
+
+    opacity = wl_fixed_from_double(def->opacity);
+    mrp_debug("calling ivi_controller_layer_set_opacity"
+              "(struct ivi_controller_layer=%p, opacity=%d)",
+              ctrl_layer, opacity);
+    ivi_controller_layer_set_opacity(ctrl_layer, opacity);
+
+
+    mrp_debug("calling ivi_controller_layer_set_visibility"
+              "(ivi_controller_layer=%p, visibility=%d)",
+              ctrl_layer, def->visibility);
+    ivi_controller_layer_set_visibility(ctrl_layer, def->visibility);
+
 
     return ly;
 }
@@ -2587,4 +2639,11 @@ static void get_appid(int32_t pid, char *buf, int len)
             }
         }
     }
+}
+
+
+static void create_background_surface(mrp_glm_window_manager_t *wm,
+                                      ctrl_layer_t *ly)
+{
+    
 }
