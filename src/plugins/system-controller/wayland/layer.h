@@ -36,6 +36,7 @@
 
 enum mrp_wayland_layer_type_e {
     MRP_WAYLAND_LAYER_TYPE_UNKNOWN  = 0,
+
     MRP_WAYLAND_LAYER_BACKGROUND,  /* 1 */
     MRP_WAYLAND_LAYER_APPLICATION, /* 2 */
     MRP_WAYLAND_LAYER_INPUT,       /* 3 */
