@@ -1067,10 +1067,11 @@ wmgr = window_manager {
                                  window_manager_operation_name(oper))
                        end
                        if oper == 1 then
-                           local wumask = window_mask { raise   = true,
+                           local wumask = window_mask { -- raise   = true,
                                                         visible = true,
                                                         active  = true }
-                           local wrmask = window_mask { active  = true,
+                           local wrmask = window_mask { raise   = true,
+                                                        active  = true,
                                                         layer   = true }
                            local lumask = layer_mask  { visible = true }
                            local lrmask = layer_mask  { visible = true }
