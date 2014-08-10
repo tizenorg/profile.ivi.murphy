@@ -258,7 +258,9 @@ static void layer_added_to_screen_callback(void*, struct ivi_controller_layer*,
                                            struct wl_output *);
 static void layer_destroyed_callback(void *, struct ivi_controller_layer *);
 static bool layer_add_surface_to_top(ctrl_layer_t *, ctrl_surface_t *);
+static bool layer_add_surface_to_bottom(ctrl_layer_t *, ctrl_surface_t *);
 static bool layer_move_surface_to_top(ctrl_layer_t *, ctrl_surface_t *);
+static bool layer_move_surface_to_bottom(ctrl_layer_t *, ctrl_surface_t *);
 static bool layer_remove_surface(ctrl_layer_t *, ctrl_surface_t *);
 static void layer_send_surfaces(ctrl_layer_t *);
 
@@ -1567,9 +1569,9 @@ static void layer_destroyed_callback(void *data,
     mrp_debug("ctrl_layer=%p (%s %d)", ctrl_layer, ly->name, ly->id);
 }
 
-static bool layer_add_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
+static bool layer_add_surface_to_bottom(ctrl_layer_t *ly, ctrl_surface_t *sf)
 {
-    uint32_t *top;
+    uint32_t *last, *pos;
     char id_str[256];
 
     MRP_ASSERT(ly && sf, "invalid argument");
@@ -1577,13 +1579,65 @@ static bool layer_add_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
 
     surface_id_print(sf->id, id_str, sizeof(id_str));
 
-    if (!(top = wl_array_add(&ly->surfaces, sizeof(*top)))) {
-        mrp_log_error("system-controller: can't add surface %s to the top of "
-                      "layer %d (no memory)", id_str, sf->layerid);
+    wl_array_for_each(pos, &ly->surfaces) {
+        if (*pos == (uint32_t)sf->id) {
+            mrp_log_error("system-controller: can't add surface %s to the "
+                          "bottom of layer %d (surface already exists)",
+                          id_str, sf->layerid);
+            return false;
+        }
+    }
+
+    if (!(last = wl_array_add(&ly->surfaces, sizeof(uint32_t)))) {
+        mrp_log_error("system-controller: can't add surface %s to the bottom "
+                      "of layer %d (no memory)", id_str, sf->layerid);
         return false;
     }
 
-    *top = sf->id;
+    for (pos = last;   (void *)pos > ly->surfaces.data;  pos--)
+        pos[0] = pos[-1];
+
+    pos[0] = sf->id;
+
+    mrp_debug("surface %s added to the bottom of layer %d",id_str,sf->layerid);
+
+    mrp_debug("calling ivi_controller_layer_add_surface"
+              "(ivi_controller_layer=%p, surface=%p)",
+              ly->ctrl_layer, sf->ctrl_surface);
+    ivi_controller_layer_add_surface(ly->ctrl_layer, sf->ctrl_surface);
+
+    layer_send_surfaces(ly);
+
+    return true;
+}
+
+
+static bool layer_add_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
+{
+    uint32_t *last, *pos;
+    char id_str[256];
+
+    MRP_ASSERT(ly && sf, "invalid argument");
+    MRP_ASSERT(ly->id == sf->layerid, "mismatching layer ID's");
+
+    surface_id_print(sf->id, id_str, sizeof(id_str));
+
+    wl_array_for_each(pos, &ly->surfaces) {
+        if (*pos == (uint32_t)sf->id) {
+            mrp_log_error("system-controller: can't add surface %s to the "
+                          "top of layer %d (surface already exists)",
+                          id_str, sf->layerid);
+            return false;
+        }
+    }
+
+    if (!(last = wl_array_add(&ly->surfaces, sizeof(uint32_t)))) {
+        mrp_log_error("system-controller: can't add surface %s to the top "
+                      "of layer %d (no memory)", id_str, sf->layerid);
+        return false;
+    }
+
+    *last = sf->id;
 
     mrp_debug("surface %s added to the top of layer %d", id_str, sf->layerid);
 
@@ -1597,10 +1651,10 @@ static bool layer_add_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
     return true;
 }
 
-
-static bool layer_move_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
+static bool layer_move_surface_to_bottom(ctrl_layer_t *ly, ctrl_surface_t *sf)
 {
-    uint32_t *pos;
+    uint32_t *pos, *first, *last;
+    int dim;
     bool removed;
     char id_str[256];
     
@@ -1608,23 +1662,67 @@ static bool layer_move_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
     MRP_ASSERT(ly->id == sf->layerid, "mismatching layer ID's");
     
     surface_id_print(sf->id, id_str, sizeof(id_str));
+
+    dim = ly->surfaces.size / sizeof(uint32_t);
+    first = (uint32_t *)ly->surfaces.data;
+    last = first + (dim - 1);
+
     removed = false;
+
+    for (pos = last;  pos >= first;  pos--) {
+        if (pos[0] == (uint32_t)sf->id)
+            removed = true;
+        else if (removed)
+            pos[1] = pos[0];
+    }
+
+    if (!removed) {
+        mrp_debug("failed to move surface %s to bottom of layer %d "
+                  "(can't find surface)", id_str, sf->layerid);
+        return false;
+    }
     
+    *first = (uint32_t)sf->id;
+    
+    mrp_debug("surface %s moved to bottom of layer %d", id_str, sf->layerid);
+    
+    layer_send_surfaces(ly);
+
+    return true;
+}
+
+static bool layer_move_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
+{
+    uint32_t *pos, *first, *last;
+    int dim;
+    bool removed;
+    char id_str[256];
+    
+    MRP_ASSERT(ly && sf, "invalid argument");
+    MRP_ASSERT(ly->id == sf->layerid, "mismatching layer ID's");
+    
+    surface_id_print(sf->id, id_str, sizeof(id_str));
+
+    dim = ly->surfaces.size / sizeof(uint32_t);
+    first = (uint32_t *)ly->surfaces.data;
+    last = first + (dim - 1);
+
+    removed = false;
+
     wl_array_for_each(pos, &ly->surfaces) {
         if (pos[0] == (uint32_t)sf->id)
             removed = true;
         else if (removed)
             pos[-1] = pos[0];
     }
-    
+
     if (!removed) {
         mrp_debug("failed to move surface %s to top of layer %d "
                   "(can't find surface)", id_str, sf->layerid);
         return false;
     }
     
-    pos = ly->surfaces.data + (ly->surfaces.size - sizeof(*pos));
-    pos[0] = (uint32_t)sf->id;
+    *last = (uint32_t)sf->id;
     
     mrp_debug("surface %s moved to top of layer %d", id_str, sf->layerid);
     
@@ -1658,7 +1756,7 @@ static bool layer_remove_surface(ctrl_layer_t *ly, ctrl_surface_t *sf)
         return false;
     }
 
-    ly->surfaces.size -= sizeof(*pos);
+    ly->surfaces.size -= sizeof(uint32_t);
 
     mrp_debug("surface %s removed from layer %d", id_str, sf->layerid);
 
@@ -2249,17 +2347,12 @@ static bool set_window_layer(mrp_wayland_window_t *win,
     int32_t id_layer;
     ctrl_surface_t *sf;
     ctrl_layer_t *ly;
+    bool changed;
+    mrp_wayland_window_update_t u2;
     char buf[256];
 
     if (!u->layer) {
         mrp_log_error("system-controller: broken request (layer is <null>)");
-        return false;
-    }
-
-    if (win->layer && (u->layer == win->layer) &&
-        !(passthrough & MRP_WAYLAND_WINDOW_LAYER_MASK))
-    {
-        mrp_debug("nothing to do");
         return false;
     }
 
@@ -2277,9 +2370,28 @@ static bool set_window_layer(mrp_wayland_window_t *win,
         return false;
     }
 
-    sf->layerid = id_layer;
+    if (sf->layerid == id_layer) {
+        if ((u->mask & MRP_WAYLAND_WINDOW_RAISE_MASK))
+            changed = false;
+        else
+            changed = layer_move_surface_to_top(ly, sf);
+    }
+    else {
+        sf->layerid = id_layer;
+        changed = layer_add_surface_to_top(ly, sf);
+    }
 
-    return layer_add_surface_to_top(ly, sf);
+    if (changed) {
+        memset(&u2, 0, sizeof(u2));
+        u2.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                  MRP_WAYLAND_WINDOW_RAISE_MASK;
+        u2.surfaceid = win->surfaceid;
+        u2.raise = 1;
+
+        mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_VISIBLE, &u2);
+    }
+
+    return changed;
 }
 
 static bool set_window_geometry(mrp_wayland_window_t *win,
@@ -2345,45 +2457,50 @@ static bool raise_window(mrp_wayland_window_t *win,
     int32_t id_surface = win->surfaceid;
     ctrl_surface_t *sf;
     ctrl_layer_t *ly;
+    bool changed;
     char buf[256];
 
-    if (((u->raise && win->raise) || (!u->raise && !win->raise)) &&
-        !(passthrough & MRP_WAYLAND_WINDOW_RAISE_MASK))
-    {
-        mrp_debug("nothing to do");
-        return false;
-    }
+    do { /* not a loop */
+        changed = false;
 
-    if (!(sf = surface_find(wm, win->surfaceid))) {
-        mrp_debug("can't find surface %s",
-                  surface_id_print(id_surface, buf, sizeof(buf)));
-        return false;
-    }
+        if (((u->raise && win->raise) || (!u->raise && !win->raise))) {
+            mrp_debug("no actual change is needed");
+            break;
+        }
 
-    if (!win->layer) {
-        mrp_debug("layer is not set");
-        return false;
-    }
+        if (!(sf = surface_find(wm, win->surfaceid))) {
+            mrp_debug("can't find surface %s",
+                      surface_id_print(id_surface, buf, sizeof(buf)));
+            return false;
+        }
 
-    if (!(ly = layer_find(wm, win->layer->layerid))) {
-        mrp_debug("can't find layer %d", win->layer->layerid);
-        return false;
-    }
+        if (!win->layer) {
+            mrp_debug("layer is not set");
+            return false;
+        }
 
-    if (!layer_move_surface_to_top(ly, sf))
-        return false;
+        if (!(ly = layer_find(wm, win->layer->layerid))) {
+            mrp_debug("can't find layer %d", win->layer->layerid);
+            return false;
+        }
 
-    if (!(passthrough & MRP_WAYLAND_WINDOW_RAISE_MASK)) {
-        memset(&u2, 0, sizeof(u2));
-        u2.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
-                  MRP_WAYLAND_WINDOW_RAISE_MASK;
-        u2.surfaceid = win->surfaceid;
-        u2.raise = u->raise;
+        if (u->raise)
+            changed = layer_move_surface_to_top(ly, sf);
+        else
+            changed = layer_move_to_bottom(ly, sf);
 
-        mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_VISIBLE, &u2);
-    }
+    } while (0);
 
-    return true;
+
+    memset(&u2, 0, sizeof(u2));
+    u2.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+              MRP_WAYLAND_WINDOW_RAISE_MASK;
+    u2.surfaceid = win->surfaceid;
+    u2.raise = u->raise;
+    
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_VISIBLE, &u2);
+
+    return changed;
 }
 
 
@@ -2640,11 +2757,4 @@ static void get_appid(int32_t pid, char *buf, int len)
             }
         }
     }
-}
-
-
-static void create_background_surface(mrp_glm_window_manager_t *wm,
-                                      ctrl_layer_t *ly)
-{
-    
 }
