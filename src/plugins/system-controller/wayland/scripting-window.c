@@ -301,6 +301,7 @@ static int window_getfield(lua_State *L)
         case POS_Y:     lua_pushinteger(L, win->y);                      break;
         case WIDTH:     lua_pushinteger(L, win->width);                  break;
         case HEIGHT:    lua_pushinteger(L, win->height);                 break;
+        case OPACITY:   lua_pushnumber(L, win->opacity);                 break;
         case VISIBLE:   lua_pushinteger(L, win->visible ? 1 : 0);        break;
         case RAISE:     lua_pushinteger(L, win->raise ? 1 : 0);          break;
         case MAPPED:    lua_pushinteger(L, win->mapped ? 1 : 0);         break;
@@ -570,6 +571,7 @@ static uint32_t get_window_mask(mrp_wayland_scripting_field_t fld)
     case WIDTH:     return MRP_WAYLAND_WINDOW_WIDTH_MASK;
     case HEIGHT:    return MRP_WAYLAND_WINDOW_HEIGHT_MASK;
     case SIZE:      return MRP_WAYLAND_WINDOW_SIZE_MASK;
+    case OPACITY:   return MRP_WAYLAND_WINDOW_OPACITY_MASK;
     case VISIBLE:   return MRP_WAYLAND_WINDOW_VISIBLE_MASK;
     case RAISE:     return MRP_WAYLAND_WINDOW_RAISE_MASK;
     case ACTIVE:    return MRP_WAYLAND_WINDOW_ACTIVE_MASK;

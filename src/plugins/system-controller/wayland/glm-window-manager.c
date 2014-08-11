@@ -104,6 +104,7 @@ struct ctrl_surface_s {
     char *title;
     int32_t x, y;
     int32_t width, height;
+    double opacity;
     bool visible;
     int32_t layerid;
     mrp_wayland_window_t *win;
@@ -320,12 +321,12 @@ static layer_defaults_t layer_defaults[MRP_WAYLAND_LAYER_TYPE_MAX] = {
     /*---------------------------------------------------------------- */
     [ MRP_WAYLAND_LAYER_TYPE_UNKNOWN ] = {      2,  0.750,  HIDDEN     },
     [ MRP_WAYLAND_LAYER_BACKGROUND   ] = {      1,  0.000,  VISIBLE    },
-    [ MRP_WAYLAND_LAYER_APPLICATION  ] = {      3,  0.750,  HIDDEN,    },
+    [ MRP_WAYLAND_LAYER_APPLICATION  ] = {      3,  1.000,  HIDDEN,    },
     [ MRP_WAYLAND_LAYER_INPUT        ] = {      4,  1.000,  HIDDEN     },
     [ MRP_WAYLAND_LAYER_TOUCH        ] = {      5,  1.000,  VISIBLE    },
     [ MRP_WAYLAND_LAYER_CURSOR       ] = {      6,  1.000,  VISIBLE    },
-    [ MRP_WAYLAND_LAYER_STARTUP      ] = {      7,  0.000,  HIDDEN     },
-    [ MRP_WAYLAND_LAYER_FULLSCREEN   ] = {      8,  0.750,  HIDDEN     },
+    [ MRP_WAYLAND_LAYER_STARTUP      ] = {      7,  1.000,  HIDDEN     },
+    [ MRP_WAYLAND_LAYER_FULLSCREEN   ] = {      8,  1.000,  HIDDEN     },
 };
 
 
@@ -731,6 +732,7 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     sf->title = title ? mrp_strdup(title) : NULL;
     sf->width = -1;
     sf->height = -1;
+    sf->opacity = -1.0;
     sf->layerid = -1;
 
     if (!mrp_htbl_insert(wm->surfaces, &sf->id, sf)) {
@@ -845,6 +847,7 @@ static void surface_opacity_callback(void *data,
     ctrl_surface_t *sf = (ctrl_surface_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
+    mrp_wayland_window_update_t u;
     char buf[256];
 
     MRP_ASSERT(sf && sf->wl, "invalid argument");
@@ -857,6 +860,18 @@ static void surface_opacity_callback(void *data,
     MRP_ASSERT(wm, "data inconsitency");
     mrp_debug("ctrl_surface=%p (id=%s) opacity=%d", ctrl_surface,
               surface_id_print(sf->id, buf, sizeof(buf)), opacity);
+
+    sf->opacity = wl_fixed_to_double(opacity);
+
+    if (surface_is_ready(wm, sf)) {
+        memset(&u, 0, sizeof(u));
+        u.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                 MRP_WAYLAND_WINDOW_OPACITY_MASK;
+        u.surfaceid = sf->id;
+        u.opacity = sf->opacity;
+        
+        mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_VISIBLE, &u);
+    }
 }
 
 static void surface_source_rectangle_callback(void *data,
@@ -1231,12 +1246,20 @@ static bool surface_is_ready(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
 
             sf->win = mrp_wayland_window_create(wl, &u);
 
-            if (sf->visible) {
+            if (sf->visible || sf->opacity >= 0) {
                 memset(&u, 0, sizeof(u));
-                u.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
-                         MRP_WAYLAND_WINDOW_VISIBLE_MASK;
+                u.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK;
                 u.surfaceid = sf->id;
-                u.visible = sf->visible;
+
+                if (sf->visible) {
+                    u.mask |= MRP_WAYLAND_WINDOW_VISIBLE_MASK;
+                    u.visible = sf->visible;
+                }
+
+                if (sf->opacity >= 0) {
+                    u.mask |= MRP_WAYLAND_WINDOW_OPACITY_MASK;
+                    u.opacity = sf->opacity;
+                }
         
                 mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_VISIBLE,
                                           &u);
@@ -2428,19 +2451,52 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
     w = (mask & MRP_WAYLAND_WINDOW_WIDTH_MASK )  ?  u->width  : win->width;
     h = (mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK)  ?  u->height : win->height;
 
-#if 0
     mrp_debug("calling ivi_controller_surface_set_source_rectangle"
               "(ivi_controller_surface=%p, x=0, y=0, width=%d height=%d)",
               sf->ctrl_surface, w,h);
 
     ivi_controller_surface_set_source_rectangle(sf->ctrl_surface, 0,0, w,h);
-#endif
 
     mrp_debug("calling ivi_controller_surface_set_destination_rectangle"
               "(ivi_controller_surface=%p, x=%d, y=%d, width=%d height=%d)",
               sf->ctrl_surface, x,y, w,h);
 
     ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface, x,y, w,h);
+
+    return true;
+}
+
+
+static bool set_window_opacity(mrp_wayland_window_t *win,
+                               mrp_wayland_window_update_mask_t passthrough,
+                               mrp_wayland_window_update_t *u)
+{
+    mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
+    int32_t id_surface = win->surfaceid;
+    ctrl_surface_t *sf;
+    wl_fixed_t opacity;
+    char buf[256];
+
+    if (u->opacity == win->opacity &&
+        !(passthrough & MRP_WAYLAND_WINDOW_OPACITY_MASK))
+    {
+        mrp_debug("nothing to do");
+        return false;
+    }
+
+    if (!(sf = surface_find(wm, id_surface))) {
+        mrp_debug("can't find surface %s",
+                  surface_id_print(id_surface, buf, sizeof(buf)));
+        return false;
+    }
+    
+    opacity = wl_fixed_from_double(u->opacity);
+
+    mrp_debug("calling ivi_controller_surface_set_opacity"
+              "(ivi_controller_surface=%p, opacity=%d)",
+              sf->ctrl_surface, opacity);
+
+    ivi_controller_surface_set_opacity(sf->ctrl_surface, opacity);
 
     return true;
 }
@@ -2557,6 +2613,8 @@ static void window_request(mrp_wayland_window_t *win,
         /* MRP_WAYLAND_WINDOW_NODEID_MASK   | */
         MRP_WAYLAND_WINDOW_POSITION_MASK |
         MRP_WAYLAND_WINDOW_SIZE_MASK     ;
+    static mrp_wayland_window_update_mask_t opacity_mask =
+        MRP_WAYLAND_WINDOW_OPACITY_MASK;
     static mrp_wayland_window_update_mask_t raise_mask =
         MRP_WAYLAND_WINDOW_RAISE_MASK;
     static mrp_wayland_window_update_mask_t layer_mask =
@@ -2601,6 +2659,10 @@ static void window_request(mrp_wayland_window_t *win,
         else if ((mask & geometry_mask)) {
             changed |= set_window_geometry(win, passthrough, u);
             mask &= ~geometry_mask;
+        }
+        else if ((mask & opacity_mask)) {
+            changed |= set_window_opacity(win, passthrough, u);
+            mask &= ~opacity_mask;
         }
         else if ((mask & raise_mask)) {
             changed |= raise_window(win, passthrough, u);
