@@ -92,6 +92,7 @@ mrp_wayland_window_create(mrp_wayland_t *wl, mrp_wayland_window_update_t *u)
     win->nodeid = -1;
     win->x = win->y = -1;
     win->width = win->height = -1;
+    win->opacity = 1.0;
 
     if (!mrp_htbl_insert(wl->windows, &win->surfaceid, win)) {
         mrp_log_error("system-controller: failed to create window: "
@@ -189,6 +190,13 @@ void mrp_wayland_window_request(mrp_wayland_t *wl,
 
     MRP_ASSERT(win->wm, "confused with data structures");
     wm = win->wm;
+
+    if ((u->mask & MRP_WAYLAND_WINDOW_OPACITY_MASK)) {
+        if (u->opacity > 1.0)
+            u->opacity = 1.0;
+        else if (u->opacity < 0.0)
+            u->opacity = 0.0;
+    }
 
     mrp_wayland_window_request_print(u, buf,sizeof(buf));
     mrp_debug("window %d%s", u->surfaceid, buf);
@@ -374,6 +382,8 @@ size_t mrp_wayland_window_print(mrp_wayland_window_t *win,
         PRINT("position: %d,%d", win->x, win->y);
     if ((mask & MRP_WAYLAND_WINDOW_SIZE_MASK))
         PRINT("size: %dx%d", win->width, win->height);
+    if ((mask & MRP_WAYLAND_WINDOW_OPACITY_MASK))
+        PRINT("opacity: %lf", win->opacity);
     if ((mask & MRP_WAYLAND_WINDOW_VISIBLE_MASK))
         PRINT("visible: %s", win->visible ? "yes" : "no");
     if ((mask & MRP_WAYLAND_WINDOW_RAISE_MASK))
@@ -433,6 +443,8 @@ size_t mrp_wayland_window_request_print(mrp_wayland_window_update_t *u,
         PRINT("position: %d,%d", u->x, u->y);
     if ((mask & MRP_WAYLAND_WINDOW_SIZE_MASK))
         PRINT("size: %dx%d", u->width, u->height);
+    if ((mask & MRP_WAYLAND_WINDOW_OPACITY_MASK))
+        PRINT("opacity: %lf", u->opacity);
     if ((mask & MRP_WAYLAND_WINDOW_VISIBLE_MASK))
         PRINT("visible: %s", u->visible ? "yes" : "no");
     if ((mask & MRP_WAYLAND_WINDOW_RAISE_MASK))
@@ -471,6 +483,7 @@ mrp_wayland_window_update_mask_str(mrp_wayland_window_update_mask_t mask)
     case MRP_WAYLAND_WINDOW_WIDTH_MASK:     return "width";
     case MRP_WAYLAND_WINDOW_HEIGHT_MASK:    return "height";
     case MRP_WAYLAND_WINDOW_SIZE_MASK:      return "size";
+    case MRP_WAYLAND_WINDOW_OPACITY_MASK:   return "opacity";
     case MRP_WAYLAND_WINDOW_VISIBLE_MASK:   return "visible";
     case MRP_WAYLAND_WINDOW_RAISE_MASK:     return "raise";
     case MRP_WAYLAND_WINDOW_ACTIVE_MASK:    return "active";
@@ -596,6 +609,15 @@ static mrp_wayland_window_update_mask_t update(mrp_wayland_window_t *win,
         {
             mask |= MRP_WAYLAND_WINDOW_SIZE_MASK;
             win->height = u->height;
+        }
+    }
+
+    if ((u->mask & MRP_WAYLAND_WINDOW_OPACITY_MASK)) {
+        if (u->opacity != win->opacity ||
+            (passthrough & MRP_WAYLAND_WINDOW_OPACITY_MASK))
+        {
+            mask |= MRP_WAYLAND_WINDOW_OPACITY_MASK;
+            win->opacity = u->opacity;
         }
     }
 
