@@ -167,6 +167,38 @@ int mrp_wayland_json_boolean_copy(mrp_wayland_t *wl, void *uval,
     return 0;
 }
 
+int mrp_wayland_json_floating_copy(mrp_wayland_t *wl, void *uval,
+                                   mrp_json_t *jval, int mask)
+{
+    const char *str;
+    double val;
+    char *e;
+
+    MRP_UNUSED(wl);
+
+    if (mrp_json_is_type(jval, MRP_JSON_DOUBLE)) {
+        *(double *)uval = mrp_json_double_value(jval);
+        return mask;
+    }
+
+    if (mrp_json_is_type(jval, MRP_JSON_INTEGER)) {
+        *(double *)uval = mrp_json_integer_value(jval);
+        return mask;
+    }
+
+    if (mrp_json_is_type(jval, MRP_JSON_STRING)) {
+        str = mrp_json_string_value(jval);
+        val = strtod(str, &e);
+
+        if (e > str && !*e) {
+            *(double *)uval = val;
+            return mask;
+        }
+    }
+
+    return 0;
+}
+
 int mrp_wayland_json_layer_copy(mrp_wayland_t *wl, void *uval,
                                 mrp_json_t *jval, int mask)
 {
@@ -501,6 +533,10 @@ mrp_wayland_scripting_field_name_to_type(const char *name, ssize_t len)
         case 'k':
             if (!strcmp(name, "keycode"))
                 return KEYCODE;
+        case 'o':
+            if (!strcmp(name, "opacity"))
+                return OPACITY;
+            break;
         case 'p':
             if (!strcmp(name, "pixel_x"))
                 return PIXEL_X;
