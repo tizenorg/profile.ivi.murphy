@@ -1995,6 +1995,7 @@ static void constructor_surfaceless(mrp_timer_t *timer, void *user_data)
     wm = c->wm;
 
     mrp_del_timer(c->timer.surfaceless);
+    c->timer.surfaceless = NULL;
 
     c->state = CONSTRUCTOR_SURFACELESS;
     constructor_issue_next_request(wm);
