@@ -165,6 +165,8 @@ int mrp_wayland_json_string_copy(mrp_wayland_t *wl, void *uval,
                                  mrp_json_t *jval, int mask);
 int mrp_wayland_json_boolean_copy(mrp_wayland_t *wl, void *uval,
                                   mrp_json_t *jval, int mask);
+int mrp_wayland_json_floating_copy(mrp_wayland_t *wl, void *uval,
+                                   mrp_json_t *jval, int mask);
 int mrp_wayland_json_layer_copy(mrp_wayland_t *wl, void *uval,
                                 mrp_json_t *jval, int mask);
 int mrp_wayland_json_output_copy(mrp_wayland_t *wl, void *uval,
