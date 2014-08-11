@@ -66,6 +66,7 @@ struct mrp_wayland_window_s {
     mrp_wayland_layer_t *layer;
     int32_t x, y;
     int32_t width, height;
+    double opacity;
     bool visible;
     bool raise;
     bool mapped;
@@ -104,16 +105,17 @@ enum mrp_wayland_window_update_mask_e {
     MRP_WAYLAND_WINDOW_WIDTH_MASK       = 0x00100,
     MRP_WAYLAND_WINDOW_HEIGHT_MASK      = 0x00200,
     MRP_WAYLAND_WINDOW_SIZE_MASK        = 0x00300,
-    MRP_WAYLAND_WINDOW_VISIBLE_MASK     = 0x00400,
-    MRP_WAYLAND_WINDOW_RAISE_MASK       = 0x00800,
-    MRP_WAYLAND_WINDOW_MAPPED_MASK      = 0x01000,
-    MRP_WAYLAND_WINDOW_ACTIVE_MASK      = 0x02000,
-    MRP_WAYLAND_WINDOW_LAYERTYPE_MASK   = 0x04000,
-    MRP_WAYLAND_WINDOW_APP_MASK         = 0x08000,
-    MRP_WAYLAND_WINDOW_AREA_MASK        = 0x10000,
-    MRP_WAYLAND_WINDOW_MAP_MASK         = 0x20000,
+    MRP_WAYLAND_WINDOW_OPACITY_MASK     = 0x00400,
+    MRP_WAYLAND_WINDOW_VISIBLE_MASK     = 0x00800,
+    MRP_WAYLAND_WINDOW_RAISE_MASK       = 0x01000,
+    MRP_WAYLAND_WINDOW_MAPPED_MASK      = 0x02000,
+    MRP_WAYLAND_WINDOW_ACTIVE_MASK      = 0x04000,
+    MRP_WAYLAND_WINDOW_LAYERTYPE_MASK   = 0x08000,
+    MRP_WAYLAND_WINDOW_APP_MASK         = 0x10000,
+    MRP_WAYLAND_WINDOW_AREA_MASK        = 0x20000,
+    MRP_WAYLAND_WINDOW_MAP_MASK         = 0x40000,
 
-    MRP_WAYLAND_WINDOW_END_MASK         = 0x40000
+    MRP_WAYLAND_WINDOW_END_MASK         = 0x80000
 };
 
 
@@ -127,6 +129,7 @@ struct mrp_wayland_window_update_s {
     mrp_wayland_layer_t *layer;
     int32_t x, y;
     int32_t width, height;
+    double opacity;
     bool visible;
     bool raise;
     bool mapped;
