@@ -340,7 +340,7 @@ static int window_manager_create(lua_State *L)
             lu.layerid = l->id;
             lu.name = l->name;
             lu.type = l->type;
-            lu.outputname = l->output;
+            lu.outputname = (char *)l->output;
             mrp_wayland_layer_create(wl, &lu);
         }
 
@@ -757,19 +757,20 @@ static bool window_request_bridge(lua_State *L,
 #define TYPE(t)  mrp_wayland_json_ ## t ## _copy
 
     static request_def_t   fields[] = {
-        { "surface", FIELD(surfaceid), MASK(SURFACEID), TYPE(integer) },
-        { "layer"  , FIELD(layer)    , MASK(LAYER)    , TYPE(layer)   },
-        { "node"   , FIELD(nodeid)   , MASK(NODEID)   , TYPE(integer) },
-        { "pos_x"  , FIELD(x)        , MASK(X)        , TYPE(integer) },
-        { "pos_y"  , FIELD(y)        , MASK(Y)        , TYPE(integer) },
-        { "width"  , FIELD(width)    , MASK(WIDTH)    , TYPE(integer) },
-        { "height" , FIELD(height)   , MASK(HEIGHT)   , TYPE(integer) },
-        { "raise"  , FIELD(raise)    , MASK(RAISE)    , TYPE(integer) },
-        { "visible", FIELD(visible)  , MASK(VISIBLE)  , TYPE(integer) },
-        { "active" , FIELD(active)   , MASK(ACTIVE)   , TYPE(integer) },
-        { "mapped" , FIELD(mapped)   , MASK(MAPPED)   , TYPE(integer) },
-        { "area"   , FIELD(area)     , MASK(AREA)     , TYPE(area)    },
-        {   NULL   ,        0        ,      0         ,      NULL     }
+        { "surface", FIELD(surfaceid), MASK(SURFACEID), TYPE(integer)  },
+        { "layer"  , FIELD(layer)    , MASK(LAYER)    , TYPE(layer)    },
+        { "node"   , FIELD(nodeid)   , MASK(NODEID)   , TYPE(integer)  },
+        { "pos_x"  , FIELD(x)        , MASK(X)        , TYPE(integer)  },
+        { "pos_y"  , FIELD(y)        , MASK(Y)        , TYPE(integer)  },
+        { "width"  , FIELD(width)    , MASK(WIDTH)    , TYPE(integer)  },
+        { "height" , FIELD(height)   , MASK(HEIGHT)   , TYPE(integer)  },
+        { "opacity", FIELD(opacity)  , MASK(OPACITY)  , TYPE(floating) },
+        { "raise"  , FIELD(raise)    , MASK(RAISE)    , TYPE(integer)  },
+        { "visible", FIELD(visible)  , MASK(VISIBLE)  , TYPE(integer)  },
+        { "active" , FIELD(active)   , MASK(ACTIVE)   , TYPE(integer)  },
+        { "mapped" , FIELD(mapped)   , MASK(MAPPED)   , TYPE(integer)  },
+        { "area"   , FIELD(area)     , MASK(AREA)     , TYPE(area)     },
+        {   NULL   ,        0        ,      0         ,      NULL      }
     };
 
 #undef FIELD
