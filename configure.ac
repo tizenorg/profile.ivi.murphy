@@ -1,4 +1,3 @@
-
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
@@ -524,14 +523,13 @@ if test "$enable_systemctl" = "yes"; then
     AC_DEFINE([SYSTEMCTL_ENABLED], 1, [Enable system-controller support ?])
     PKG_CHECK_MODULES(WAYLAND_CLIENT, wayland-client)
     PKG_CHECK_MODULES(LIBXML2, libxml-2.0)
-    AC_CHECK_HEADER(
-        [ico-uxf-weston-plugin/ico_input_mgr-client-protocol.h],
-        [weston_ico_plugins=yes], [weston_ico_plugins=false]
+    PKG_CHECK_MODULES(
+        IVI_EXTENSION_PROTOCOL, ivi-extension-protocol,
+        [weston_ico_plugins=no], [weston_ico_plugins=yes]
     )
-    if test "$weston_ico_plugins" = "yes"; then
-        AC_MSG_NOTICE([System-controller uses ICO weston plugins.])
-    else
-        PKG_CHECK_MODULES(IVI_EXTENSION_PROTOCOL, ivi-extension-protocol)
+    AC_CHECK_HEADER([ico-uxf-weston-plugin/ico_input_mgr-client-protocol.h])
+    if test "$weston_ico_plugins" != "yes"; then
+        AC_MSG_NOTICE([System-controller uses GENIVI shell.])
     fi
     PKG_CHECK_MODULES(AIL, ail)
 else
