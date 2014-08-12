@@ -2521,6 +2521,49 @@ static void layer_request(mrp_wayland_layer_t *layer,
 }
 
 
+static void set_window_animation(mrp_wayland_window_t *win,
+                                 mrp_wayland_animation_type_t type,
+                                 mrp_wayland_animation_t *anims)
+{
+    static int32_t ico_types[MRP_WAYLAND_ANIMATION_MAX] = {
+        [MRP_WAYLAND_ANIMATION_HIDE]   = ICO_WINDOW_MGR_ANIMATION_TYPE_HIDE,
+        [MRP_WAYLAND_ANIMATION_SHOW]   = ICO_WINDOW_MGR_ANIMATION_TYPE_SHOW,
+        [MRP_WAYLAND_ANIMATION_MOVE]   = ICO_WINDOW_MGR_ANIMATION_TYPE_MOVE,
+        [MRP_WAYLAND_ANIMATION_RESIZE] = ICO_WINDOW_MGR_ANIMATION_TYPE_RESIZE
+    };
+
+    mrp_glm_window_manager_t *wm;
+    ico_extension_t *ico;
+    struct ico_window_mgr *ico_window_mgr;
+    mrp_wayland_animation_t *a;
+
+    MRP_ASSERT(win && win->wm, "invalid argument");
+
+    wm = (mrp_glm_window_manager_t *)(win->wm);
+    ico = wm->ico;
+
+    if (!ico) {
+        mrp_debug("can't animate on window %u (ico-extension not available)",
+                  win->surfaceid);
+        return;
+    }
+
+    ico_window_mgr = (struct ico_window_mgr *)ico->proxy;
+
+    if (anims && type >= 0 && type < MRP_WAYLAND_ANIMATION_MAX) {
+        a = anims + type;
+
+        if (a->name && a->name[0] && a->time > 0) {
+            mrp_debug("calling ico_window_mgr_set_animation"
+                      "(surfaceid=%d type=%d, animation='%s' time=%d)",
+                      win->surfaceid, ico_types[type], a->name, a->time);
+
+            ico_window_mgr_set_animation(ico_window_mgr, win->surfaceid,
+                                         ico_types[type], a->name, a->time);
+        }
+    }
+}
+
 static bool set_window_layer(mrp_wayland_window_t *win,
                              mrp_wayland_window_update_mask_t passthrough,
                              mrp_wayland_window_update_t *u)
@@ -2579,7 +2622,8 @@ static bool set_window_layer(mrp_wayland_window_t *win,
 
 static bool set_window_geometry(mrp_wayland_window_t *win,
                                 mrp_wayland_window_update_mask_t passthrough,
-                                mrp_wayland_window_update_t *u)
+                                mrp_wayland_window_update_t *u,
+                                mrp_wayland_animation_t *anims)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
     mrp_wayland_window_update_mask_t mask = u->mask;
@@ -2631,7 +2675,8 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
 
 static bool set_window_opacity(mrp_wayland_window_t *win,
                                mrp_wayland_window_update_mask_t passthrough,
-                               mrp_wayland_window_update_t *u)
+                               mrp_wayland_window_update_t *u,
+                               mrp_wayland_animation_t *anims)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
     int32_t id_surface = win->surfaceid;
@@ -2666,7 +2711,8 @@ static bool set_window_opacity(mrp_wayland_window_t *win,
 
 static bool raise_window(mrp_wayland_window_t *win,
                          mrp_wayland_window_update_mask_t passthrough,
-                         mrp_wayland_window_update_t *u)
+                         mrp_wayland_window_update_t *u,
+                         mrp_wayland_animation_t *anims)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
     mrp_wayland_t *wl = wm->interface->wl;
@@ -2723,13 +2769,15 @@ static bool raise_window(mrp_wayland_window_t *win,
 
 
 static bool set_window_visibility(mrp_wayland_window_t *win,
-                                  mrp_wayland_window_update_mask_t passthrough,
-                                  mrp_wayland_window_update_t *u)
+                                 mrp_wayland_window_update_mask_t passthrough,
+                                 mrp_wayland_window_update_t *u,
+                                 mrp_wayland_animation_t *anims)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
     int32_t id_surface;
     uint32_t visibility;
     ctrl_surface_t *sf;
+    mrp_wayland_animation_type_t anim_type;
     char buf[256];
 
     if ((((u->visible && win->visible) || (!u->visible && !win->visible)) &&
@@ -2741,12 +2789,16 @@ static bool set_window_visibility(mrp_wayland_window_t *win,
 
     id_surface = win->surfaceid;
     visibility = u->visible ? 1 : 0;
+    anim_type  = visibility ? MRP_WAYLAND_ANIMATION_SHOW :
+                              MRP_WAYLAND_ANIMATION_HIDE;
 
     if (!(sf = surface_find(wm, id_surface))) {
         mrp_debug("can't find surface %s",
                   surface_id_print(id_surface, buf, sizeof(buf)));
         return false;
     }
+
+    set_window_animation(win, anim_type, anims);
 
     mrp_debug("calling ivi_controller_surface_set_visibility"
               "(ivi_controller_surface=%p, visibility=%u)",
@@ -2814,24 +2866,24 @@ static void window_request(mrp_wayland_window_t *win,
         }
 #if 0
         else if ((mask & area_mask))  {
-            changed |= set_window_area(win, passthrough, u);
+            changed |= set_window_area(win, passthrough, u, anims);
             mask &= ~(area_mask | geometry_mask);
         }
 #endif
         else if ((mask & geometry_mask)) {
-            changed |= set_window_geometry(win, passthrough, u);
+            changed |= set_window_geometry(win, passthrough, u, anims);
             mask &= ~geometry_mask;
         }
         else if ((mask & opacity_mask)) {
-            changed |= set_window_opacity(win, passthrough, u);
+            changed |= set_window_opacity(win, passthrough, u, anims);
             mask &= ~opacity_mask;
         }
         else if ((mask & raise_mask)) {
-            changed |= raise_window(win, passthrough, u);
+            changed |= raise_window(win, passthrough, u, anims);
             mask &= ~raise_mask;
         }
         else if ((mask & visible_mask)) {
-            changed |= set_window_visibility(win, passthrough, u);
+            changed |= set_window_visibility(win, passthrough, u, anims);
             mask &= ~visible_mask;
         }
 #if 0
