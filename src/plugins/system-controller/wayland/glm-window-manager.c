@@ -1622,12 +1622,8 @@ static bool layer_add_surface_to_bottom(ctrl_layer_t *ly, ctrl_surface_t *sf)
 
     pos[0] = sf->id;
 
-    mrp_debug("surface %s added to the bottom of layer %d",id_str,sf->layerid);
-
-    mrp_debug("calling ivi_controller_layer_add_surface"
-              "(ivi_controller_layer=%p, surface=%p)",
-              ly->ctrl_layer, sf->ctrl_surface);
-    ivi_controller_layer_add_surface(ly->ctrl_layer, sf->ctrl_surface);
+    mrp_debug("surface %s added to the bottom of layer %d",
+              id_str, sf->layerid);
 
     layer_send_surfaces(ly);
 
@@ -1663,11 +1659,6 @@ static bool layer_add_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
     *last = sf->id;
 
     mrp_debug("surface %s added to the top of layer %d", id_str, sf->layerid);
-
-    mrp_debug("calling ivi_controller_layer_add_surface"
-              "(ivi_controller_layer=%p, surface=%p)",
-              ly->ctrl_layer, sf->ctrl_surface);
-    ivi_controller_layer_add_surface(ly->ctrl_layer, sf->ctrl_surface);
 
     layer_send_surfaces(ly);
 
@@ -2451,11 +2442,13 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
     w = (mask & MRP_WAYLAND_WINDOW_WIDTH_MASK )  ?  u->width  : win->width;
     h = (mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK)  ?  u->height : win->height;
 
+#if 0
     mrp_debug("calling ivi_controller_surface_set_source_rectangle"
               "(ivi_controller_surface=%p, x=0, y=0, width=%d height=%d)",
               sf->ctrl_surface, w,h);
 
     ivi_controller_surface_set_source_rectangle(sf->ctrl_surface, 0,0, w,h);
+#endif
 
     mrp_debug("calling ivi_controller_surface_set_destination_rectangle"
               "(ivi_controller_surface=%p, x=%d, y=%d, width=%d height=%d)",
@@ -2543,7 +2536,7 @@ static bool raise_window(mrp_wayland_window_t *win,
         if (u->raise)
             changed = layer_move_surface_to_top(ly, sf);
         else
-            changed = layer_move_to_bottom(ly, sf);
+            changed = layer_move_surface_to_bottom(ly, sf);
 
     } while (0);
 
