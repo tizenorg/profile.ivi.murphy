@@ -43,6 +43,7 @@
 
 #include <genivi-shell/ivi-controller-client-protocol.h>
 #include <genivi-shell/ivi-application-client-protocol.h>
+#include <ico-uxf-weston-plugin/ico_window_mgr-client-protocol.h>
 
 #include <aul/aul.h>
 
@@ -79,6 +80,7 @@ typedef struct ctrl_layer_s             ctrl_layer_t;
 typedef struct ctrl_screen_s            ctrl_screen_t;
 typedef struct app_surface_s            app_surface_t;
 typedef struct application_s            application_t;
+typedef struct ico_extension_s          ico_extension_t;
 typedef struct constructor_s            constructor_t;
 typedef struct screen_layer_iterator_s  screen_layer_iterator_t;
 typedef struct surface_layer_iterator_s surface_layer_iterator_t;
@@ -87,6 +89,7 @@ typedef struct layer_defaults_s         layer_defaults_t;
 struct mrp_glm_window_manager_s {
     MRP_WAYLAND_WINDOW_MANAGER_COMMON;
     application_t *app;
+    ico_extension_t *ico;
     mrp_list_hook_t constructors;
     mrp_htbl_t *surfaces;
     mrp_htbl_t *layers;
@@ -136,6 +139,10 @@ struct app_surface_s {
 struct application_s {
     MRP_WAYLAND_OBJECT_COMMON;
 };
+
+struct ico_extension_s {
+    MRP_WAYLAND_OBJECT_COMMON;
+}; 
 
 enum constructor_state_e {
     CONSTRUCTOR_FAILED = 0,     /* handle request failed */
@@ -275,6 +282,24 @@ static bool application_manager_constructor(mrp_wayland_t *,
 static void shell_info_callback(void *, struct ivi_application *,
                                 int32_t, const char *, uint32_t);
 
+static bool ico_extension_constructor(mrp_wayland_t *,mrp_wayland_object_t *);
+static void ico_extension_window_active_callback(void*,struct ico_window_mgr*,
+                                                 uint32_t, int32_t);
+static void ico_extension_map_surface_callback(void *,struct ico_window_mgr *,
+                                               int32_t, uint32_t, uint32_t,
+                                               int32_t,int32_t, int32_t,
+                                               uint32_t);
+static void ico_extension_update_surface_callback(void *,
+                                                  struct ico_window_mgr *,
+                                                  uint32_t, int32_t,
+                                                  int32_t, int32_t,
+                                                  int32_t, int32_t,
+                                                  int32_t, int32_t);
+static void ico_extension_destroy_surface_callback(void *,
+                                                   struct ico_window_mgr *,
+                                                   uint32_t);
+
+
 static constructor_t *constructor_create(mrp_glm_window_manager_t *,
                                          constructor_state_t,
                                          int32_t, const char *, uint32_t);
@@ -343,6 +368,12 @@ bool mrp_glm_window_manager_register(mrp_wayland_t *wl)
     factory.size = sizeof(application_t);
     factory.interface = &ivi_application_interface;
     factory.constructor = application_manager_constructor;
+    factory.destructor = NULL;
+    mrp_wayland_register_interface(wl, &factory);
+
+    factory.size = sizeof(ico_extension_t);
+    factory.interface = &ico_window_mgr_interface;
+    factory.constructor = ico_extension_constructor;
     factory.destructor = NULL;
     mrp_wayland_register_interface(wl, &factory);
 
@@ -1974,6 +2005,144 @@ static void shell_info_callback(void *data,
         }
     }
 }
+
+
+static bool ico_extension_constructor(mrp_wayland_t *wl,
+                                      mrp_wayland_object_t *obj)
+{
+    static struct ico_window_mgr_listener listener =  {
+        .window_active   = ico_extension_window_active_callback,
+        .map_surface     = ico_extension_map_surface_callback,
+        .update_surface  = ico_extension_update_surface_callback,
+        .destroy_surface = ico_extension_destroy_surface_callback
+    };
+
+    ico_extension_t *ico = (ico_extension_t *)obj;
+    mrp_glm_window_manager_t *wm;
+    int sts;
+
+    if (!(wm = (mrp_glm_window_manager_t *)(wl->wm))) {
+        mrp_log_error("system-controller: phase error in %s(): "
+                      "window manager does not exist", __FUNCTION__);
+        return false;
+    }
+
+    sts = ico_window_mgr_add_listener((struct ico_window_mgr *)ico->proxy,
+                                      &listener, ico);
+    if (sts < 0)
+        return false;
+
+    wm->ico = ico;
+
+    return true;
+}
+
+
+static void ico_extension_window_active_callback(void *data,
+			      struct ico_window_mgr *ico_window_mgr,
+			      uint32_t surfaceid,
+			      int32_t select)
+{
+    ico_extension_t *ico = (ico_extension_t *)data;
+    mrp_wayland_t *wl;
+    mrp_glm_window_manager_t *wm;
+
+    MRP_ASSERT(ico && ico->interface && ico->interface->wl,
+               "invalid argument");
+    MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
+               "confused with data structures");
+    
+    wl = ico->interface->wl;
+    wm = (mrp_glm_window_manager_t *)(wl->wm);
+
+    MRP_ASSERT(wm, "data inconsitency");
+
+    mrp_debug("surfaceid=%u select=%d", surfaceid, select);
+}
+
+
+static void ico_extension_map_surface_callback(void *data,
+			      struct ico_window_mgr *ico_window_mgr,
+                              int32_t event,
+			      uint32_t surfaceid,
+			      uint32_t type,
+			      int32_t width,
+			      int32_t height,
+			      int32_t stride,
+			      uint32_t format)
+{
+    ico_extension_t *ico = (ico_extension_t *)data;
+    mrp_wayland_t *wl;
+    mrp_glm_window_manager_t *wm;
+
+    MRP_ASSERT(ico && ico->interface && ico->interface->wl,
+               "invalid argument");
+    MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
+               "confused with data structures");
+    
+    wl = ico->interface->wl;
+    wm = (mrp_glm_window_manager_t *)(wl->wm);
+
+    MRP_ASSERT(wm, "data inconsitency");
+
+    mrp_debug("event=%d surfaceid=%u type=%u width=%d height=%d stride=%d "
+              "format=%u",
+              event, surfaceid, type, width,height, stride, format);
+}
+
+static void ico_extension_update_surface_callback(void *data,
+			      struct ico_window_mgr *ico_window_mgr,
+			      uint32_t surfaceid,
+			      int32_t visible,
+			      int32_t srcwidth,
+			      int32_t srcheight,
+			      int32_t x,
+			      int32_t y,
+			      int32_t width,
+			      int32_t height)
+{
+    ico_extension_t *ico = (ico_extension_t *)data;
+    mrp_wayland_t *wl;
+    mrp_glm_window_manager_t *wm;
+
+    MRP_ASSERT(ico && ico->interface && ico->interface->wl,
+               "invalid argument");
+    MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
+               "confused with data structures");
+    
+    wl = ico->interface->wl;
+    wm = (mrp_glm_window_manager_t *)(wl->wm);
+
+    MRP_ASSERT(wm, "data inconsitency");
+
+    mrp_debug("surfaceid=%u visible=%d srcwidth=%d srcheight=%d x=%d y=%d "
+              "width=%d height=%d",
+              surfaceid, visible, srcwidth,srcheight, x,y, width,height);
+}
+
+
+static void ico_extension_destroy_surface_callback(void *data,
+			       struct ico_window_mgr *ico_window_mgr,
+			       uint32_t surfaceid)
+{
+    ico_extension_t *ico = (ico_extension_t *)data;
+    mrp_wayland_t *wl;
+    mrp_glm_window_manager_t *wm;
+
+    MRP_ASSERT(ico && ico->interface && ico->interface->wl,
+               "invalid argument");
+    MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
+               "confused with data structures");
+    
+    wl = ico->interface->wl;
+    wm = (mrp_glm_window_manager_t *)(wl->wm);
+
+    MRP_ASSERT(wm, "data inconsitency");
+
+    mrp_debug("surfaceid=%u", surfaceid);
+}
+
+
 
 
 static uint32_t surface_id_generate(void)
