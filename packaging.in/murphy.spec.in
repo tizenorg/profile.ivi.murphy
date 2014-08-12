@@ -46,6 +46,10 @@ BuildRequires: pkgconfig(lua)
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(libsystemd-journal)
 
+BuildRequires: pkgconfig(wayland-client)
+BuildRequires: pkgconfig(ivi-extension-protocol)
+BuildRequires: ico-uxf-weston-plugin-devel
+
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 BuildRequires: pkgconfig(libpulse)
 %endif
