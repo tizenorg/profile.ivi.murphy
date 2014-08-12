@@ -92,6 +92,7 @@ BuildRequires: pkgconfig(libsmack)
 #%else
 BuildRequires: weston-ivi-shell-devel
 BuildRequires: genivi-shell-devel
+BuildRequires: ico-uxf-weston-plugin-devel
 #%endif
 BuildRequires: pkgconfig(ail)
 BuildRequires: pkgconfig(aul)
