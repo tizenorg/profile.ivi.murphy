@@ -1,6 +1,6 @@
 with_system_controller = false
 with_amb = false
-verbose = 0
+verbose = 3
 
 m = murphy.get()
 
@@ -730,23 +730,29 @@ command_names = {
     [0x10003] = "show",
     [0x10004] = "hide",
     [0x10005] = "move",
-    [0x10006] = "change_active",
-    [0x10007] = "change_layer",
-    [0x10008] = "change_attr",
-    [0x10009] = "name",
-    [0x10011] = "map_thumb",
-    [0x10012] = "unmap_thumb",
-    [0x10020] = "show layer",
-    [0x10021] = "hide_layer",
-    [0x10022] = "change_layer_attr",
+    [0x10006] = "animation",
+    [0x10007] = "change_active",
+    [0x10008] = "change_layer",
+    [0x10009] = "change_attr",
+    [0x10010] = "name",
+    [0x10020] = "map_thumb",
+    [0x10021] = "unmap_thumb",
+    [0x10022] = "map_get",
+    [0x10030] = "show layer",
+    [0x10031] = "hide_layer",
+    [0x10032] = "change_layer_attr",
     [0x20001] = "add_input",
     [0x20002] = "del_input",
-    [0x20003] = "send_input",
+    [0x30001] = "change_user",
+    [0x30002] = "get_userlist",
+    [0x30003] = "get_lastinfo",
+    [0x30004] = "set_lastinfo",
     [0x40001] = "acquire_res",
     [0x40002] = "release_res",
     [0x40003] = "deprive_res",
     [0x40004] = "waiting_res",
     [0x40005] = "revert_res",
+    [0x40006] = "window_id_res",
     [0x40011] = "create_res",
     [0x40012] = "destroy_res",
     [0x50001] = "set_region",
@@ -761,20 +767,23 @@ function command_name(command)
 end
 
 input_layer = {
-   [3] = true, -- input
-   [4] = true, -- touch
-   [5] = true  -- cursor
+   [101] = true, -- input
+   [102] = true, -- touch
+   [103] = true  -- cursor
 }
 
 -- some day this should be merged with wmgr.layers
 ico_layer_type = {
-   [1] = 0x1000, -- background
-   [2] = 0x2000, -- application
-   [3] = 0x4000, -- input
-   [4] = 0xa000, -- touch
-   [5] = 0xb000, -- cursor
-   [6] = 0xc000, -- startup
-   [7] = 0x3000  -- fullscreen
+   [1]   = 0x1000, -- background
+   [2]   = 0x2000, -- application
+   [3]   = 0x2000, -- homescreen
+   [4]   = 0x2000, -- interrupt application
+   [5]   = 0x2000, -- onscreen application
+   [6]   = 0xc000, -- startup
+   [7]   = 0x3000, -- fullscreen
+   [101] = 0x4000, -- input
+   [102] = 0xa000, -- touch
+   [103] = 0xb000  -- cursor
 }
 
 resmgr = resource_manager {
@@ -1030,8 +1039,29 @@ wmgr = window_manager {
                               width  = function(w,h) return w/2-181 end,
                               height = function(w,h) return h-64-128 end
                            },
-                           Control = {
+                           MobileFull = {
                               id     = 11,
+                              pos_x  = 0,
+                              pos_y  = 64,
+                              width  = function(w,h) return w end,
+                              height = function(w,h) return h-64-128 end
+                           },
+                           MobileUpper = {
+                              id     = 12,
+                              pos_x  = 0,
+                              pos_y  = 64,
+                              width  = function(w,h) return w end,
+                              height = function(w,h) return (h-64-128)/2 end
+                           },
+                           MobileLower = {
+                              id     = 13,
+                              pos_x  = 0,
+                              pos_y  = function(w,h) return (h-64-128)/2+64 end,
+                              width  = function(w,h) return w end,
+                              height = function(w,h) return (h-64-128)/2 end
+                           },                           
+                           Control = {
+                              id     = 14,
                               pos_x  = 0,
                               pos_y  = function(w,h) return h-128 end,
                               width  = function(w,h) return w end,
@@ -1041,23 +1071,14 @@ wmgr = window_manager {
               }
   },
              --    id   name            type  output
-  layers = { {      0, "Background"   ,    1, "Center" },
+  layers = { {      0, "BackGround"   ,    1, "Center" },
              {      1, "Application"  ,    2, "Center" },
-             {      2, "Softkeyboard" ,    4, "Center" },
-             {      3, "HomeScreen"   ,    2, "Center" },
-             {      4, "ControlBar"   ,    2, "Center" },
-             {      5, "InterruptApp" ,    2, "Center" },
-             {      6, "OnScreen"     ,    2, "Center" },
-             {    101, "Input"        ,    3, "Center" },
-             {    102, "Cursor"       ,    5, "Center" },
-             {    103, "Startup"      ,    6, "Center" },
-             { 0x1000, "Background"   ,    1, "Center" },
-             { 0x2000, "Normal"       ,    2, "Center" },
-             { 0x3000, "Fullscreen"   ,    7, "Center" },
-             { 0x4000, "InputPanel"   ,    3, "Center" },
-             { 0xA000, "Touch"        ,    4, "Center" },
-             { 0xB000, "Cursor"       ,    5, "Center" },
-             { 0xC000, "Startup"      ,    6, "Center" }
+             {      2, "HomeScreen"   ,    3, "Center" },
+             {      3, "ControlBar"   ,    3, "Center" },
+             {      4, "InterruptApp" ,    4, "Center" },
+             {      5, "OnScreen"     ,    5, "Center" },
+             {      6, "Touch"        ,  102, "Center" },
+             {      7, "Cursor"       ,  103, "Center" }
   },
 
 
@@ -1112,14 +1133,13 @@ wmgr = window_manager {
                       elseif oper == 2 then -- destroy
                            command     = 0x10002
                       elseif oper == 3 then  -- namechange
+                           command     = 0x10010
+                      elseif oper == 4 or oper == 5 then -- visible/configure
                            command     = 0x10009
-                      elseif oper == 4 or oper == 5 then --visible or configure
-                           local icolayer = ico_layer_type[win.layertype]
-                           command     = 0x10008
                            arg.zone    = win.area
                            arg.node    = win.node
-                           if icolayer then
-                               arg.layertype = icolayer
+                           if win.layertype then
+                               arg.layertype = win.layertype
                            end
                            arg.layer   = win.layer
                            arg.pos_x   = win.pos_x
@@ -1140,16 +1160,16 @@ wmgr = window_manager {
                                end
                                return
                            end
-                           command = 0x10006
+                           command = 0x10007
                       elseif oper == 7 then -- map
                            local map = win.map
                            if not map then
                                return
                            end
                            if win.mapped == 0 then
-                               command = 0x10012
+                               command = 0x10021
                            else
-                               command = 0x10011
+                               command = 0x10020
                            end
                            arg.attr = map.type
                            arg.name = map.target
@@ -1231,7 +1251,7 @@ wmgr = window_manager {
                           end
                       end
                       if oper == 3 then -- visible
-                         local command = 0x10022
+                         local command = 0x10008 -- change_layer
                          local msg = m:JSON({
                                          command = command,
                                          appid = "",
@@ -1612,16 +1632,16 @@ if sc then
             end
             wmgr:window_request(msg.arg, a, 0)
             -- TODO: handle if area changed
-        elseif msg.command == 0x10006 then   -- ico ACTIVE
+        elseif msg.command == 0x10007 then   -- ico CHANGE_ACTIVE
             if not msg.arg.active then
                 msg.arg.active = 3 -- pointer + keyboard
             end
             if verbose > 2 then
-                print('### ==> ACTIVE REQUEST')
+                print('### ==> CHANGE_ACTIVE REQUEST')
                 print(tostring(msg.arg))
             end
             wmgr:window_request(msg.arg, a, 0)
-        elseif msg.command == 0x10007 then   -- ico CHANGE_LAYER
+        elseif msg.command == 0x10008 then   -- ico CHANGE_LAYER
             if verbose > 2 then
                 print('### ==> CHANGE_LAYER REQUEST')
                 print(tostring(msg.arg))
@@ -1633,7 +1653,7 @@ if sc then
             end
             --]]
             wmgr:window_request(msg.arg, a, 0)
-        elseif msg.command == 0x10011 then   -- ico MAP_THUMB
+        elseif msg.command == 0x10020 then   -- ico MAP_THUMB
             local framerate = msg.arg.framerate
             if not framerate or framerate < 0 then
                 framerate = 0
@@ -1645,13 +1665,14 @@ if sc then
                 print('framerate: '..framerate)
             end
             wmgr:window_request(msg.arg, a, framerate)
-        elseif msg.command == 0x10012 then   -- ico UNMAP_THUMB
+        elseif msg.command == 0x10021 then   -- ico UNMAP_THUMB
             msg.arg.mapped = 0
             if verbose > 2 then
                 print('### ==> UNMAP_THUMB REQUEST')
                 print(msg.arg)
             end
             wmgr:window_request(msg.arg, a, 0)
+--[[
         elseif msg.command == 0x10013 then -- ico MAP_BUFFER command
             local shmname = msg.arg.anim_name
             local bufsize = msg.arg.width
@@ -1665,14 +1686,15 @@ if sc then
                 end
                 wmgr:buffer_request(shmname, bufsize, bufnum)
             end
-        elseif msg.command == 0x10020 then   -- ico SHOW_LAYER command
+--]]
+        elseif msg.command == 0x10030 then   -- ico SHOW_LAYER command
             msg.arg.visible = 1
             if verbose > 2 then
                 print('### ==> SHOW_LAYER REQUEST')
                 print(msg.arg)
             end
             wmgr:layer_request(msg.arg)
-        elseif msg.command == 0x10021 then   -- ico HIDE_LAYER command
+        elseif msg.command == 0x10031 then   -- ico HIDE_LAYER command
             msg.arg.visible = 0
             if verbose > 2 then
                 print('### ==> HIDE_LAYER REQUEST')
@@ -1703,7 +1725,7 @@ if sc then
                 print(tostring(msg.arg))
             end
             imgr:input_request(msg.arg)
-        elseif msg.command == 0x20003 then -- send_input
+        -- elseif msg.command == 0x20003 then -- send_input
         end
     end
 
@@ -1720,7 +1742,7 @@ if sc then
             return
         end
 
-        if msg.command == 0x00030001 then -- MSG_CMD_CHANGE_USER
+        if msg.command == 0x30001 then -- change_user
             print("command CHANGE_USER")
             if not msg.arg then
                 print("invalid message")
@@ -1752,7 +1774,7 @@ if sc then
                 end
             end
 
-        elseif msg.command == 0x00030002 then -- MSG_CMD_GET_USERLIST
+        elseif msg.command == 0x30002 then -- get_userlist
             print("command GET_USERLIST")
             if not msg.appid then
                 print("invalid message")
@@ -1804,7 +1826,7 @@ if sc then
                 print('*** reply FAILED')
             end
 
-        elseif msg.command == 0x00030003 then -- MSG_CMD_GET_LASTINFO
+        elseif msg.command == 0x30003 then -- get_lastinfo
             print("command GET_LASTINFO")
             if not msg.appid then
                 print("invalid message")
@@ -1832,7 +1854,7 @@ if sc then
                 print('*** reply FAILED')
             end
 
-        elseif msg.command == 0x00030004 then -- MSG_CMD_SET_LASTINFO
+        elseif msg.command == 0x30004 then -- set_lastinfo
             print("command SET_LASTINFO")
             if not msg.arg or not msg.appid then
                 print("invalid message")
@@ -1965,15 +1987,15 @@ if sc then
         --      msg.appid
         --      msg.pid
 
-        if msg.command == 0x00040011 then -- MSG_CMD_CREATE_RES
-            print("command CREATE")
+        if msg.command == 0x40011 then -- create_res
+            print("command CREATE_RES")
 
             if not sets.cid then
                 sets.cid = createResourceSet(self, cid, msg)
             end
 
-        elseif msg.command == 0x00040012 then -- MSG_CMD_DESTORY_RES
-            print("command DESTROY")
+        elseif msg.command == 0x40012 then -- destroy_res
+            print("command DESTROY_RES")
 
             if sets.cid then
                 sets.cid:release()
@@ -1981,8 +2003,8 @@ if sc then
 
             sets.cid = nil -- garbage collecting
 
-        elseif msg.command == 0x00040001 then -- MSG_CMD_ACQUIRE_RES
-            print("command ACQUIRE")
+        elseif msg.command == 0x40001 then -- acquire_res
+            print("command ACQUIRE_RES")
 
             if not sets.cid then
                 sets.cid = createResourceSet(self, cid, msg)
@@ -1990,21 +2012,21 @@ if sc then
 
             sets.cid:acquire()
 
-        elseif msg.command == 0x00040002 then -- MSG_CMD_RELEASE_RES
-            print("command RELEASE")
+        elseif msg.command == 0x40002 then -- release_res
+            print("command RELEASE_RES")
 
             if sets.cid then
                 sets.cid:release()
             end
 
-        elseif msg.command == 0x00040003 then -- MSG_CMD_DEPRIVE_RES
-            print("command DEPRIVE")
+        elseif msg.command == 0x40003 then -- deprive_res
+            print("command DEPRIVE_RES")
 
-        elseif msg.command == 0x00040004 then -- MSG_CMD_WAITING_RES
-            print("command WAITING")
+        elseif msg.command == 0x40004 then -- waiting_res
+            print("command WAITING_RES")
 
-        elseif msg.command == 0x00040005 then -- MSG_CMD_REVERT_RES
-            print("command REVERT")
+        elseif msg.command == 0x40005 then -- revert_res
+            print("command REVERT_RES")
         end
     end
 
