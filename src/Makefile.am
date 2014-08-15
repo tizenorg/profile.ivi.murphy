@@ -1371,13 +1371,6 @@ libmurphy_decision_tree_la_LIBADD =                                         \
 libmurphy_decision_tree_la_DEPENDENCIES = linker-script.decision_tree       \
 	$(filter %.la, $(libmurphy_decision_tree_la_LIBADD))
 
-# debug file:line-function mapping generation
-decision-tree-func-info.c: $(libmurphy_decision_tree_la_REGULAR_SOURCES)
-	$(QUIET_GEN)$(top_builddir)/build-aux/gen-debug-table -o $@ $^
-
-clean-func-infos::
-	-rm decision-tree-func-info.c
-
 # decision-tree linker script generation
 linker-script.decision_tree: $(libmurphy_decision_tree_la_HEADERS)
 	$(QUIET_GEN)$(top_builddir)/build-aux/gen-linker-script -q \
@@ -1397,8 +1390,7 @@ PLUGIN_GAM_RESOURCE_MANAGER_REGULAR_SOURCES = 				    \
 		plugins/gam-resource-manager/sink.c                         \
 		plugins/gam-resource-manager/usecase.c
 PLUGIN_GAM_RESOURCE_MANAGER_SOURCES = 					    \
-		$(PLUGIN_GAM_RESOURCE_MANAGER_REGULAR_SOURCES)		    \
-                plugin-gam-resource-manager-func-info.c
+		$(PLUGIN_GAM_RESOURCE_MANAGER_REGULAR_SOURCES)
 PLUGIN_GAM_RESOURCE_MANAGER_CFLAGS =					    \
 		$(LUA_CFLAGS)
 
@@ -1417,12 +1409,6 @@ plugin_gam_resource_manager_la_LIBADD  = $(PLUGIN_GAM_RESOURCE_MANAGER_LIBS)
 
 plugin_LTLIBRARIES += plugin-gam-resource-manager.la
 
-# debug file:line-function mapping generation
-plugin-gam-resource-manager-func-info.c: $(PLUGIN_GAM_RESOURCE_MANAGER_REGULAR_SOURCES)
-	$(QUIET_GEN)$(top_builddir)/build-aux/gen-debug-table -o $@ $^
-
-clean-func-infos::
-	-rm plugin-gam-resource-manager-func-info.c
 
 # pattern-generator
 bin_PROGRAMS += pattern-generator
