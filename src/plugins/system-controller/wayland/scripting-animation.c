@@ -133,6 +133,7 @@ static int animation_create(lua_State *L)
     animation_def_t *show = NULL;
     animation_def_t *move = NULL;
     animation_def_t *resize = NULL;
+    animation_def_t *map = NULL;
 
     MRP_LUA_ENTER;
 
@@ -145,6 +146,7 @@ static int animation_create(lua_State *L)
         case SHOW:    show   = animation_def_check(L, -1);     break;
         case MOVE:    move   = animation_def_check(L, -1);     break;
         case RESIZE:  resize = animation_def_check(L, -1);     break;
+        case MAP:     map    = animation_def_check(L, -1);     break;
         default:      luaL_error(L, "bad field '%s'", fldnam); break;
         }
     }
@@ -170,6 +172,11 @@ static int animation_create(lua_State *L)
         mrp_wayland_animation_set(anims, MRP_WAYLAND_ANIMATION_RESIZE,
                                   resize->name, resize->time);
         animation_def_free(resize);
+    }
+    if (map) {
+        mrp_wayland_animation_set(anims, MRP_WAYLAND_ANIMATION_MAP,
+                                  map->name, map->time);
+        animation_def_free(map);
     }
 
     an = (scripting_animation_t *)mrp_lua_create_object(L, ANIMATION_CLASS,
@@ -204,6 +211,7 @@ static int  animation_getfield(lua_State *L)
         case SHOW:    type = MRP_WAYLAND_ANIMATION_SHOW;     goto push;
         case MOVE:    type = MRP_WAYLAND_ANIMATION_MOVE;     goto push;
         case RESIZE:  type = MRP_WAYLAND_ANIMATION_RESIZE;   goto push;
+        case MAP:     type = MRP_WAYLAND_ANIMATION_MAP;      goto push;
         push:         animation_push_type(L, anims, type);   break;
         default:      lua_pushnil(L);                        break;
         }
@@ -234,6 +242,7 @@ static int  animation_setfield(lua_State *L)
         case SHOW:    type = MRP_WAYLAND_ANIMATION_SHOW;    goto setfield;
         case MOVE:    type = MRP_WAYLAND_ANIMATION_MOVE;    goto setfield;
         case RESIZE:  type = MRP_WAYLAND_ANIMATION_RESIZE;  goto setfield;
+        case MAP:     type = MRP_WAYLAND_ANIMATION_MAP;     goto setfield;
         default:                                            break;
         setfield:
             mrp_wayland_animation_set(anims, type, def->name, def->time);
