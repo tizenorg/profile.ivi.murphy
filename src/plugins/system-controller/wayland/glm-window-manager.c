@@ -310,7 +310,8 @@ static constructor_t *constructor_find_first(mrp_glm_window_manager_t *,
                                              match_t,
                                              constructor_state_t);
 static constructor_t *constructor_find_surface(mrp_glm_window_manager_t *,
-                                               uint32_t);
+                                               uint32_t,int32_t,const char *);
+
 static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *,
                                              uint32_t);
 static void constructor_set_title(mrp_glm_window_manager_t *,
@@ -567,7 +568,7 @@ static void ctrl_surface_callback(void *data,
 
     wl_surface = NULL;
 
-    if ((c = constructor_find_surface(wm, id_surface))) {
+    if ((c = constructor_find_surface(wm, id_surface, pid, title))) {
         switch (c->state) {
             
         case CONSTRUCTOR_BOUND:
@@ -1936,32 +1937,30 @@ static void shell_info_callback(void *data,
         if (!(sf = surface_find(wm, id_surface))) {
             /* no surface found with the ID */
 
-            if (!(found = constructor_find_surface(wm, id_surface))) {
-                /* no constructor with the ID found;
-                   try to find a matching pid/title entry */
-                mrp_list_foreach(&wm->constructors, c, n) {
-                    entry = mrp_list_entry(c, constructor_t, link);
+            /* try to find a matching constructor */
+            found = constructor_find_surface(wm, id_surface, pid, title);
 
-                    if (pid == entry->pid) {
-                        if (!entry->title || !entry->title[0]) {
-                            found = entry;
-                            if (!has_title)
-                                break;
-                        }
-                        else if (has_title && !strcmp(title, entry->title)) {
-                            found = entry;
-                            break;
-                        }
+            if (!found) {
+                if (has_title)
+                    state = CONSTRUCTOR_TITLED;
+                else
+                    state = CONSTRUCTOR_INCOMPLETE;
+
+                constructor_create(wm, state, pid, title, id_surface);
+            }
+            else {
+                if (id_surface > 0) {
+                    /* found a constructor with the ID */
+                    if (pid != found->pid) {
+                        mrp_log_error("system-controller: confused with "
+                                      "surface constructors "
+                                      "(mismatching PIDs: %d vs. %d)",
+                                      pid, found->pid);
                     }
-                } /* mrp_list_foreach */
-
-                if (!found) {
-                    if (has_title)
-                        state = CONSTRUCTOR_TITLED;
-                    else
-                        state = CONSTRUCTOR_INCOMPLETE;
-
-                    constructor_create(wm, state, pid, title, id_surface);
+                    else {
+                        if (has_title)
+                            constructor_set_title(wm, found, title);
+                    }
                 }
                 else {
                     mrp_debug("found a constructor with matching pid/title. "
@@ -1973,19 +1972,7 @@ static void shell_info_callback(void *data,
                         mrp_del_timer(found->timer.surfaceless);
                         found->timer.surfaceless = NULL;
                     }
-
-                    if (has_title)
-                        constructor_set_title(wm, found, title);
-                }
-            }
-            else {
-                /* found a constructor with the ID */
-                if (pid != found->pid) {
-                    mrp_log_error("system-controller: confused with surface "
-                                  "constructors (mismatching PIDs: %d vs. %d)",
-                                  pid, found->pid);
-                }
-                else {
+                    
                     if (has_title)
                         constructor_set_title(wm, found, title);
                 }
@@ -2219,6 +2206,7 @@ static constructor_t *constructor_create(mrp_glm_window_manager_t *wm,
 
     mrp_debug("constructor created (state=%s, pid=%d, title='%s' id_surface=%u)",
               constructor_state_str(state), pid, title?title:"<null>", id_surface);
+ace);
 
     return c;
 }
@@ -2301,21 +2289,42 @@ static constructor_t *constructor_find_first(mrp_glm_window_manager_t *wm,
 }
 
 static constructor_t *constructor_find_surface(mrp_glm_window_manager_t *wm,
-                                               uint32_t id_surface)
+                                               uint32_t id_surface,
+                                               int32_t pid,
+                                               const char *title)
 {
     mrp_list_hook_t *c, *n;
-    constructor_t *entry;
+    constructor_t *entry, *candidate;
+    bool candidate_titleless;
 
-    if (id_surface > 0) {
-        mrp_list_foreach(&wm->constructors, c, n) {
-            entry = mrp_list_entry(c, constructor_t, link);
+    candidate = NULL;
+    candidate_titleless = false;
 
+    mrp_list_foreach(&wm->constructors, c, n) {
+        entry = mrp_list_entry(c, constructor_t, link);
+
+        if (id_surface > 0) {
             if (id_surface == entry->id_surface)
                 return entry;
         }
+
+        if (pid == entry->pid) {
+            if (entry->state == CONSTRUCTOR_INCOMPLETE) {
+                if (!title && !candidate)
+                    candidate = entry;
+            }
+            else {
+                if (title && !strcmp(title, entry->title)) {
+                    if (!candidate || !candidate_titleless) {
+                        candidate = entry;
+                        candidate_titleless = false;
+                    }
+                }
+            }
+        }
     }
 
-    return NULL;
+    return candidate;
 }
 
 static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *wm,
