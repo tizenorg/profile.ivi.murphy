@@ -349,8 +349,8 @@ static layer_defaults_t layer_defaults[MRP_WAYLAND_LAYER_TYPE_MAX] = {
     [ MRP_WAYLAND_LAYER_BACKGROUND   ] = {      1,  0.000,  VISIBLE    },
     [ MRP_WAYLAND_LAYER_APPLICATION  ] = {      3,  1.000,  HIDDEN,    },
     [ MRP_WAYLAND_LAYER_INPUT        ] = {      4,  1.000,  HIDDEN     },
-    [ MRP_WAYLAND_LAYER_TOUCH        ] = {      5,  1.000,  VISIBLE    },
-    [ MRP_WAYLAND_LAYER_CURSOR       ] = {      6,  1.000,  VISIBLE    },
+    [ MRP_WAYLAND_LAYER_TOUCH        ] = {      5,  1.000,  HIDDEN     },
+    [ MRP_WAYLAND_LAYER_CURSOR       ] = {      6,  1.000,  HIDDEN     },
     [ MRP_WAYLAND_LAYER_STARTUP      ] = {      7,  1.000,  HIDDEN     },
     [ MRP_WAYLAND_LAYER_FULLSCREEN   ] = {      8,  1.000,  HIDDEN     },
 };
@@ -2033,6 +2033,10 @@ static void ico_extension_window_active_callback(void *data,
     ico_extension_t *ico = (ico_extension_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
+    ctrl_surface_t *sf;
+    mrp_wayland_window_t *win;
+    mrp_wayland_window_update_t u;
+    char id_str[256];
 
     MRP_ASSERT(ico && ico->interface && ico->interface->wl,
                "invalid argument");
@@ -2045,6 +2049,35 @@ static void ico_extension_window_active_callback(void *data,
     MRP_ASSERT(wm, "data inconsitency");
 
     mrp_debug("surfaceid=%u select=%d", surfaceid, select);
+
+    if (!select) {
+        mrp_debug("ignoring select=0 events");
+        return;
+    }
+
+    surface_id_print(surfaceid, id_str, sizeof(id_str));
+
+    if (!(sf = surface_find(wm, surfaceid))) {
+        mrp_debug("can't find surface for id=%s", id_str);
+        return;
+    }
+
+    if (!(win = sf->win)) {
+        mrp_debug("can't forward selection event for surface id=%s "
+                  "(no window)", id_str);
+        return;
+    }
+
+    memset(&u, 0, sizeof(u));
+    u.mask = MRP_WAYLAND_WINDOW_ACTIVE_MASK;
+    u.active = 0;
+
+    if ((select & ICO_WINDOW_MGR_SELECT_POINTER))
+        u.active |= MRP_WAYLAND_WINDOW_ACTIVE_POINTER;
+    if ((select & ICO_WINDOW_MGR_SELECT_TOUCH))
+        u.active |= MRP_WAYLAND_WINDOW_ACTIVE_TOUCH;
+
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_ACTIVE, &u);
 }
 
 
@@ -2729,8 +2762,8 @@ static bool set_window_mapped(mrp_wayland_window_t *win,
     }
     else {
         if (!ico_window_mgr) {
-            mrp_debug("can't unmap surface %u (ico-extension not available)",
-                      win->surfaceid);
+            mrp_debug("can't unmap surface %s (ico-extension not available)",
+                      id_str);
             return false;
         }
 
@@ -2933,6 +2966,44 @@ static bool set_window_visibility(mrp_wayland_window_t *win,
     return true;
 }
 
+static bool set_window_active(mrp_wayland_window_t *win,
+                              mrp_wayland_window_update_mask_t passthrough,
+                              mrp_wayland_window_update_t *u)
+{
+    static mrp_wayland_active_t focus_mask = MRP_WAYLAND_WINDOW_ACTIVE_POINTER|
+                                             MRP_WAYLAND_WINDOW_ACTIVE_TOUCH  ;
+
+    mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
+    int32_t id_surface = win->surfaceid;
+    ctrl_surface_t *sf;
+    int32_t focus_enabled;
+    char id_str[256];
+
+    surface_id_print(id_surface, id_str, sizeof(id_str));
+
+    if (u->active == win->active &&
+        !(passthrough & MRP_WAYLAND_WINDOW_ACTIVE_MASK))
+    {
+        mrp_debug("nothing to do");
+        return false;
+    }
+
+    if (!(sf = surface_find(wm, id_surface))) {
+        mrp_debug("can't find surface %s", id_str);
+        return false;
+    }
+
+    focus_enabled = (u->active & focus_mask) ? 1 : 0;
+
+    mrp_debug("calling ivi_controller_surface_set_input_focus"
+              "(struct ivi_controller_surface=%p, enabled=%d)",
+              sf->ctrl_surface, focus_enabled);
+
+
+    ivi_controller_surface_set_input_focus(sf->ctrl_surface, focus_enabled);
+
+    return true;
+}
 
 static void window_request(mrp_wayland_window_t *win,
                            mrp_wayland_window_update_t *u,
@@ -2942,8 +3013,6 @@ static void window_request(mrp_wayland_window_t *win,
 #if 0
     static mrp_wayland_window_update_mask_t area_mask =
         MRP_WAYLAND_WINDOW_AREA_MASK;
-    static mrp_wayland_window_update_mask_t active_mask =
-        MRP_WAYLAND_WINDOW_ACTIVE_MASK;
 #endif
     static mrp_wayland_window_update_mask_t mapped_mask =
         MRP_WAYLAND_WINDOW_MAPPED_MASK;
@@ -2959,6 +3028,8 @@ static void window_request(mrp_wayland_window_t *win,
         MRP_WAYLAND_WINDOW_LAYER_MASK;
     static mrp_wayland_window_update_mask_t visible_mask =
         MRP_WAYLAND_WINDOW_VISIBLE_MASK;
+    static mrp_wayland_window_update_mask_t active_mask =
+        MRP_WAYLAND_WINDOW_ACTIVE_MASK;
 
 
     mrp_wayland_t *wl;
@@ -3015,12 +3086,10 @@ static void window_request(mrp_wayland_window_t *win,
             changed |= set_window_visibility(win, passthrough, u, anims);
             mask &= ~visible_mask;
         }
-#if 0
         else if ((mask & active_mask)) {
             changed |= set_window_active(win, passthrough, u);
             mask &= ~active_mask;
         }
-#endif
         else {
             mask = 0;
         }
