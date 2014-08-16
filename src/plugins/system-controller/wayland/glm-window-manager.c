@@ -2061,6 +2061,11 @@ static void ico_extension_map_surface_callback(void *data,
     ico_extension_t *ico = (ico_extension_t *)data;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
+    ctrl_surface_t *sf;
+    mrp_wayland_window_t *win;
+    mrp_wayland_window_update_t u;
+    mrp_wayland_window_map_t map;
+    char id_str[256];
 
     MRP_ASSERT(ico && ico->interface && ico->interface->wl,
                "invalid argument");
@@ -2075,6 +2080,50 @@ static void ico_extension_map_surface_callback(void *data,
     mrp_debug("event=%d surfaceid=%u type=%u width=%d height=%d stride=%d "
               "format=%u",
               event, surfaceid, type, width,height, stride, format);
+
+    surface_id_print(surfaceid, id_str, sizeof(id_str));
+
+    if (!(sf = surface_find(wm, surfaceid))) {
+        mrp_debug("can't find surface for id=%s", id_str);
+        return;
+    }
+
+    if (!(win = sf->win)) {
+        mrp_debug("can't forward map event for surface id=%s "
+                  "(no window)", id_str);
+        return;
+    }
+
+    memset(&map, 0, sizeof(map));
+    map.type = type;
+    map.width = width;
+    map.height = height;
+    map.stride = stride;
+    map.format = format;
+
+    memset(&u, 0, sizeof(u));
+    u.mask = MRP_WAYLAND_WINDOW_MAPPED_MASK | MRP_WAYLAND_WINDOW_MAP_MASK;
+    u.map  = &map;
+
+    switch (event)  {
+
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_CONTENTS:
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_RESIZE:
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_MAP:
+        u.mapped = true;
+        break;
+
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_UNMAP:
+    case ICO_WINDOW_MGR_MAP_SURFACE_EVENT_ERROR:
+        u.mapped = false;
+        break;
+
+    default:
+        mrp_debug("ignoring unknown event type %d event", event);
+        return;
+    }
+
+    mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_MAP, &u);
 }
 
 static void ico_extension_update_surface_callback(void *data,
@@ -2204,9 +2253,9 @@ static constructor_t *constructor_create(mrp_glm_window_manager_t *wm,
 
     mrp_list_append(&wm->constructors, &c->link);
 
-    mrp_debug("constructor created (state=%s, pid=%d, title='%s' id_surface=%u)",
-              constructor_state_str(state), pid, title?title:"<null>", id_surface);
-ace);
+    mrp_debug("constructor created (state=%s, pid=%d, title='%s' "
+              "id_surface=%u)", constructor_state_str(state), pid,
+              title ? title: "<null>", id_surface);
 
     return c;
 }
@@ -2629,6 +2678,72 @@ static bool set_window_layer(mrp_wayland_window_t *win,
     return changed;
 }
 
+static bool set_window_mapped(mrp_wayland_window_t *win,
+                              mrp_wayland_window_update_mask_t passthrough,
+                              mrp_wayland_window_update_t *u,
+                              mrp_wayland_animation_t *anims,
+                              uint32_t framerate)
+{
+    mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
+    ico_extension_t *ico = wm->ico;
+    int32_t id_surface;
+    struct ico_window_mgr *ico_window_mgr;
+    const char *filepath;
+    char id_str[256];
+
+    ico_window_mgr = ico ? (struct ico_window_mgr *)ico->proxy : NULL;
+    id_surface = win->surfaceid;
+
+    surface_id_print(id_surface, id_str, sizeof(id_str));
+
+    if (((u->mapped && win->mapped) || (!u->mapped && !win->mapped)) &&
+        !(passthrough & MRP_WAYLAND_WINDOW_MAPPED_MASK))
+    {
+        mrp_debug("nothing to do");
+        return false;
+    }
+
+    if (u->mapped) {
+        if (!anims || !(filepath = anims[MRP_WAYLAND_ANIMATION_MAP].name)) {
+            mrp_log_error("system-controller: broken map request "
+                          "(no file path)");
+            return false;
+        }
+
+        if (!ico_window_mgr) {
+            mrp_debug("can't map surface %s to file '%s' (ico-extension not "
+                      "available)", id_str, filepath);
+            return false;
+        }
+
+        if (framerate == 0)
+            framerate = -1;
+
+        mrp_debug("calling ico_window_mgr_map_surface"
+                  "(ico_window_mgr=%p, surfaceid=%u, framerate=%d, "
+                  "filepath='%s')",
+                  ico_window_mgr, id_surface, framerate, filepath);
+
+        ico_window_mgr_map_surface(ico_window_mgr, id_surface, framerate,
+                                   filepath);
+    }
+    else {
+        if (!ico_window_mgr) {
+            mrp_debug("can't unmap surface %u (ico-extension not available)",
+                      win->surfaceid);
+            return false;
+        }
+
+        mrp_debug("calling ico_window_mgr_unmap_surface"
+                  "(ico_window_mgr=%p, surfaceid=%u)",
+                  ico_window_mgr, id_surface, framerate, filepath);
+
+        ico_window_mgr_unmap_surface(ico_window_mgr, id_surface);
+    }
+
+    return true;
+}
+
 static bool set_window_geometry(mrp_wayland_window_t *win,
                                 mrp_wayland_window_update_mask_t passthrough,
                                 mrp_wayland_window_update_t *u,
@@ -2829,9 +2944,9 @@ static void window_request(mrp_wayland_window_t *win,
         MRP_WAYLAND_WINDOW_AREA_MASK;
     static mrp_wayland_window_update_mask_t active_mask =
         MRP_WAYLAND_WINDOW_ACTIVE_MASK;
+#endif
     static mrp_wayland_window_update_mask_t mapped_mask =
         MRP_WAYLAND_WINDOW_MAPPED_MASK;
-#endif
     static mrp_wayland_window_update_mask_t geometry_mask =
         /* MRP_WAYLAND_WINDOW_NODEID_MASK   | */
         MRP_WAYLAND_WINDOW_POSITION_MASK |
@@ -2872,6 +2987,11 @@ static void window_request(mrp_wayland_window_t *win,
         if ((mask & layer_mask)) {
             changed |= set_window_layer(win, passthrough, u);
             mask &= ~layer_mask;
+        }
+        else if ((mask & mapped_mask))  {
+            changed |= set_window_mapped(win, passthrough, u,
+                                         anims, framerate);
+            mask &= ~(mapped_mask);
         }
 #if 0
         else if ((mask & area_mask))  {
