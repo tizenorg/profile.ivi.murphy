@@ -135,6 +135,7 @@ static const char *type_str(mrp_wayland_animation_type_t type)
     case MRP_WAYLAND_ANIMATION_SHOW:     str = "show";              break;
     case MRP_WAYLAND_ANIMATION_MOVE:     str = "move";              break;
     case MRP_WAYLAND_ANIMATION_RESIZE:   str = "resize";            break;
+    case MRP_WAYLAND_ANIMATION_MAP:      str = "map";               break;
     default:                             str = "<not-supported>";   break;
     }
 
