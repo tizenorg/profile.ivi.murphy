@@ -1172,7 +1172,7 @@ wmgr = window_manager {
                                command = 0x10020
                            end
                            arg.attr = map.type
-                           arg.name = map.target
+                           --arg.name = map.target
                            arg.width = map.width
                            arg.height = map.height
                            arg.stride = map.stride
@@ -1655,16 +1655,20 @@ if sc then
             wmgr:window_request(msg.arg, a, 0)
         elseif msg.command == 0x10020 then   -- ico MAP_THUMB
             local framerate = msg.arg.framerate
-            if not framerate or framerate < 0 then
-                framerate = 0
+            local animname  = msg.arg.anim_name
+            if animname then
+               a.map = { animname, 1 }
+               if not framerate or framerate < 0 then
+                  framerate = 5
+               end
+               msg.arg.mapped = 1
+               if verbose > 2 then
+                  print('### ==> MAP_THUMB REQUEST')
+                  print(msg.arg)
+                  print('framerate: '..framerate)
+               end
+               wmgr:window_request(msg.arg, a, framerate)
             end
-            msg.arg.mapped = 1
-            if verbose > 2 then
-                print('### ==> MAP_THUMB REQUEST')
-                print(msg.arg)
-                print('framerate: '..framerate)
-            end
-            wmgr:window_request(msg.arg, a, framerate)
         elseif msg.command == 0x10021 then   -- ico UNMAP_THUMB
             msg.arg.mapped = 0
             if verbose > 2 then
