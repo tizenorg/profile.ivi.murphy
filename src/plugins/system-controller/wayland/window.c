@@ -874,6 +874,7 @@ static char *active_str(mrp_wayland_active_t active, char *buf, size_t len)
 
     static map_t map[] = {
         { MRP_WAYLAND_WINDOW_ACTIVE_POINTER,  "pointer"  },
+        { MRP_WAYLAND_WINDOW_ACTIVE_TOUCH  ,  "touch"    },
         { MRP_WAYLAND_WINDOW_ACTIVE_KEYBOARD, "keyboard" },
         { MRP_WAYLAND_WINDOW_ACTIVE_SELECTED, "selected" },
         {                 0,                      NULL   }
