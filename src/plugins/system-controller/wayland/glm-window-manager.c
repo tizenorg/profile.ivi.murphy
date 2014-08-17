@@ -247,7 +247,9 @@ static void surface_titleless(mrp_timer_t *, void *);
 
 static ctrl_layer_t *layer_create(mrp_glm_window_manager_t *,
                                   mrp_wayland_layer_t *, ctrl_screen_t *);
+#if 0
 static void layer_destroy(mrp_glm_window_manager_t *, ctrl_layer_t *);
+#endif
 static void layer_visibility_callback(void *, struct ivi_controller_layer *,
                                       int32_t);
 static void layer_opacity_callback(void *, struct ivi_controller_layer *,
@@ -266,7 +268,9 @@ static void layer_added_to_screen_callback(void*, struct ivi_controller_layer*,
                                            struct wl_output *);
 static void layer_destroyed_callback(void *, struct ivi_controller_layer *);
 static bool layer_add_surface_to_top(ctrl_layer_t *, ctrl_surface_t *);
+#if 0
 static bool layer_add_surface_to_bottom(ctrl_layer_t *, ctrl_surface_t *);
+#endif
 static bool layer_move_surface_to_top(ctrl_layer_t *, ctrl_surface_t *);
 static bool layer_move_surface_to_bottom(ctrl_layer_t *, ctrl_surface_t *);
 static bool layer_remove_surface(ctrl_layer_t *, ctrl_surface_t *);
@@ -312,8 +316,10 @@ static constructor_t *constructor_find_first(mrp_glm_window_manager_t *,
 static constructor_t *constructor_find_surface(mrp_glm_window_manager_t *,
                                                uint32_t,int32_t,const char *);
 
+#if 0
 static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *,
                                              uint32_t);
+#endif
 static void constructor_set_title(mrp_glm_window_manager_t *,
                                   constructor_t *, const char *);
 static void constructor_issue_next_request(mrp_glm_window_manager_t *);
@@ -531,14 +537,11 @@ static void ctrl_layer_callback(void *data,
                                 uint32_t id_layer)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)data;
-    mrp_wayland_t *wl;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
     
-    wl = wm->interface->wl;
-
     mrp_debug("id_layer=%u", id_layer);
 }
 
@@ -549,18 +552,13 @@ static void ctrl_surface_callback(void *data,
                                   const char *title)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)data;
-    mrp_wayland_t *wl;
-    ctrl_surface_t *sf;
     constructor_t *c;
-    struct ivi_surface *ivi_surface;
     struct wl_surface *wl_surface;
     char buf[256];
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
-
-    wl = wm->interface->wl;
 
     mrp_debug("id_surface=%s pid=%d title='%s'",
               surface_id_print(id_surface, buf,sizeof(buf)),
@@ -600,17 +598,12 @@ static void ctrl_error_callback(void *data,
                                 const char *error_text)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)data;
-    mrp_wayland_t *wl;
     const char *type_str;
-    mrp_list_hook_t *c, *n;
-    constructor_t *entry;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
     
-    wl = wm->interface->wl;
-
     switch (object_type) {
     case IVI_CONTROLLER_OBJECT_TYPE_SURFACE:   type_str = "surface";     break;
     case IVI_CONTROLLER_OBJECT_TYPE_LAYER:     type_str = "layer";       break;
@@ -646,20 +639,13 @@ static void ctrl_native_handle_callback(void *data,
                                         struct wl_surface *wl_surface)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)data;
-    mrp_wayland_t *wl;
     application_t *app;
-    const char *type_str;
     constructor_t *reqsurf;
-    mrp_list_hook_t *s, *n;
-    constructor_t *entry;
-    char buf[256];
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
     
-    wl = wm->interface->wl;
-
     mrp_debug("wl_surface=%p", wl_surface);
 
     if (!(app = wm->app)) {
@@ -710,7 +696,6 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     ctrl_surface_t *sf;
     char appid[1024];
     char id_str[256];
-    int sts;
 
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
 
@@ -1432,6 +1417,7 @@ static ctrl_layer_t *layer_create(mrp_glm_window_manager_t *wm,
     return ly;
 }
 
+#if 0
 static void layer_destroy(mrp_glm_window_manager_t *wm, ctrl_layer_t *ly)
 {
     ctrl_layer_t *d;
@@ -1450,6 +1436,7 @@ static void layer_destroy(mrp_glm_window_manager_t *wm, ctrl_layer_t *ly)
         }
     }
 }
+#endif
 
 static void layer_visibility_callback(void *data,
                                       struct ivi_controller_layer *ctrl_layer,
@@ -1624,6 +1611,7 @@ static void layer_destroyed_callback(void *data,
     mrp_debug("ctrl_layer=%p (%s %d)", ctrl_layer, ly->name, ly->id);
 }
 
+#if 0
 static bool layer_add_surface_to_bottom(ctrl_layer_t *ly, ctrl_surface_t *sf)
 {
     uint32_t *last, *pos;
@@ -1661,7 +1649,7 @@ static bool layer_add_surface_to_bottom(ctrl_layer_t *ly, ctrl_surface_t *sf)
 
     return true;
 }
-
+#endif
 
 static bool layer_add_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
 {
@@ -2409,6 +2397,7 @@ static constructor_t *constructor_find_surface(mrp_glm_window_manager_t *wm,
     return candidate;
 }
 
+#if 0
 static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *wm,
                                              uint32_t id_surface)
 {
@@ -2427,6 +2416,7 @@ static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *wm,
 
     return NULL;
 }
+#endif
 
 static void constructor_set_title(mrp_glm_window_manager_t *wm,
                                   constructor_t *c,
@@ -2553,6 +2543,8 @@ static bool set_layer_visibility(mrp_wayland_layer_t *layer,
     ctrl_layer_t *ly;
     uint32_t visibility;
 
+    (void)passthrough;
+
     if (!(ly = layer_find(wm, layer->layerid))) {
         mrp_debug("can't find layer");
         return false;
@@ -2668,6 +2660,8 @@ static bool set_window_layer(mrp_wayland_window_t *win,
     mrp_wayland_window_update_t u2;
     char buf[256];
 
+    (void)passthrough;
+
     if (!u->layer) {
         mrp_log_error("system-controller: broken request (layer is <null>)");
         return false;
@@ -2769,7 +2763,7 @@ static bool set_window_mapped(mrp_wayland_window_t *win,
 
         mrp_debug("calling ico_window_mgr_unmap_surface"
                   "(ico_window_mgr=%p, surfaceid=%u)",
-                  ico_window_mgr, id_surface, framerate, filepath);
+                  ico_window_mgr, id_surface);
 
         ico_window_mgr_unmap_surface(ico_window_mgr, id_surface);
     }
@@ -2790,6 +2784,8 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
     int32_t x,y;
     int32_t w,h;
     char buf[256];
+
+    (void)passthrough;
 
     if (!output_changed                                        &&
         (!(mask & MRP_WAYLAND_WINDOW_POSITION_MASK) ||
@@ -2812,6 +2808,11 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
     w = (mask & MRP_WAYLAND_WINDOW_WIDTH_MASK )  ?  u->width  : win->width;
     h = (mask & MRP_WAYLAND_WINDOW_HEIGHT_MASK)  ?  u->height : win->height;
 
+    if (x != win->x || y != win->y)
+        set_window_animation(win, MRP_WAYLAND_ANIMATION_MOVE, anims);
+    if (w != win->width || h != win->height)
+        set_window_animation(win, MRP_WAYLAND_ANIMATION_RESIZE, anims);
+
 #if 0
     mrp_debug("calling ivi_controller_surface_set_source_rectangle"
               "(ivi_controller_surface=%p, x=0, y=0, width=%d height=%d)",
@@ -2832,8 +2833,7 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
 
 static bool set_window_opacity(mrp_wayland_window_t *win,
                                mrp_wayland_window_update_mask_t passthrough,
-                               mrp_wayland_window_update_t *u,
-                               mrp_wayland_animation_t *anims)
+                               mrp_wayland_window_update_t *u)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
     int32_t id_surface = win->surfaceid;
@@ -2868,18 +2868,17 @@ static bool set_window_opacity(mrp_wayland_window_t *win,
 
 static bool raise_window(mrp_wayland_window_t *win,
                          mrp_wayland_window_update_mask_t passthrough,
-                         mrp_wayland_window_update_t *u,
-                         mrp_wayland_animation_t *anims)
+                         mrp_wayland_window_update_t *u)
 {
     mrp_glm_window_manager_t *wm = (mrp_glm_window_manager_t *)win->wm;
-    mrp_wayland_t *wl = wm->interface->wl;
-    mrp_wayland_window_update_mask_t mask = u->mask;
     mrp_wayland_window_update_t u2;
     int32_t id_surface = win->surfaceid;
     ctrl_surface_t *sf;
     ctrl_layer_t *ly;
     bool changed;
     char buf[256];
+
+    (void)passthrough;
 
     do { /* not a loop */
         changed = false;
@@ -3075,11 +3074,11 @@ static void window_request(mrp_wayland_window_t *win,
             mask &= ~geometry_mask;
         }
         else if ((mask & opacity_mask)) {
-            changed |= set_window_opacity(win, passthrough, u, anims);
+            changed |= set_window_opacity(win, passthrough, u);
             mask &= ~opacity_mask;
         }
         else if ((mask & raise_mask)) {
-            changed |= raise_window(win, passthrough, u, anims);
+            changed |= raise_window(win, passthrough, u);
             mask &= ~raise_mask;
         }
         else if ((mask & visible_mask)) {
@@ -3109,10 +3108,13 @@ static void buffer_request(mrp_wayland_window_manager_t *wm,
                            uint32_t bufsize,
                            uint32_t bufnum)
 {
+    (void)bufnum;
+    (void)bufsize;
+
     MRP_ASSERT(wm && wm->proxy && shmname, "invalid argument");
 
-    mrp_warning("system-controller: buffer_request is not supported in "
-                "Genivi Layer Management");
+    mrp_log_warning("system-controller: buffer_request is not supported in "
+                    "Genivi Layer Management");
 }
 
 
