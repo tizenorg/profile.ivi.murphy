@@ -391,7 +391,7 @@ if with_system_controller then
                 return true
             end,
         update = function(self)
-                send_night_mode_to_home_screen()
+                send_night_mode_to(homescreen)
             end
     }
 end
@@ -553,7 +553,7 @@ sink.lua {
         end
 
         -- tell homescreen that driving mode was updated
-        send_driving_mode_to_home_screen()
+        send_driving_mode_to(homescreen)
 
         regulateApplications(ft(mdb.select.entertainment_applications), data)
         regulateApplications(ft(mdb.select.undefined_applications), data)
@@ -1117,7 +1117,7 @@ wmgr = window_manager {
                       end
 
                       local arg = m:JSON({ surface = win.surface,
-                                           winname = win.name,
+                                           winname = win.name
                       })
                       local command = 0
 
@@ -1192,7 +1192,7 @@ wmgr = window_manager {
                       if verbose > 0 then
                           print("### <== sending " ..
                                 command_name(msg.command) ..
-                                " window message to '" .. win.name .. "'")
+                                " window message to '" .. homescreen .. "'")
                           if verbose > 1 then
                               print(msg)
                           end
@@ -1223,6 +1223,35 @@ wmgr = window_manager {
                                                                win.surface)
                                   special_screen_sets[win.surface] = true
                               end
+                          end
+
+                          if onscreen and win.appid == onscreen then
+                              local resmsg = m:JSON({
+                                        command = 0x40006, -- window_id_res
+                                        appid   = win.appid,
+                                        pid     = win.pid,
+                                        res     = m:JSON({
+                                            window  = m:JSON({
+                                                ECU     = "",
+                                                display = "",
+                                                layer   = "",
+                                                layout  = "",
+                                                area    = "",
+                                                dispatchApp = "",
+                                                role        = win.name,
+                                                resourceId  = win.surface
+                                            })
+                                        })
+                              })
+                              if verbose > 0 then
+                                  print("### <== sending " ..
+                                        command_name(resmsg.command) ..
+                                        " message to '" .. onscreen .. "'")
+                                  if verbose > 1 then
+                                      print(resmsg)
+                                  end
+                              end
+                              sc:send_message(onscreen, resmsg);
                           end
                       elseif oper == 2 then -- destroy
                           resclnt:resource_set_destroy("screen", win.surface)
@@ -1509,11 +1538,15 @@ if sc then
                 print('Setting homescreen='..appid)
                 homescreen = appid
                 if command and command == 1 then
-                    send_driving_mode_to_home_screen()
-                    send_night_mode_to_home_screen()
+                    send_driving_mode_to(homescreen)
+                    send_night_mode_to(homescreen)
                 end
             elseif appid == "org.tizen.ico.onscreen" then
                 onscreen = appid
+                if command and command == 1 then
+                    send_driving_mode_to(onscreen)
+                    send_night_mode_to(onscreen)
+                end
             end
 
 	    if not connected and appid == "org.tizen.ico.homescreen" then
@@ -2042,10 +2075,19 @@ if sc then
             end
         end
     end
+
+    sc.notify_handler = function (self, cid, msg)
+        if verbose > 0 then
+            print('### notify handler: ' .. command_name(msg.command))
+            if verbose > 1 then
+                print(msg)
+            end
+        end
+    end
 end
 
-function send_driving_mode_to_home_screen()
-    if homescreen == "" then
+function send_driving_mode_to(client)
+    if client == "" then
         return
     end
 
@@ -2066,11 +2108,11 @@ function send_driving_mode_to_home_screen()
         end
     end
 
-    sc:send_message(homescreen, reply)
+    sc:send_message(client, reply)
 end
 
-function send_night_mode_to_home_screen()
-    if homescreen == "" then
+function send_night_mode_to(client)
+    if client == "" then
         return
     end
 
@@ -2091,7 +2133,7 @@ function send_night_mode_to_home_screen()
         end
      end
 
-     sc:send_message(homescreen, reply)
+     sc:send_message(client, reply)
 end
 
 -- we should have 'audio_playback' defined by now
