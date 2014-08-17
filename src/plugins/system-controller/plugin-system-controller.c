@@ -89,6 +89,7 @@ typedef struct {
         mrp_funcbridge_t *user;
         mrp_funcbridge_t *resource;
         mrp_funcbridge_t *inputdev;
+        mrp_funcbridge_t *notify;
     } handler;
 } sysctl_t;
 
@@ -119,6 +120,7 @@ typedef enum {
     SYSCTL_IDX_USER,
     SYSCTL_IDX_RESOURCE,
     SYSCTL_IDX_INPUTDEV,
+    SYSCTL_IDX_NOTIFY
 } sysctl_lua_index_t;
 
 
@@ -331,7 +333,8 @@ static int send_message(client_t *c, mrp_json_t *msg)
 
     s = mrp_json_object_to_string(msg);
 
-    mrp_debug("sending system controller message to client #%d:", c->id);
+    mrp_debug("sending system controller message to client #%d (%s):",
+              c->id, c->app ? c->app : "<unknown>");
     mrp_debug("  %s", s);
 
     return mrp_transport_sendcustom(c->t, msg);
@@ -414,7 +417,8 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
         [2] = sc->handler.input,
         [3] = sc->handler.user,
         [4] = sc->handler.resource,
-        [5] = sc->handler.inputdev
+        [5] = sc->handler.inputdev,
+        [6] = sc->handler.notify,
     }, *h;
     mrp_funcbridge_value_t args[4];
     mrp_funcbridge_value_t ret;
@@ -466,7 +470,7 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
     else {
         type = (cmd & 0xffff0000) >> 16;
 
-        if (0 <= type && type <= 5)
+        if (0 <= type && type <= 6)
             h = handlers[type];
         else
             h = NULL;
@@ -580,6 +584,7 @@ static int name_to_index(const char *name)
     MAP("user_handler"    , USER);
     MAP("resource_handler", RESOURCE);
     MAP("inputdev_handler", INPUTDEV);
+    MAP("notify_handler"  , NOTIFY);
     return 0;
 #undef MAP
 }
@@ -614,6 +619,9 @@ static int sysctl_lua_getfield(lua_State *L)
     case SYSCTL_IDX_INPUTDEV:
         mrp_funcbridge_push(L, scl->sc->handler.inputdev);
         break;
+    case SYSCTL_IDX_NOTIFY:
+        mrp_funcbridge_push(L, scl->sc->handler.notify);
+        break;
     default:
         lua_pushnil(L);
     }
@@ -637,6 +645,7 @@ static int sysctl_lua_setfield(lua_State *L)
     case SYSCTL_IDX_USER:     hptr = &scl->sc->handler.user;     break;
     case SYSCTL_IDX_RESOURCE: hptr = &scl->sc->handler.resource; break;
     case SYSCTL_IDX_INPUTDEV: hptr = &scl->sc->handler.inputdev; break;
+    case SYSCTL_IDX_NOTIFY:   hptr = &scl->sc->handler.notify;   break;
     default:
         luaL_error(L, "unknown system-controller handler '%s'", name);
     }
