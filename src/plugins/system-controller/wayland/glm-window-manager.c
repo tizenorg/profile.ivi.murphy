@@ -2999,7 +2999,9 @@ static bool set_window_active(mrp_wayland_window_t *win,
               sf->ctrl_surface, focus_enabled);
 
 
-    ivi_controller_surface_set_input_focus(sf->ctrl_surface, focus_enabled);
+    ivi_controller_surface_set_input_focus(sf->ctrl_surface,
+                                      IVI_CONTROLLER_SURFACE_INPUT_DEVICE_ALL,
+                                      focus_enabled);
 
     return true;
 }
