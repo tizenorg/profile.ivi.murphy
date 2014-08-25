@@ -131,7 +131,7 @@ endif
 # linker script generation
 linker-script.common: $(libmurphy_common_la_HEADERS)
 	$(QUIET_GEN)$(top_builddir)/build-aux/gen-linker-script -q \
-		-c "$(libmurphy_common_la_CFLAGS)" -o $@ $^
+		-P "$CC" -c "$(libmurphy_common_la_CFLAGS)" -o $@ $^
 
 clean-linker-script::
 	-rm -f linker-script.common
