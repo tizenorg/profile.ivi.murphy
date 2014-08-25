@@ -831,6 +831,7 @@ echo "Extra C warnings flags: $WARNING_CFLAGS"
 echo "Cross-compiling: $cross_compiling"
 if test "$cross_compiling" != "no"; then
     echo "     * native compiler: $UNSHAVED_CC_FOR_BUILD"
+    echo "     * CC: $CC"
     echo "     * CFLAGS: $CFLAGS"
 fi
 echo "Lua (pkgconfig file) to use: $with_lua"
