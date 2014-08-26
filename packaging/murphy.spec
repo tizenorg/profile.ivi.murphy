@@ -25,6 +25,32 @@
 # TODO: take care of /lib vs /lib64...
 %define systemddir /lib/systemd
 
+#
+# Abnormalize _with_icosyscon to _enable_icosyscon
+#
+# Since some people seem to have a hard time understanding that
+#
+# 1) the right way to disable a conditional _with_* rpm macro is to leave it
+#    undefined as opposed to defining it to 0
+#
+# 2) if you decide to do it the wrong way at least you should be consistent
+#    about it and not randomly change between the conventions
+#
+# we need to roll this butt-ugly hack to make sure that we always go with
+# the wrong convention. We always set up _enable_icosyscon to 1 or 0 depending
+# on how _with_icosyscon happens to be set (or unset).
+#
+
+%if %{!?_with_icosyscon:0}%{?_with_icosyscon:1}
+%if %{_with_icosyscon}
+%define _enable_icosyscon 1
+%else
+%define _enable_icosyscon 0
+%endif
+%else
+%define _enable_icosyscon 0
+%endif
+
 Summary: Murphy policy framework
 Name: murphy
 Version: 0.0.53
@@ -83,7 +109,7 @@ BuildRequires: pkgconfig(json)
 BuildRequires: pkgconfig(libsmack)
 %endif
 
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 BuildRequires: ico-uxf-weston-plugin-devel
 BuildRequires: pkgconfig(ail)
 BuildRequires: pkgconfig(aul)
@@ -214,7 +240,7 @@ Requires: %{name} = %{version}
 Summary: Murphy IVI resource manager plugin
 Group: System/Service
 
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 %package system-controller
 Summary: Murphy IVI System Controller plugin
 Group: System/Service
@@ -281,13 +307,16 @@ This package contains various test binaries for Murphy.
 %description ivi-resource-manager
 This package contains the Murphy IVI resource manager plugin.
 
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 %description system-controller
 This package contains the Murphy IVI resource manager plugin.
 %endif
 
 %prep
 %setup -q
+
+echo "_with_icosyscon:   \"%{_with_icosyscon}\""
+echo "_enable_icosyscon: \"%{_enable_icosyscon}\""
 
 %build
 %if %{?_with_debug:1}%{!?_with_debug:0}
@@ -353,7 +382,7 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-smack"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-smack"
 %endif
 
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-controller"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-controller"
@@ -423,7 +452,7 @@ cp packaging.in/murphyd.conf $RPM_BUILD_ROOT%{_tmpfilesdir}
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/user
 cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 cp packaging.in/ico-homescreen.service $RPM_BUILD_ROOT%{systemddir}/user
 cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir}/user
 %endif
@@ -449,7 +478,7 @@ cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-pulse.manifest
 %if %{?_with_ecore:1}%{!?_with_ecore:0}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ecore.manifest
 %endif
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-system-controller.manifest
 %endif
 
@@ -507,7 +536,7 @@ lfconfig
 ldconfig
 %endif
 
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 %post system-controller
 # prevent system controller from starting
 rm -f %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
@@ -697,7 +726,7 @@ fi
 %{_libdir}/murphy/plugins/plugin-ivi-resource-manager.so
 %manifest %{_datadir}/murphy-ivi-resource-manager.manifest
 
-%if %{_with_icosyscon}
+%if %{_enable_icosyscon}
 %files system-controller
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-system-controller.so
