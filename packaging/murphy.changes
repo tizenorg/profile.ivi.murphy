@@ -1,3 +1,10 @@
+* Tue Aug 26 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.54
+- rebased on latest upstream master
+- common: open up mainloop for external polling (for xwalk integration)
+- build-sys: make sure collect-symbols is not cross-compiled
+- build-sys: properly propagate CC to collect-symbols for pre-processing
+- packaging: kludge for random _with_icosyscon conventions
+
 * Mon May 26 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.53
 - build-sys: stop generating file:line->function mapping tables.
 - common,daemon,console: removed support for listing debug sites.
