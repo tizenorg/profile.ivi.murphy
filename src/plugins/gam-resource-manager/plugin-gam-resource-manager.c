@@ -404,7 +404,7 @@ static const char *get_default_sink(gam_connect_t *ctx, mrp_resource_set_t *rset
         routing_target_t *t = mrp_list_entry(p, typeof(*t), hook);
 
         if (is_sink_available(ctx, t->name)) {
-            name = t->name;
+            name = mrp_strdup(t->name);
             break;
         }
     }
@@ -484,7 +484,7 @@ static bool register_sink_with_gam(gam_connect_t *ctx, mrp_resource_set_t *rset,
 
     if (!sink) {
         mrp_log_error("gam_connect: error finding default sink, using global default");
-        sink = ctx->default_sink;
+        sink = mrp_strdup(ctx->default_sink);
     }
 
     rset_id = mrp_get_resource_set_id(rset);
@@ -493,6 +493,8 @@ static bool register_sink_with_gam(gam_connect_t *ctx, mrp_resource_set_t *rset,
 
     mrp_debug("gam_connect: register rset %u with GAM! (%s(%u) -> %s(%u))",
             rset_id, source, source_id, sink, sink_id);
+
+    mrp_free(sink);
 
     /*
         calling GAM:
