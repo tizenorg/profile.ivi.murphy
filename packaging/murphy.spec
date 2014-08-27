@@ -109,11 +109,13 @@ BuildRequires: pkgconfig(json)
 BuildRequires: pkgconfig(libsmack)
 %endif
 
-%if %{_enable_icosyscon}
+%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
+#%if %{_with_icosyscon} # gbs can't, so don't bother...
 BuildRequires: ico-uxf-weston-plugin-devel
 BuildRequires: pkgconfig(ail)
 BuildRequires: pkgconfig(aul)
 BuildRequires: libxml2-devel
+#%endif
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
