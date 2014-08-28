@@ -75,6 +75,7 @@ BuildRequires: pkgconfig(lua)
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(libsystemd-journal)
 BuildRequires: pkgconfig(libcap)
+BuildRequires: pkgconfig(libtzplatform-config)
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 BuildRequires: pkgconfig(libpulse)
@@ -461,6 +462,7 @@ cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
+sed "s/@TZ_SYS_USER_GROUP@/%{TZ_SYS_USER_GROUP}/g" packaging.in/org.Murphy.conf.in > packaging.in/org.Murphy.conf
 cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
 
