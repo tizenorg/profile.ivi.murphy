@@ -40,6 +40,8 @@
 #include <murphy/core/lua-utils/object.h>
 #include <murphy/core/lua-utils/funcbridge.h>
 
+#include <tzplatform_config.h>
+
 #include "system-controller.h"
 
 #include "resource-manager/scripting-resource-manager.h"
@@ -49,10 +51,8 @@
 #include "user/user.h"
 #include "application-tracker/application-tracker.h"
 
-
 #define DEFAULT_ADDRESS "wsck:127.0.0.1:18081/ico_syc_protocol"
 #define DEFAULT_USER_CONFIG "/usr/apps/org.tizen.ico.system-controller/res/config/user.xml"
-#define DEFAULT_USER_DIR "/home/app/ico"
 
 /*
  * plugin argument ids/indices
@@ -756,6 +756,10 @@ static int plugin_init(mrp_plugin_t *plugin)
         sc->user_config_file = plugin->args[ARG_USER_CONFIG].str;
         sc->user_dir = plugin->args[ARG_USER_DIR].str;
 
+        if (strcmp(sc->user_dir, "") == 0) {
+            sc->user_dir = tzplatform_mkpath(TZ_USER_HOME, "ico");
+        }
+
         if (!transport_create(sc))
             goto fail;
 
@@ -804,7 +808,7 @@ static void plugin_exit(mrp_plugin_t *plugin)
 static mrp_plugin_arg_t plugin_args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ADDRESS, STRING, "address", DEFAULT_ADDRESS),
     MRP_PLUGIN_ARGIDX(ARG_USER_CONFIG, STRING, "user_config", DEFAULT_USER_CONFIG),
-    MRP_PLUGIN_ARGIDX(ARG_USER_DIR, STRING, "user_dir", DEFAULT_USER_DIR),
+    MRP_PLUGIN_ARGIDX(ARG_USER_DIR, STRING, "user_dir", ""),
 };
 
 MURPHY_REGISTER_PLUGIN("system-controller",
