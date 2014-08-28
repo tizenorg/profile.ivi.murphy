@@ -3,12 +3,7 @@
         "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 
 <busconfig>
-        <policy user="root">
-                <allow own="org.Murphy"/>
-                <allow receive_sender="org.Murphy"/>
-                <allow send_destination="org.Murphy"/>
-        </policy>
-        <policy user="app">
+        <policy group="@TZ_SYS_USER_GROUP@">
                 <allow own="org.Murphy"/>
                 <allow receive_sender="org.Murphy"/>
                 <allow send_destination="org.Murphy"/>
