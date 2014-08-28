@@ -37,11 +37,12 @@
 #include <limits.h>
 #include <errno.h>
 
+#include <tzplatform_config.h>
+
 #include <murphy/common.h>
 
 #include "appid.h"
 
-#define APP_DIR   "/opt/usr/apps"
 #define APP_MAX   1024
 
 typedef struct appid_map_s   appid_map_t;
@@ -67,6 +68,7 @@ mrp_resmgr_appid_t *mrp_resmgr_appid_create(mrp_resmgr_data_t *data)
 {
     mrp_resmgr_appid_t *appid;
     mrp_htbl_config_t cfg;
+    char *app_dir = tzplatform_getenv(TZ_USER_APP);
 
     cfg.nentry = APP_MAX;
     cfg.comp = mrp_string_comp;
@@ -78,7 +80,7 @@ mrp_resmgr_appid_t *mrp_resmgr_appid_create(mrp_resmgr_data_t *data)
         appid->data = data;
         appid->map = mrp_htbl_create(&cfg);
 
-        map_init(appid, APP_DIR);
+        map_init(appid, app_dir);
     }
 
     return appid;
