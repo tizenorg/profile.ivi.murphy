@@ -658,11 +658,10 @@ fi
 %defattr(-,root,root,-)
 %doc %{_docdir}/../murphy/AUTHORS
 %doc %{_docdir}/../murphy/CODING-STYLE
-%license %{_docdir}/../murphy/COPYING
 %doc %{_docdir}/../murphy/ChangeLog
-%doc %{_docdir}/../murphy/INSTALL
 %doc %{_docdir}/../murphy/NEWS
 %doc %{_docdir}/../murphy/README
+%license COPYING LICENSE-BSD
 
 %if %{?_with_pulse:1}%{!?_with_pulse:0}
 %files pulse
