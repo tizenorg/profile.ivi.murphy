@@ -497,6 +497,17 @@ AC_SUBST(AUL_ENABLED)
 AC_SUBST(AUL_CFLAGS)
 AC_SUBST(AUL_LIBS)
 
+PKG_CHECK_MODULES(TZCONFIG, libtzplatform-config,
+           [have_tzconfig=yes], [have_tzconfig=no])
+enable_tzconfig="$have_tzconfig"
+if test "$enable_tzconfig" = "yes"; then
+    AC_DEFINE([TZCONFIG_ENABLED], 1, [Enable Tizen configuration support ?])
+fi
+AM_CONDITIONAL(TZCONFIG_ENABLED, [test "$enable_tzconfig" = "yes"])
+AC_SUBST(TZCONFIG_ENABLED)
+AC_SUBST(TZCONFIG_CFLAGS)
+AC_SUBST(TZCONFIG_LIBS)
+
 # Check if system-controller (plugin) support should be enabled.
 AC_ARG_ENABLE(system-controller,
               [  --enable-system-controller enable system-controller support],
@@ -801,7 +812,7 @@ fi
 AC_CONFIG_FILES([build-aux/shave
 		 build-aux/shave-libtool
 		 Makefile
-                 utils/Makefile
+		 utils/Makefile
 		 src/Makefile
 		 src/common/tests/Makefile
 		 src/core/tests/Makefile
@@ -815,10 +826,10 @@ AC_CONFIG_FILES([build-aux/shave
 		 src/common/murphy-pulse.pc
 		 src/common/murphy-ecore.pc
 		 src/common/murphy-glib.pc
-                 src/common/murphy-qt.pc
+		 src/common/murphy-qt.pc
 		 src/core/murphy-core.pc
-                 src/core/lua-utils/murphy-lua-utils.pc
-                 src/core/lua-decision/murphy-lua-decision.pc
+		 src/core/lua-utils/murphy-lua-utils.pc
+		 src/core/lua-decision/murphy-lua-decision.pc
 		 src/breedline/breedline.pc
 		 src/breedline/breedline-murphy.pc
 		 src/breedline/breedline-glib.pc
@@ -838,6 +849,7 @@ AC_CONFIG_FILES([build-aux/shave
 		 doc/plugin-developer-guide/db/Makefile
 		 doc/plugin-developer-guide/doxml/Makefile
 		 src/plugins/resource-native/libmurphy-resource/murphy-resource.pc
+		 packaging.in/org.Murphy.conf
 		 ])
 AC_OUTPUT
 
