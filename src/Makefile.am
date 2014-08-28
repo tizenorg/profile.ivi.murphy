@@ -1333,12 +1333,14 @@ PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES = 				    \
 PLUGIN_IVI_RESOURCE_MANAGER_SOURCES = 					    \
 		$(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)
 PLUGIN_IVI_RESOURCE_MANAGER_CFLAGS =					    \
-		$(LUA_CFLAGS)
+		$(LUA_CFLAGS)										\
+		$(TZCONFIG_CFLAGS)
 
 PLUGIN_IVI_RESOURCE_MANAGER_LIBS =       				    \
-		libmurphy-common.la					    \
+		libmurphy-common.la									\
 		$(RESOURCE_LIBRARY)                   			    \
-		$(LUA_LIBS)
+		$(LUA_LIBS) 										\
+		$(TZCONFIG_LIBS)
 
 plugin_ivi_resource_manager_la_SOURCES = $(PLUGIN_IVI_RESOURCE_MANAGER_SOURCES)
 plugin_ivi_resource_manager_la_CFLAGS  = $(PLUGIN_IVI_RESOURCE_MANAGER_CFLAGS)\
@@ -1546,7 +1548,7 @@ SYSTEMCTL_PLUGIN_CFLAGS  = \
                         -I$(top_builddir)/src/$(SYSTEMCTL_DIR)
 SYSTEMCTL_PLUGIN_LIBS    = \
 			$(WEBSOCKET_LIBS) $(WAYLAND_CLIENT_LIBS) $(LIBXML2_LIBS) $(AUL_LIBS) \
-			$(AIL_CFLAGS) -lico-uxf-weston-plugin
+			$(AIL_CFLAGS) -lico-uxf-weston-plugin $(TZCONFIG_LIBS)
 
 SYSTEMCTL_PLUGIN_LOADER  = linkedin-system-controller-loader.c
 
@@ -1566,7 +1568,8 @@ libmurphy_plugin_system_controller_la_SOURCES =			 	\
 
 libmurphy_plugin_system_controller_la_CFLAGS =			 	\
 		$(SYSTEMCTL_PLUGIN_CFLAGS)			 	\
-		$(AM_CFLAGS)
+		$(AM_CFLAGS)						\
+		$(TZCONFIG_CFLAGS)
 
 libmurphy_plugin_system_controller_la_LDFLAGS =				\
 		-Wl,-version-script=linker-script.system-controller	\
