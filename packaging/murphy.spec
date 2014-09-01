@@ -254,6 +254,7 @@ Summary: Murphy IVI System Controller plugin
 Group: System/Service
 Requires: ico-uxf-homescreen
 Conflicts: murphy-ivi-resource-manager
+Provides: system-controller
 %endif
 
 %description
