@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     OpenPF User Configurations
+-->
+
+<userconfig>
+<users>
+    <user>
+        <name>Daddy</name>
+        <passwd></passwd>
+        <hs>org.tizen.ico.homescreen</hs>
+    </user>
+    <user>
+        <name>Mommy</name>
+        <passwd></passwd>
+        <hs>org.tizen.ico.homescreen</hs>
+    </user>
+</users>
+
+<default>
+    <user>
+        <name>Daddy</name>
+    </user>
+</default>
+
+<homescreens>
+    <homescreen name="org.tizen.ico.homescreen"/>
+</homescreens>
+</userconfig>
+<!-- vim:set expandtab ts=4 sw=4: -->
