@@ -255,6 +255,7 @@ Group: System/Service
 Requires: ico-uxf-homescreen
 Conflicts: murphy-ivi-resource-manager
 Provides: system-controller
+Conflicts: ico-uxf-homescreen-system-controller
 %endif
 
 %description
