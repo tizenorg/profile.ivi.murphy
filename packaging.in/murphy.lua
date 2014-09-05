@@ -50,6 +50,60 @@ else
     m:info("No glib plugin found...")
 end
 
+if m:plugin_exists("gam-resource-manager") then
+
+function get_general_priorities(self)
+    print("*** get_general_priorities\n")
+    return { "USB Headset", "wiredHeadset", "speakers" }
+end
+
+function get_phone_priorities(self)
+    print("*** get_phone_priorities\n")
+    return { "wiredHeadset", "USB Headset" }
+end
+
+m:load_plugin('gam-resource-manager', {
+    config_dir = '/etc/murphy/gam',
+    decision_names = 'gam-wrtApplication-4',
+    max_active = 4,
+    app_mapping = {
+        ['t8j6HTRpuz.MediaPlayer'] = 'wrtApplication',
+        ['pacat'] = 'icoApplication'
+    },
+    app_default = 'icoApplication'
+})
+
+routing_sink_priority {
+    application_class = "player",
+    priority_queue = get_general_priorities
+}
+
+routing_sink_priority {
+    application_class = "game",
+    priority_queue = get_general_priorities
+}
+
+routing_sink_priority {
+    application_class = "implicit",
+    priority_queue = get_general_priorities
+}
+
+routing_sink_priority {
+    application_class = "phone",
+    priority_queue = get_phone_priorities
+}
+
+routing_sink_priority {
+    application_class = "basic",
+    priority_queue = get_phone_priorities
+}
+
+routing_sink_priority {
+    application_class = "event",
+    priority_queue = get_phone_priorities
+}
+end
+
 -- load the AMB plugin
 if m:plugin_exists('amb') then
     m:try_load_plugin('amb')
@@ -192,7 +246,8 @@ zone {
 
 -- define resource classes
 if not m:plugin_exists('ivi-resource-manager') and
-   not with_system_controller
+   not with_system_controller and
+   not m:plugin_exists('gam-resource-manager')
 then
    resource.class {
         name = "audio_playback",
@@ -200,20 +255,24 @@ then
         attributes = {
             role = { mdb.string, "music", "rw" },
             pid = { mdb.string, "<unknown>", "rw" },
-            policy = { mdb.string, "relaxed", "rw" }
+            policy = { mdb.string, "relaxed", "rw" },
+            source = { mdb.string, "webkit", "rw" },
+            conn_id = { mdb.unsigned, 0, "rw" }
         }
    }
 end
 
-resource.class {
-     name = "audio_recording",
-     shareable = true,
-     attributes = {
-         role   = { mdb.string, "music"    , "rw" },
-         pid    = { mdb.string, "<unknown>", "rw" },
-         policy = { mdb.string, "relaxed"  , "rw" }
-     }
-}
+if not m:plugin_exists('gam-resource-manager') then
+    resource.class {
+        name = "audio_recording",
+        shareable = true,
+        attributes = {
+             role   = { mdb.string, "music"    , "rw" },
+             pid    = { mdb.string, "<unknown>", "rw" },
+             policy = { mdb.string, "relaxed"  , "rw" }
+         }
+    }
+end
 
 resource.class {
      name = "video_playback",
