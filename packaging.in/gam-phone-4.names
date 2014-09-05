@@ -1,0 +1,27 @@
+decision.
+
+wrtApplicationRoute:     noroute, phone, btHeadset, usbHeadset, speakers, wiredHeadset, voiceRecognition.
+wrtApplicationStamp:     0, 1, 2, 3, 4.
+wrtApplicationState:     stop, pause, play.
+
+icoApplicationRoute:     noroute, phone, btHeadset, usbHeadset, speakers, wiredHeadset, voiceRecognition.
+icoApplicationStamp:     0, 1, 2, 3, 4.
+icoApplicationState:     stop, pause, play.
+
+phoneRoute:              noroute, phone, btHeadset, usbHeadset, speakers, wiredHeadset, voiceRecognition.
+phoneStamp:              0, 1, 2, 3, 4.
+phoneState:              stop, pause, play.
+
+radioRoute:              noroute, phone, btHeadset, usbHeadset, speakers, wiredHeadset, voiceRecognition.
+radioStamp:              0, 1, 2, 3, 4.
+radioState:              stop, pause, play.
+
+microphoneRoute:         noroute, phone, btHeadset, usbHeadset, speakers, wiredHeadset, voiceRecognition.
+microphoneStamp:         0, 1, 2, 3, 4.
+microphoneState:         stop, pause, play.
+
+navigatorRoute:          noroute, phone, btHeadset, usbHeadset, speakers, wiredHeadset, voiceRecognition.
+navigatorStamp:          0, 1, 2, 3, 4.
+navigatorState:          stop, pause, play.
+
+decision:                teardown, disconnected, connected, suspended.
