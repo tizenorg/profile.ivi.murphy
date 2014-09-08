@@ -1,3 +1,7 @@
+* Tue Sep 03 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.55
+- rebased on latest upstream master
+- domain-control: fix another column overflow check
+
 * Tue Aug 26 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.54
 - rebased on latest upstream master
 - common: open up mainloop for external polling (for xwalk integration)
