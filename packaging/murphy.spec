@@ -56,7 +56,7 @@
 
 Summary: Murphy policy framework
 Name: murphy
-Version: 0.0.54
+Version: 0.0.55
 Release: 1
 License: BSD-3-Clause
 Group: System/Service
@@ -513,6 +513,11 @@ cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ecore.manifest
 %if %{_enable_icosyscon}
 cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-system-controller.manifest
 %endif
+
+# copy (experimental) GAM resource backend configuration files
+mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/murphy/gam
+cp packaging.in/gam-*.names packaging.in/gam-*.tree \
+    $RPM_BUILD_ROOT%{_sysconfdir}/murphy/gam
 
 %clean
 rm -rf $RPM_BUILD_ROOT
