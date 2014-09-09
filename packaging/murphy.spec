@@ -567,7 +567,7 @@ ldconfig
 
 %if %{?_with_qt:1}%{!?_with_qt:0}
 %post qt
-lfconfig
+ldconfig
 
 %postun qt
 ldconfig
