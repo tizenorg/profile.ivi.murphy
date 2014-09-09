@@ -590,6 +590,12 @@ if [ -f %{systemddir}/user/ico-uxf-wait-launchpad-ready.path ]; then
 fi
 %endif
 
+%post gam
+ldconfig
+
+%postun gam
+ldconfig
+
 %if %{?_with_squashpkg:1}%{!?_with_squashpkg:0}
 %files -f filelist.plugins-base
 %else
