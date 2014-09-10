@@ -240,7 +240,7 @@ static void surface_content_callback(void *, struct ivi_controller_surface *,
                                      int32_t);
 static void surface_input_focus_callback(void *,
                                  struct ivi_controller_surface *,
-                                 int32_t);
+                                 uint32_t, int32_t);
 static bool surface_is_ready(mrp_glm_window_manager_t *, ctrl_surface_t *);
 static void surface_set_title(mrp_glm_window_manager_t *, ctrl_surface_t *,
                               const char *);
@@ -1239,6 +1239,7 @@ static void surface_content_callback(void *data,
 
 static void surface_input_focus_callback(void *data,
                                  struct ivi_controller_surface *ctrl_surface,
+                                 uint32_t device,
                                  int32_t enabled)
 {
     ctrl_surface_t *sf = (ctrl_surface_t *)data;
@@ -1255,8 +1256,8 @@ static void surface_input_focus_callback(void *data,
 
     MRP_ASSERT(wm, "data inconsitency");
 
-    mrp_debug("ctrl_surface=%p (id=%s) enabled=%d", ctrl_surface,
-              surface_id_print(sf->id, buf, sizeof(buf)), enabled);
+    mrp_debug("ctrl_surface=%p (id=%s) device=%u enabled=%d", ctrl_surface,
+              surface_id_print(sf->id, buf, sizeof(buf)), device, enabled);
 }
 
 static bool surface_is_ready(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
