@@ -344,7 +344,7 @@ static int send_message(client_t *c, mrp_json_t *msg)
 static const char *message_name(int code)
 {
 #define MAX_CLASS   0x08
-#define MAX_TYPE    0x30
+#define MAX_TYPE    0x32
 #define CLASS(code) (((code) & 0xf0000) >> 16)
 #define TYPE(code)  (((code) & 0x0ffff))
     static char *names[MAX_CLASS + 1][MAX_TYPE + 1];
