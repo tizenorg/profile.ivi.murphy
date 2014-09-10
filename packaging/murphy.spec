@@ -479,13 +479,8 @@ mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
 mkdir -p $RPM_BUILD_ROOT%{systemddir}/user
 cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
 %if %{_enable_icosyscon}
-mkdir -p $RPM_BUILD_ROOT/usr/apps/org.tizen.ico.system-controller/res/config
-cp packaging.in/ico-homescreen.service \
-    $RPM_BUILD_ROOT%{systemddir}/user
-cp packaging.in/murphy-wait-for-launchpad-ready.path \
-    $RPM_BUILD_ROOT%{systemddir}/user
-cp packaging.in/user.xml \
-    $RPM_BUILD_ROOT/usr/apps/org.tizen.ico.system-controller/res/config
+cp packaging.in/ico-homescreen.service $RPM_BUILD_ROOT%{systemddir}/user
+cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir}/user
 %endif
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
@@ -787,7 +782,6 @@ ldconfig
 %{systemddir}/user/ico-homescreen.service
 %{systemddir}/user/murphy-wait-for-launchpad-ready.path
 %manifest %{_datadir}/murphy-system-controller.manifest
-%{_prefix}/apps/org.tizen.ico.system-controller/res/config/user.xml
 %endif
 
 %changelog
