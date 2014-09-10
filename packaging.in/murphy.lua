@@ -1,6 +1,6 @@
 with_system_controller = false
 with_amb = false
-verbose = 3
+verbose = 0
 
 m = murphy.get()
 
