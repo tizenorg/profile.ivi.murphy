@@ -107,6 +107,8 @@ struct ctrl_surface_s {
     char *title;
     int32_t x, y;
     int32_t width, height;
+    int32_t requested_x, requested_y;
+    int32_t requested_width, requested_height;
     double opacity;
     bool visible;
     int32_t layerid;
@@ -489,7 +491,7 @@ static void ctrl_screen_callback(void *data,
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
-    
+
     wl = wm->interface->wl;
 
     mrp_debug("id_screen=%u screen=%p", id_screen, screen);
@@ -517,7 +519,7 @@ static void ctrl_screen_callback(void *data,
     s->output_index = output->index;
     s->width = output->width;
     s->height = output->height;
-    
+
     it.wm = wm;
     it.out = output;
     it.scr = s;
@@ -541,7 +543,7 @@ static void ctrl_layer_callback(void *data,
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
-    
+
     mrp_debug("id_layer=%u", id_layer);
 }
 
@@ -568,11 +570,11 @@ static void ctrl_surface_callback(void *data,
 
     if ((c = constructor_find_surface(wm, id_surface, pid, title))) {
         switch (c->state) {
-            
+
         case CONSTRUCTOR_BOUND:
             wl_surface = c->wl_surface;
             /* intentional fall over */
-            
+
         case CONSTRUCTOR_TITLED:
         case CONSTRUCTOR_REQUESTED:
             if (!title || !title[0])
@@ -603,7 +605,7 @@ static void ctrl_error_callback(void *data,
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
-    
+
     switch (object_type) {
     case IVI_CONTROLLER_OBJECT_TYPE_SURFACE:   type_str = "surface";     break;
     case IVI_CONTROLLER_OBJECT_TYPE_LAYER:     type_str = "layer";       break;
@@ -626,7 +628,7 @@ static void ctrl_error_callback(void *data,
         else {
             mrp_log_error("system-controller: surface error %d: %s",
                           error_code, error_text);
-        }        
+        }
         break;
 
     default:
@@ -645,7 +647,7 @@ static void ctrl_native_handle_callback(void *data,
     MRP_ASSERT(wm && wm->interface && wm->interface->wl, "invalid argument");
     MRP_ASSERT(ivi_controller == (struct ivi_controller *)wm->proxy,
                "confused with data structures");
-    
+
     mrp_debug("wl_surface=%p", wl_surface);
 
     if (!(app = wm->app)) {
@@ -749,6 +751,10 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     sf->title = title ? mrp_strdup(title) : NULL;
     sf->width = -1;
     sf->height = -1;
+    sf->requested_x = MAX_COORDINATE+1;
+    sf->requested_y = MAX_COORDINATE+1;
+    sf->requested_width = -1;
+    sf->requested_height = -1;
     sf->opacity = -1.0;
     sf->layerid = -1;
 
@@ -852,7 +858,7 @@ static void surface_visibility_callback(void *data,
                  MRP_WAYLAND_WINDOW_VISIBLE_MASK;
         u.surfaceid = sf->id;
         u.visible = sf->visible;
-        
+
         mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_VISIBLE, &u);
     }
 }
@@ -886,7 +892,7 @@ static void surface_opacity_callback(void *data,
                  MRP_WAYLAND_WINDOW_OPACITY_MASK;
         u.surfaceid = sf->id;
         u.opacity = sf->opacity;
-        
+
         mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_VISIBLE, &u);
     }
 }
@@ -949,6 +955,32 @@ static void surface_destination_rectangle_callback(void *data,
     sf->height = height;
 
     if (surface_is_ready(wm, sf)) {
+        /*
+         * system-controller is the sole authority who manages the
+         * destination rectangle. So if a rouge app is is fiddling
+         * with it here we fight back and set it back what it was
+         * requested.
+         *
+         * A quick series of legitime requests might result extra
+         * wayland messages but hopefully will not end up in a infinite
+         * loop ...
+         */
+        if ((sf->requested_x <= MAX_COORDINATE && x != sf->requested_x ) ||
+            (sf->requested_y <= MAX_COORDINATE && x != sf->requested_y ) ||
+            (sf->requested_width  > 0 && width  != sf->requested_width ) ||
+            (sf->requested_height > 0 && height != sf->requested_height)  )
+        {
+            mrp_debug("calling ivi_controller_surface_set_destination_"
+                      "rectangle(ivi_controller_surface=%p, x=%d, y=%d, "
+                      "width=%d height=%d)", sf->ctrl_surface,
+                      sf->requested_x, sf->requested_y,
+                      sf->requested_width, sf->requested_height);
+
+            ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface,
+                                    sf->requested_x, sf->requested_y,
+                                    sf->requested_width, sf->requested_height);
+        }
+
         memset(&u, 0, sizeof(u));
         u.mask      =  MRP_WAYLAND_WINDOW_SURFACEID_MASK |
                        MRP_WAYLAND_WINDOW_POSITION_MASK  |
@@ -1279,7 +1311,7 @@ static bool surface_is_ready(mrp_glm_window_manager_t *wm, ctrl_surface_t *sf)
                     u.mask |= MRP_WAYLAND_WINDOW_OPACITY_MASK;
                     u.opacity = sf->opacity;
                 }
-        
+
                 mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_VISIBLE,
                                           &u);
             }
@@ -1693,10 +1725,10 @@ static bool layer_move_surface_to_bottom(ctrl_layer_t *ly, ctrl_surface_t *sf)
     int dim;
     bool removed;
     char id_str[256];
-    
+
     MRP_ASSERT(ly && sf, "invalid argument");
     MRP_ASSERT(ly->id == sf->layerid, "mismatching layer ID's");
-    
+
     surface_id_print(sf->id, id_str, sizeof(id_str));
 
     dim = ly->surfaces.size / sizeof(uint32_t);
@@ -1717,11 +1749,11 @@ static bool layer_move_surface_to_bottom(ctrl_layer_t *ly, ctrl_surface_t *sf)
                   "(can't find surface)", id_str, sf->layerid);
         return false;
     }
-    
+
     *first = (uint32_t)sf->id;
-    
+
     mrp_debug("surface %s moved to bottom of layer %d", id_str, sf->layerid);
-    
+
     layer_send_surfaces(ly);
 
     return true;
@@ -1733,10 +1765,10 @@ static bool layer_move_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
     int dim;
     bool removed;
     char id_str[256];
-    
+
     MRP_ASSERT(ly && sf, "invalid argument");
     MRP_ASSERT(ly->id == sf->layerid, "mismatching layer ID's");
-    
+
     surface_id_print(sf->id, id_str, sizeof(id_str));
 
     dim = ly->surfaces.size / sizeof(uint32_t);
@@ -1757,11 +1789,11 @@ static bool layer_move_surface_to_top(ctrl_layer_t *ly, ctrl_surface_t *sf)
                   "(can't find surface)", id_str, sf->layerid);
         return false;
     }
-    
+
     *last = (uint32_t)sf->id;
-    
+
     mrp_debug("surface %s moved to top of layer %d", id_str, sf->layerid);
-    
+
     layer_send_surfaces(ly);
 
     return true;
@@ -1962,7 +1994,7 @@ static void shell_info_callback(void *data,
                         mrp_del_timer(found->timer.surfaceless);
                         found->timer.surfaceless = NULL;
                     }
-                    
+
                     if (has_title)
                         constructor_set_title(wm, found, title);
                 }
@@ -2032,7 +2064,7 @@ static void ico_extension_window_active_callback(void *data,
                "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
                "confused with data structures");
-    
+
     wl = ico->interface->wl;
     wm = (mrp_glm_window_manager_t *)(wl->wm);
 
@@ -2094,7 +2126,7 @@ static void ico_extension_map_surface_callback(void *data,
                "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
                "confused with data structures");
-    
+
     wl = ico->interface->wl;
     wm = (mrp_glm_window_manager_t *)(wl->wm);
 
@@ -2168,7 +2200,7 @@ static void ico_extension_update_surface_callback(void *data,
                "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
                "confused with data structures");
-    
+
     wl = ico->interface->wl;
     wm = (mrp_glm_window_manager_t *)(wl->wm);
 
@@ -2192,7 +2224,7 @@ static void ico_extension_destroy_surface_callback(void *data,
                "invalid argument");
     MRP_ASSERT(ico_window_mgr == (struct ico_window_mgr *)ico->proxy,
                "confused with data structures");
-    
+
     wl = ico->interface->wl;
     wm = (mrp_glm_window_manager_t *)(wl->wm);
 
@@ -2296,7 +2328,7 @@ static void constructor_destroy(constructor_t *c)
 
         mrp_list_delete(&c->link);
         mrp_free(c->title);
-        
+
         mrp_free(c);
     }
 }
@@ -2409,7 +2441,7 @@ static constructor_t *constructor_find_bound(mrp_glm_window_manager_t *wm,
     if (id_surface > 0) {
         mrp_list_foreach(&wm->constructors, c, n) {
             entry = mrp_list_entry(c, constructor_t, link);
-            
+
             if (id_surface == entry->id_surface &&
                 entry->state == CONSTRUCTOR_BOUND)
                 return entry;
@@ -2451,22 +2483,22 @@ static void constructor_issue_next_request(mrp_glm_window_manager_t *wm)
         entry = mrp_list_entry(c, constructor_t, link);
 
         mrp_debug("   state %s", constructor_state_str(entry->state));
-        
+
         if (entry->state == CONSTRUCTOR_SURFACELESS) {
             mrp_debug("      call ivi_controller_get_native_handle"
                       "(pid=%d title='%s')", entry->pid,
                       entry->title ? entry->title : "<not set>");
-            
+
             ivi_controller_get_native_handle((struct ivi_controller*)wm->proxy,
                                              entry->pid, entry->title);
-            
+
             entry->state = CONSTRUCTOR_REQUESTED;
 
             mrp_wayland_flush(wm->interface->wl);
-            
+
             return;
         }
-        
+
         if (entry->state == CONSTRUCTOR_REQUESTED)
             break;
     }
@@ -2526,7 +2558,7 @@ static char *constructor_state_str(constructor_state_t state)
 }
 
 static ctrl_layer_t *layer_find(mrp_glm_window_manager_t *wm, int32_t id_layer)
-{ 
+{
     ctrl_layer_t *ly;
 
     if (!wm || !wm->layers)
@@ -2804,7 +2836,7 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
                   surface_id_print(id_surface, buf, sizeof(buf)));
         return false;
     }
-    
+
     x = (mask & MRP_WAYLAND_WINDOW_X_MASK     )  ?  u->x      : win->x;
     y = (mask & MRP_WAYLAND_WINDOW_Y_MASK     )  ?  u->y      : win->y;
     w = (mask & MRP_WAYLAND_WINDOW_WIDTH_MASK )  ?  u->width  : win->width;
@@ -2823,11 +2855,18 @@ static bool set_window_geometry(mrp_wayland_window_t *win,
     ivi_controller_surface_set_source_rectangle(sf->ctrl_surface, 0,0, w,h);
 #endif
 
+
+    sf->requested_x = x;
+    sf->requested_y = y;
+    sf->requested_width = w;
+    sf->requested_height = h;
+
     mrp_debug("calling ivi_controller_surface_set_destination_rectangle"
               "(ivi_controller_surface=%p, x=%d, y=%d, width=%d height=%d)",
               sf->ctrl_surface, x,y, w,h);
 
-    ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface, x,y, w,h);
+    ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface,
+                                                     x,y, w,h);
 
     return true;
 }
