@@ -1074,7 +1074,9 @@ static void surface_added_to_layer_callback(void *data,
 
     if (!ctrl_layer) {
         /* surface is removed from a layer */
+#if 0   /* silently ignore the removal */
         sf->layerid = -1;
+#endif
         return;  /* do not send notification of removal for the time being */
     }
     else {
