@@ -43,6 +43,7 @@
 #include "system-monitor.h"
 #include "cpu-watch.h"
 #include "mem-watch.h"
+#include "process-watch.h"
 
 /*
  * system monitor context (singleton) object
@@ -56,6 +57,7 @@ struct sysmon_lua_s {
     lua_State       *L;                  /* Lua execution context */
     mrp_list_hook_t  cpu_watches;        /* active CPU watches */
     mrp_list_hook_t  mem_watches;        /* active memory watches */
+    mrp_list_hook_t  process_watches;    /* active process watches */
     int              polling;            /* polling interval (in msecs) */
     mrp_context_t   *ctx;                /* murphy context */
     mrp_timer_t     *t;                  /* polling timer */
@@ -70,11 +72,15 @@ static ssize_t sysmon_tostring(mrp_lua_tostr_mode_t mode, char *buf, size_t size
 
 static int sysmon_add_cpu_watch(lua_State *L);
 static int sysmon_add_mem_watch(lua_State *L);
+static int sysmon_add_process_watch(lua_State *L);
+static int sysmon_process_event_mask(lua_State *L);
 
 MRP_LUA_METHOD_LIST_TABLE(sysmon_methods,
     MRP_LUA_METHOD_CONSTRUCTOR(sysmon_create)
     MRP_LUA_METHOD(CpuWatch, sysmon_add_cpu_watch)
-    MRP_LUA_METHOD(MemWatch, sysmon_add_mem_watch));
+    MRP_LUA_METHOD(MemWatch, sysmon_add_mem_watch)
+    MRP_LUA_METHOD(ProcessWatch, sysmon_add_process_watch)
+    MRP_LUA_METHOD(ProcessEventMask, sysmon_process_event_mask));
 
 MRP_LUA_METHOD_LIST_TABLE(sysmon_overrides,
     MRP_LUA_OVERRIDE_CALL(sysmon_create));
@@ -106,6 +112,7 @@ static sysmon_lua_t *singleton(lua_State *L)
 
             mrp_list_init(&sm->cpu_watches);
             mrp_list_init(&sm->mem_watches);
+            mrp_list_init(&sm->process_watches);
             sm->L       = L;
             sm->polling = SYSMON_DEFAULT_POLLING;
             sm->ctx     = mrp_lua_get_murphy_context();
@@ -296,6 +303,33 @@ static int sysmon_add_mem_watch(lua_State *L)
 }
 
 
+static int sysmon_add_process_watch(lua_State *L)
+{
+    sysmon_lua_t        *sm;
+    process_watch_lua_t *w;
+
+    sm = sysmon_lua_check(L, 1);
+
+    if ((w = process_watch_create(sm, L)) == NULL)
+        return luaL_error(L, "failed to create process watch");
+
+    w->watchref = mrp_lua_object_ref_value(sm, L, -1);
+    mrp_list_append(&sm->process_watches, &w->hook);
+
+    return 1;
+}
+
+
+static int sysmon_process_event_mask(lua_State *L)
+{
+    sysmon_lua_t *sm = sysmon_lua_check(L, 1);
+
+    MRP_UNUSED(sm);
+
+    return process_event_mask(L, 2);
+}
+
+
 int sysmon_del_cpu_watch(sysmon_lua_t *sm, cpu_watch_lua_t *w)
 {
     if (sm->pending == &w->hook)
@@ -323,6 +357,14 @@ int sysmon_del_mem_watch(sysmon_lua_t *sm, mem_watch_lua_t *w)
         mrp_del_timer(sm->t);
         sm->t = NULL;
     }
+
+    return 0;
+}
+
+
+int sysmon_del_process_watch(sysmon_lua_t *sm, process_watch_lua_t *w)
+{
+    mrp_lua_object_unref_value(sm, sm->L, w->watchref);
 
     return 0;
 }
