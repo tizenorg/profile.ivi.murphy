@@ -27,25 +27,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __MURPHY_SYSTEM_MONITOR_H__
-#define __MURPHY_SYSTEM_MONITOR_H__
+#ifndef __MURPHY_SYSMON_PROCESS_WATCH_H__
+#define __MURPHY_SYSMON_PROCESS_WATCH_H__
 
-#define SYSMON_MINIMUM_POLLING  1000     /* minimum polling interval */
-#define SYSMON_DEFAULT_POLLING 15000     /* default polling interval */
+#include <murphy/common/macros.h>
+#include <murphy/common/list.h>
+#include <murphy/common/process-watch.h>
+#include <murphy/core/lua-utils/funcbridge.h>
 
-typedef struct sysmon_lua_s        sysmon_lua_t;
-typedef struct cpu_watch_lua_s     cpu_watch_lua_t;
-typedef struct mem_watch_lua_s     mem_watch_lua_t;
-typedef struct process_watch_lua_s process_watch_lua_t;
+#include "system-monitor.h"
 
-/** Request deletion of the given CPU watch. */
-int sysmon_del_cpu_watch(sysmon_lua_t *sm, cpu_watch_lua_t *w);
+struct process_watch_lua_s {
+    mrp_list_hook_t        hook;         /* to list of process watches */
+    sysmon_lua_t          *sysmon;       /* system monitor */
+    mrp_proc_watch_t      *w;            /* process watch */
+    int                    watchref;     /* self-ref system monitor */
+    mrp_funcbridge_t      *notify;       /* notification callback */
+    mrp_proc_event_type_t  mask;         /* event mask */
+    int                    filterref;    /* reference to given filter */
+    mrp_proc_filter_t      filter;       /* process filter */
+};
 
-/** Request deletion of the given memory watch. */
-int sysmon_del_mem_watch(sysmon_lua_t *sm, mem_watch_lua_t *w);
+/* Create a process watch. */
+process_watch_lua_t *process_watch_create(sysmon_lua_t *sm, lua_State *L);
 
-/** Request deletion of the given process watch. */
-int sysmon_del_process_watch(sysmon_lua_t *sm, process_watch_lua_t *w);
+/* Convert an array of integer event names to an event mask integer. */
+int process_event_mask(lua_State *L, int idx);
 
-
-#endif /* __MURPHY_SYSTEM_MONITOR_H__ */
+#endif /* __MURPHY_SYSMON_PROCESS_WATCH_H__ */
