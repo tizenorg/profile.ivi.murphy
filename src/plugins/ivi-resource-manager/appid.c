@@ -37,7 +37,9 @@
 #include <limits.h>
 #include <errno.h>
 
-#include <tzplatform_config.h>
+#ifdef TZCONFIG_ENABLED
+#    include <tzplatform_config.h>
+#endif
 
 #include <murphy/common.h>
 
@@ -68,7 +70,12 @@ mrp_resmgr_appid_t *mrp_resmgr_appid_create(mrp_resmgr_data_t *data)
 {
     mrp_resmgr_appid_t *appid;
     mrp_htbl_config_t cfg;
+
+#ifdef TZCONFIG_ENABLED
     char *app_dir = tzplatform_getenv(TZ_USER_APP);
+#else
+    char *app_dir = "/usr/app";
+#endif
 
     cfg.nentry = APP_MAX;
     cfg.comp = mrp_string_comp;
