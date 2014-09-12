@@ -65,3 +65,27 @@ sm:MemWatch({
             print(w.sample .. ' change: ' .. prev .. ' -> ' .. curr)
          end
      })
+
+
+--
+-- monitor process events
+--
+
+sm:ProcessWatch({
+         events = sm:ProcessEventMask({ "fork", "exec", "exit", "recurse" }),
+         filter = { pid = 15243 },
+         notify = function (w, e)
+            print('process event <' .. e.type .. '>')
+            if e.type == "fork" then
+               print('  parent: ' .. e.parent_pid .. '/' .. e.parent_tgid)
+               print('   child: ' .. e.child_pid .. '/' .. e.child_tgid)
+            end
+            if e.type == "exec" then
+               print('  process ' .. e.pid .. '/' .. e.tgid .. ' has exec\'d')
+            end
+            if e.type == "exit" then
+               print('  process ' .. e.pid .. '/' .. e.tgid .. ' has exited')
+               print('    code: ' .. e.code .. ', signal: ' .. e.signal)
+            end
+         end
+})
