@@ -116,7 +116,7 @@ const char *mrp_resmgr_appid_find_by_pid(mrp_resmgr_appid_t *appid,
 
 
     return entry->id;
-    
+
  failed:
     return NULL;
 }
