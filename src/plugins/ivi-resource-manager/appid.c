@@ -132,7 +132,7 @@ static void map_init(mrp_resmgr_appid_t *appid, const char *dir_path)
     char exe[PATH_MAX];
 
     if (!(dir = opendir(dir_path))) {
-        mrp_log_error("iiv-resource-manager: can't open directory %s: %s",
+        mrp_log_error("ivi-resource-manager: can't open directory %s: %s",
                       dir_path, strerror(errno));
         return;
     }
