@@ -1,3 +1,8 @@
+* Fri Sep 12 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.56
+- rebased on latest upstream master
+- common: initial support for low-level process tracking.
+- system-monitor: initial implementation of Lua process watches.
+
 * Tue Sep 03 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.55
 - rebased on latest upstream master
 - domain-control: fix another column overflow check
