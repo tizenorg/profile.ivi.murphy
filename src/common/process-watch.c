@@ -720,7 +720,7 @@ static bool add_pid_filter(bpf_t *b, mrp_proc_watch_t *w,
 
     *events |= w->events;
     *byname |= w->filter && (w->filter->path || w->filter->comm);
-    *bypid  &= !w->filter || !w->filter->pid;
+    *bypid  &= w->filter && w->filter->pid;
 
     if (!*byname && *bypid) {
         pid = htonl(w->filter->pid);
