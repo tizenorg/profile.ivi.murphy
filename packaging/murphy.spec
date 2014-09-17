@@ -25,9 +25,6 @@
 %{!?_with_sysmon:%{!?_without_sysmon:%define _with_sysmon 1}}
 %{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
 
-# TODO: take care of /lib vs /lib64...
-%define systemddir /lib/systemd
-
 #
 # Abnormalize _with_icosyscon to _enable_icosyscon
 #
@@ -54,7 +51,7 @@
 %define _enable_icosyscon 0
 %endif
 
-Summary: Murphy policy framework
+Summary: Resource policy framework
 Name: murphy
 Version: 0.0.56
 Release: 1
@@ -62,7 +59,7 @@ License: BSD-3-Clause
 Group: System/Service
 URL: http://01.org/murphy/
 Source0: %{name}-%{version}.tar.gz
-Source1: murphy.manifest
+Source1001: %{name}.manifest
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 Requires: %{name}-core = %{version}
@@ -114,14 +111,14 @@ BuildRequires: pkgconfig(libsmack)
 %endif
 
 %if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-#%if %{_with_icosyscon} # gbs can't, so don't bother...
+# %%if %%{_with_icosyscon} # gbs can't, so don't bother...
 BuildRequires: ico-uxf-weston-plugin-devel
 BuildRequires: weston-ivi-shell-devel
 BuildRequires: genivi-shell-devel
 BuildRequires: pkgconfig(ail)
 BuildRequires: pkgconfig(aul)
 BuildRequires: libxml2-devel
-#%endif
+# %%endif
 %endif
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
@@ -269,7 +266,7 @@ Conflicts: ico-uxf-homescreen-system-controller
 %endif
 
 %description
-This package contains the basic daemon.
+This package contains the basic Murphy daemon.
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
 %description core
@@ -333,13 +330,16 @@ This package contains the Murphy IVI resource manager plugin.
 %endif
 
 %description gam
-This package contains Murphy GAM plugins.
+This package contains the Murphy plugins for necessary for supporting
+Genivi Audio Manager.
 
 %description gam-devel
-This package contains development files for Murphy GAM plugins.
+This package contains development files for Murphy Genivi Audio Manager
+plugins.
 
 %prep
 %setup -q
+cp %{SOURCE1001} .
 
 echo "_with_icosyscon:   \"%{_with_icosyscon}\""
 echo "_enable_icosyscon: \"%{_enable_icosyscon}\""
@@ -426,26 +426,26 @@ grep '^processor *:' | wc -l`"
 
 ./bootstrap && \
 %configure $CONFIG_OPTIONS --with-dynamic-plugins=$DYNAMIC_PLUGINS && \
-make clean && \
-make -j$(($NUM_CPUS + 1)) $V
+%__make clean && \
+%__make -j$(($NUM_CPUS + 1)) $V
 
 %install
-rm -rf $RPM_BUILD_ROOT
+rm -rf %{buildroot}
 %make_install
 
 # Make sure we have a plugin dir even if all the basic plugins
 # are configured to be built in.
-mkdir -p $RPM_BUILD_ROOT%{_libdir}/murphy/plugins
+mkdir -p %{buildroot}%{_libdir}/murphy/plugins
 
 # Get rid of any *.la files installed by libtool.
-rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
+rm -f %{buildroot}%{_libdir}/*.la
 
 # Clean up also the murphy DB installation.
-rm -f $RPM_BUILD_ROOT%{_libdir}/murphy/*.la
+rm -f %{buildroot}%{_libdir}/murphy/*.la
 
 # Generate list of linkedin plugins (depends on the configuration).
 outdir="`pwd`"
-pushd $RPM_BUILD_ROOT >& /dev/null && \
+pushd %{buildroot} >& /dev/null && \
 find ./%{_libdir} -name libmurphy-plugin-*.so* | \
 sed 's#^./*#/#g' > $outdir/filelist.plugins-base && \
 popd >& /dev/null
@@ -454,68 +454,51 @@ cat $outdir/filelist.plugins-base | sed 's/^/    /g'
 
 # Generate list of header files, filtering ones that go to subpackages.
 outdir="`pwd`"
-pushd $RPM_BUILD_ROOT >& /dev/null && \
+pushd %{buildroot} >& /dev/null && \
 find ./%{_includedir}/murphy | \
-egrep -v '((pulse)|(ecore)|(glib)|(qt))-glue' | \
+grep -E -v '((pulse)|(ecore)|(glib)|(qt))-glue' | \
 sed 's#^./*#/#g' > $outdir/filelist.devel-includes && \
 popd >& /dev/null
 
 # Replace the default sample/test config files with the packaging ones.
-rm -f $RPM_BUILD_ROOT%{_sysconfdir}/murphy/*
-cp packaging.in/murphy-lua.conf $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.conf
-cp packaging.in/murphy.lua      $RPM_BUILD_ROOT%{_sysconfdir}/murphy/murphy.lua
+rm -f %{buildroot}%{_sysconfdir}/murphy/*
+cp packaging.in/murphy-lua.conf %{buildroot}%{_sysconfdir}/murphy/murphy.conf
+cp packaging.in/murphy.lua      %{buildroot}%{_sysconfdir}/murphy/murphy.lua
 
 # Copy plugin configuration files in place.
-mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb
+mkdir -p %{buildroot}%{_sysconfdir}/murphy/plugins/amb
 cp packaging.in/amb-config.lua \
-$RPM_BUILD_ROOT%{_sysconfdir}/murphy/plugins/amb/config.lua
+%{buildroot}%{_sysconfdir}/murphy/plugins/amb/config.lua
 
 # Copy tmpfiles.d config file in place
-mkdir -p $RPM_BUILD_ROOT%{_tmpfilesdir}
-cp packaging.in/murphyd.conf $RPM_BUILD_ROOT%{_tmpfilesdir}
+mkdir -p %{buildroot}%{_tmpfilesdir}
+cp packaging.in/murphyd.conf %{buildroot}%{_tmpfilesdir}
 
 # Copy the systemd files in place.
-mkdir -p $RPM_BUILD_ROOT%{systemddir}/system
-mkdir -p $RPM_BUILD_ROOT%{systemddir}/user
-cp packaging.in/murphyd.service $RPM_BUILD_ROOT%{systemddir}/system
+mkdir -p %{buildroot}%{_unitdir}
+mkdir -p %{buildroot}%{_unitdir_user}
+cp packaging.in/murphyd.service %{buildroot}%{_unitdir}
 %if %{_enable_icosyscon}
-cp packaging.in/ico-homescreen.service $RPM_BUILD_ROOT%{systemddir}/user
-cp packaging.in/murphy-wait-for-launchpad-ready.path $RPM_BUILD_ROOT%{systemddir}/user
+cp packaging.in/ico-homescreen.service %{buildroot}%{_unitdir_user}
+cp packaging.in/murphy-wait-for-launchpad-ready.path \
+    %{buildroot}%{_unitdir_user}
 %endif
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
-mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d
-sed "s/@TZ_SYS_USER_GROUP@/%{TZ_SYS_USER_GROUP}/g" packaging.in/org.Murphy.conf.in > packaging.in/org.Murphy.conf
-cp packaging.in/org.Murphy.conf $RPM_BUILD_ROOT%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
-%endif
-
-# copy the manifest file
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy.manifest
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-tests.manifest
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ivi-resource-manager.manifest
-%if %{?_with_qt:1}%{!?_with_qt:0}
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-qt.manifest
-%endif
-%if %{?_with_glib:1}%{!?_with_glib:0}
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-glib.manifest
-%endif
-%if %{?_with_pulse:1}%{!?_with_pulse:0}
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-pulse.manifest
-%endif
-%if %{?_with_ecore:1}%{!?_with_ecore:0}
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-ecore.manifest
-%endif
-%if %{_enable_icosyscon}
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_datadir}/murphy-system-controller.manifest
+mkdir -p %{buildroot}%{_sysconfdir}/dbus-1/system.d
+sed "s/@TZ_SYS_USER_GROUP@/%{TZ_SYS_USER_GROUP}/g" \
+    packaging.in/org.Murphy.conf.in > packaging.in/org.Murphy.conf
+cp packaging.in/org.Murphy.conf \
+    %{buildroot}%{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
 
 # copy (experimental) GAM resource backend configuration files
-mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/murphy/gam
+mkdir -p %{buildroot}%{_sysconfdir}/murphy/gam
 cp packaging.in/gam-*.names packaging.in/gam-*.tree \
-    $RPM_BUILD_ROOT%{_sysconfdir}/murphy/gam
+    %{buildroot}%{_sysconfdir}/murphy/gam
 
 %clean
-rm -rf $RPM_BUILD_ROOT
+rm -rf %{buildroot}
 
 %post
 /bin/systemctl enable murphyd.service
@@ -571,17 +554,17 @@ ldconfig
 %if %{_enable_icosyscon}
 %post system-controller
 # prevent system controller from starting
-rm -f %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+rm -f %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
 # instead launch just ico-homescreen
-rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
-ln -s %{systemddir}/user/murphy-wait-for-launchpad-ready.path \
-    %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
+rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
+ln -s %{_unitdir_user}/murphy-wait-for-launchpad-ready.path \
+    %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
 
 %postun system-controller
-rm -f %{systemddir}/user/weston.target.wants/murphy-wait-for-launchpad-ready.path
-if [ -f %{systemddir}/user/ico-uxf-wait-launchpad-ready.path ]; then
-    ln -sf %{systemddir}/user/ico-uxf-wait-launchpad-ready.path \
-        %{systemddir}/user/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
+if [ -f %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path ]; then
+    ln -sf %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path \
+        %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
 fi
 %endif
 
@@ -597,10 +580,10 @@ ldconfig
 %files
 %endif
 %defattr(-,root,root,-)
-%manifest %{_datadir}/murphy.manifest
+%manifest murphy.manifest
 %{_bindir}/murphyd
 %config %{_sysconfdir}/murphy
-%{systemddir}/system/murphyd.service
+%{_unitdir}/murphyd.service
 %{_tmpfilesdir}/murphyd.conf
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 %{_sbindir}/asm-bridge
@@ -644,16 +627,16 @@ ldconfig
 
 %files devel -f filelist.devel-includes
 %defattr(-,root,root,-)
-# %{_includedir}/murphy/config.h
-# %{_includedir}/murphy/common.h
-# #%{_includedir}/murphy/core.h
-# %{_includedir}/murphy/common
-# %{_includedir}/murphy/core
-# %{_includedir}/murphy/resolver
-# %{_includedir}/murphy/resource
+# %%{_includedir}/murphy/config.h
+# %%{_includedir}/murphy/common.h
+# %%{_includedir}/murphy/core.h
+# %%{_includedir}/murphy/common
+# %%{_includedir}/murphy/core
+# %%{_includedir}/murphy/resolver
+# %%{_includedir}/murphy/resource
 # # hmmm... should handle disabled plugins properly.
-# %{_includedir}/murphy/domain-control
-# %{_includedir}/murphy/plugins
+# %%{_includedir}/murphy/domain-control
+# %%{_includedir}/murphy/plugins
 %{_includedir}/murphy-db
 %{_libdir}/libmurphy-common.so
 %{_libdir}/libmurphy-core.so
@@ -669,7 +652,7 @@ ldconfig
 %{_libdir}/pkgconfig/murphy-common.pc
 %{_libdir}/pkgconfig/murphy-core.pc
 %{_libdir}/pkgconfig/murphy-resolver.pc
-#%{_libdir}/pkgconfig/murphy-resource.pc
+# %%{_libdir}/pkgconfig/murphy-resource.pc
 %if %{?_with_lua:1}%{!?_with_lua:0}
 %{_libdir}/pkgconfig/murphy-lua-utils.pc
 %{_libdir}/pkgconfig/murphy-lua-decision.pc
@@ -681,7 +664,7 @@ ldconfig
 %{_libdir}/libbreedline*.so
 %{_libdir}/pkgconfig/breedline*.pc
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
-#%{_includedir}/murphy/dbus
+# %%{_includedir}/murphy/dbus
 %{_libdir}/libmurphy-libdbus.so
 %{_libdir}/libmurphy-dbus-libdbus.so
 %{_libdir}/pkgconfig/murphy-libdbus.pc
@@ -701,7 +684,7 @@ ldconfig
 %files pulse
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-pulse.so.*
-%manifest %{_datadir}/murphy-pulse.manifest
+%manifest murphy.manifest
 
 %files pulse-devel
 %defattr(-,root,root,-)
@@ -714,7 +697,7 @@ ldconfig
 %files ecore
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-ecore.so.*
-%manifest %{_datadir}/murphy-ecore.manifest
+%manifest murphy.manifest
 
 %files ecore-devel
 %defattr(-,root,root,-)
@@ -727,7 +710,7 @@ ldconfig
 %files glib
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-glib.so.*
-%manifest %{_datadir}/murphy-glib.manifest
+%manifest murphy.manifest
 
 %files glib-devel
 %defattr(-,root,root,-)
@@ -740,7 +723,7 @@ ldconfig
 %files qt
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-qt.so.*
-%manifest %{_datadir}/murphy-qt.manifest
+%manifest murphy.manifest
 
 %files qt-devel
 %defattr(-,root,root,-)
@@ -768,20 +751,20 @@ ldconfig
 %{_bindir}/resource-api-fuzz
 %{_bindir}/test-domain-controller
 %{_bindir}/murphy-console
-%manifest %{_datadir}/murphy-tests.manifest
+%manifest murphy.manifest
 
 %files ivi-resource-manager
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-ivi-resource-manager.so
-%manifest %{_datadir}/murphy-ivi-resource-manager.manifest
+%manifest murphy.manifest
 
 %if %{_enable_icosyscon}
 %files system-controller
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-system-controller.so
-%{systemddir}/user/ico-homescreen.service
-%{systemddir}/user/murphy-wait-for-launchpad-ready.path
-%manifest %{_datadir}/murphy-system-controller.manifest
+%{_unitdir_user}/ico-homescreen.service
+%{_unitdir_user}/murphy-wait-for-launchpad-ready.path
+%manifest murphy.manifest
 %endif
 
 %changelog
