@@ -1,10 +1,10 @@
 [Unit]
 Description=ICO HomeScreen
-After=weston.service
-Requires=weston.service
+After=weston.service amd_session_agent.service
+Requires=weston.service amd_session_agent.service
 
 [Service]
 Type=simple
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/dbus/user_bus_socket
 Environment=XDG_RUNTIME_DIR=/run/user/%U
-ExecStart=/usr/bin/launch_app org.tizen.ico.homescreen
+ExecStart=/usr/bin/env bash -c "while [ ! -S /run/user/%U/amd_agent ]; do echo 'ICO HomeScreen launcher waiting 200ms for amd_agent socket'; sleep 0.2; done; exec /usr/bin/launch_app org.tizen.ico.homescreen"
