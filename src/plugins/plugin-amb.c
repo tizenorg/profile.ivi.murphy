@@ -851,7 +851,9 @@ static void lua_property_handler(mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
     parse_value(w->ctx->L, msg, w);
 
     /* call the handler function */
-    lua_pcall(w->ctx->L, 2, 0, 0);
+    if (lua_pcall(w->ctx->L, 2, 0, 0) != 0) {
+        mrp_log_error("AMB: failed to call Lua handler function");
+    }
 
     mrp_dbus_msg_exit_container(msg);
 
@@ -1530,33 +1532,43 @@ static int update_amb_property(char *name, enum amb_type type, void *value,
 
     switch(type) {
         case amb_string:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_STRING, value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_STRING, value))
+                goto end;
             break;
         case amb_bool:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_BOOL, *(bool *)value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_BOOL, *(bool *)value))
+                goto end;
             break;
         case amb_int32:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_INT32, *(int32_t *)value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_INT32, *(int32_t *)value))
+                goto end;
             break;
         case amb_int16:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_INT16, *(int16_t *)value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_INT16, *(int16_t *)value))
+                goto end;
             break;
         case amb_uint32:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_UINT32, *(uint32_t *)value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_UINT32,
+                    *(uint32_t *)value))
+                goto end;
             break;
         case amb_uint16:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_UINT16, *(uint16_t *)value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_UINT16,
+                    *(uint16_t *)value))
+                goto end;
             break;
         case amb_byte:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_UINT8, *(uint8_t *)value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_UINT8, *(uint8_t *)value))
+                goto end;
             break;
         case amb_double:
-            mrp_msg_append(msg, 2, MRP_MSG_FIELD_DOUBLE, *(double *)value);
+            if (!mrp_msg_append(msg, 2, MRP_MSG_FIELD_DOUBLE, *(double *)value))
+                goto end;
             break;
     }
 
     if (!mrp_transport_send(ctx->t, msg)) {
-        mrp_log_error("AMB: failed to send message ambd");
+        mrp_log_error("AMB: failed to send message to ambd");
         goto end;
     }
 
