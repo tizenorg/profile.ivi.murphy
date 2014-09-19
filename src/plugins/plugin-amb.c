@@ -299,11 +299,15 @@ static void destroy_prop(data_t *ctx, dbus_property_watch_t *w)
     mrp_htbl_foreach(o->dbus_properties, count_keys_cb, &len);
 
     if (len == 0) {
-        mrp_dbus_unsubscribe_signal(ctx->dbus, property_signal_handler, o,
-                NULL, o->path,
-                "org.freedesktop.DBus.Properties",
-                "PropertiesChanged", NULL);
-        mrp_htbl_remove(ctx->dbus_property_objects, o->path, TRUE);
+        if (ctx->dbus) {
+            mrp_dbus_unsubscribe_signal(ctx->dbus, property_signal_handler, o,
+                    NULL, o->path,
+                    "org.freedesktop.DBus.Properties",
+                    "PropertiesChanged", NULL);
+        }
+        if (ctx->dbus_property_objects) {
+           mrp_htbl_remove(ctx->dbus_property_objects, o->path, TRUE);
+        }
     }
 
     mrp_free(w->key);
