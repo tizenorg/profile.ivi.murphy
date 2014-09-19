@@ -315,7 +315,7 @@ static mrp_list_hook_t *get_priorities_for_application_class(gam_connect_t *ctx,
         goto error;
     }
 
-    if (!ret.array.type == MRP_FUNCBRIDGE_STRING) {
+    if (ret.array.type != MRP_FUNCBRIDGE_STRING) {
         mrp_log_error("gam_connect: priorities aren't strings (%c)",
                 ret.array.type);
         goto error;
@@ -384,11 +384,11 @@ error:
     return NULL;
 }
 
-static const char *get_default_sink(gam_connect_t *ctx, mrp_resource_set_t *rset)
+static char *get_default_sink(gam_connect_t *ctx, mrp_resource_set_t *rset)
 {
     mrp_list_hook_t *pq = NULL;
     mrp_list_hook_t *p, *n;
-    const char *name = NULL;
+    char *name = NULL;
 
     /* get the priority list from Murphy configuration for this particular
      * application class */
@@ -467,7 +467,7 @@ static bool register_sink_with_gam(gam_connect_t *ctx, mrp_resource_set_t *rset,
         const char *appid)
 {
     const char *source;
-    const char *sink;
+    char *sink;
     uint32_t sink_id, source_id, rset_id;
     mrp_domctl_arg_t args[3];
     domain_data_t *d;
@@ -515,7 +515,7 @@ static bool register_sink_with_gam(gam_connect_t *ctx, mrp_resource_set_t *rset,
 
     if (!d) {
         mrp_log_error("gam_connect: memory allocation error");
-        return false;
+        return FALSE;
     }
 
     /* TODO: resource names from config */
@@ -523,7 +523,7 @@ static bool register_sink_with_gam(gam_connect_t *ctx, mrp_resource_set_t *rset,
     if (!d->resource) {
         mrp_log_error("gam_connect: memory allocation error");
         mrp_free(d);
-        return false;
+        return FALSE;
     }
 
     d->ctx = ctx;
@@ -534,10 +534,10 @@ static bool register_sink_with_gam(gam_connect_t *ctx, mrp_resource_set_t *rset,
         mrp_log_error("gam_connect: failed to send connect request to GAM");
         mrp_free(d->resource);
         mrp_free(d);
-        return false;
+        return FALSE;
     }
 
-    return true;
+    return TRUE;
 }
 
 static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
@@ -729,6 +729,7 @@ static int gam_connect_init(mrp_plugin_t *plugin)
     mrp_htbl_config_t conf;
 
     if (!plugin->args[ARG_MURPHY_CONNECTS].bln) {
+        /* we need to skip the connect part */
         return TRUE;
     }
 
@@ -737,7 +738,7 @@ static int gam_connect_init(mrp_plugin_t *plugin)
     mrp_reset_event_mask(&mask);
 
     if (!ctx)
-        goto error;
+        return FALSE;
 
     ctx->zone = mrp_strdup(plugin->args[ARG_ZONE].str);
     ctx->default_sink = mrp_strdup(plugin->args[ARG_DEFAULT_SINK].str);
@@ -1213,8 +1214,8 @@ static mrp_resource_set_t *resctl_create(gamctl_t *gam, uint16_t source,
     const char            *cls    = "player";
     const char            *play   = "audio_playback";
     uint32_t               prio   = 0;
-    bool                   ar     = false;
-    bool                   nowait = false;
+    bool                   ar     = FALSE;
+    bool                   nowait = FALSE;
     mrp_resource_set_t    *set;
     mrp_attr_t             attrs[16], *attrp;
 
@@ -1245,7 +1246,7 @@ static mrp_resource_set_t *resctl_create(gamctl_t *gam, uint16_t source,
 
     attrp = &attrs[0];
 
-    if (mrp_resource_set_add_resource(set, play, true, attrp, true) < 0) {
+    if (mrp_resource_set_add_resource(set, play, TRUE, attrp, TRUE) < 0) {
         mrp_log_error("Failed to add resource %s to Genivi Audio "
                       "Manager resource set.", play);
         goto fail;
@@ -1856,7 +1857,7 @@ static int resource_update_cb(mrp_scriptlet_t *script, mrp_context_tbl_t *ctbl)
 
     printf("### %s() called\n", __FUNCTION__);
 
-    for (recalc = false, i = 0;    i < resmgr->ndepend;    i++)
+    for (recalc = FALSE, i = 0;    i < resmgr->ndepend;    i++)
         recalc |= resmgr->depends[i].callback(resmgr);
 
     if (recalc) {
