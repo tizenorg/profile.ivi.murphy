@@ -281,7 +281,7 @@ static mrp_list_hook_t *get_priorities_for_application_class(gam_connect_t *ctx,
 {
     priority_t *prio = mrp_htbl_lookup(ctx->pqs, (char *) name);
     mrp_list_hook_t *priorities;
-    int i;
+    int i = 0; /* current value is used also in error handling */
     mrp_funcbridge_value_t ret;
     char t;
     mrp_funcbridge_value_t args[1] = { { .pointer = prio } };
@@ -323,7 +323,7 @@ static mrp_list_hook_t *get_priorities_for_application_class(gam_connect_t *ctx,
 
     arr = (char **) ret.array.items;
 
-    for (i = 0; i < ret.array.nitem; i++) {
+    for (; i < ret.array.nitem; i++) {
 
         routing_target_t *target = mrp_allocz(sizeof(routing_target_t));
 
