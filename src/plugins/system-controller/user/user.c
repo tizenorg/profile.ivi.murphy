@@ -252,6 +252,7 @@ static int terminate_app(const aul_app_info *ai, void *user_data)
     return 0;
 }
 
+#if 0
 static int iter_aul_app_info(const aul_app_info *ai, void *user_data)
 {
     pid_t *hs_pid = (pid_t *) user_data;
@@ -282,6 +283,7 @@ static pid_t get_hs_pid(const char *homescreen)
 
     return hs_pid;
 }
+#endif
 
 static bool launch_hs(user_manager_config_t *ctx)
 {
@@ -467,7 +469,8 @@ static int lua_change_user(lua_State *L)
 /* set_lastinfo stores the lastinfo string to a file, whose name
    is derived from string appid. */
 
-static bool set_lastinfo(lua_State *L, const char *appid, const char *lastinfo)
+static bool set_lastinfo(lua_State *L, const char *appid, const char *lastinfo,
+        size_t lastinfo_len)
 {
     char path[256];
     int appid_len = strlen(appid);
@@ -501,10 +504,15 @@ static bool set_lastinfo(lua_State *L, const char *appid, const char *lastinfo)
 
     fd = open(path, O_WRONLY | O_CREAT, 0600);
 
-    if (write(fd, lastinfo, sizeof(lastinfo)) < 0)
-        mrp_log_error("failed to write to lastinfo file");
+    if (fd < 0) {
+        mrp_log_error("failed to open lastinfo file for writing");
+        return FALSE;
+    }
 
-    close(fd);
+    if (write(fd, lastinfo, lastinfo_len) < 0) {
+        mrp_log_error("failed to write to lastinfo file");
+        return FALSE;
+    }
 
     return TRUE;
 }
@@ -515,6 +523,7 @@ static int lua_set_lastinfo(lua_State *L)
     const char *lastinfo;
     int narg;
     user_manager_t *ctx;
+    size_t lastinfo_len;
 
     narg = lua_gettop(L);
 
@@ -534,6 +543,8 @@ static int lua_set_lastinfo(lua_State *L)
     if (!lastinfo)
         goto error;
 
+    lastinfo_len = lua_strlen(L, -2);
+
     appid = lua_tostring(L, -1);
 
     if (!appid)
@@ -541,7 +552,7 @@ static int lua_set_lastinfo(lua_State *L)
 
     mrp_log_info("set_lastinfo appid: '%s', lastinfo: '%s'", appid, lastinfo);
 
-    if (!set_lastinfo(L, appid, lastinfo))
+    if (!set_lastinfo(L, appid, lastinfo, lastinfo_len))
         goto error;
 
     return 1;
@@ -1000,7 +1011,10 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
 
     /* create tmp dir for flag file */
 
-    mkdir("/tmp/ico", 0700);
+    if (mkdir("/tmp/ico", 0700) == -1) {
+        mrp_log_error("failed to create /tmp/ico directory");
+        goto error;
+    }
 
     ctx->flag_file_path = mrp_strdup("/tmp/ico/changeUser.flag");
     if (!ctx->flag_file_path) {
