@@ -248,14 +248,14 @@ int mrp_application_tracker_create()
         return -1;
     }
 
-    if (!aul_listen_app_launch_signal(aul_launch_signal, NULL) < 0) {
+    if (aul_listen_app_launch_signal(aul_launch_signal, NULL) < 0) {
         mrp_log_error("failed to listen to application launch signals");
         return -1;
     }
 
     /* read the existing applications to the database */
 
-    if (!aul_app_get_running_app_info(aul_iter_app_info, NULL) < 0) {
+    if (aul_app_get_running_app_info(aul_iter_app_info, NULL) < 0) {
         mrp_log_error("failed to query running applications");
         return -1;
     }
