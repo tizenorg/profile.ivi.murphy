@@ -511,8 +511,11 @@ static bool set_lastinfo(lua_State *L, const char *appid, const char *lastinfo,
 
     if (write(fd, lastinfo, lastinfo_len) < 0) {
         mrp_log_error("failed to write to lastinfo file");
+        close(fd);
         return FALSE;
     }
+
+    close(fd);
 
     return TRUE;
 }
