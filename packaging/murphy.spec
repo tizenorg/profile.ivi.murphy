@@ -7,7 +7,6 @@
 # squashing the -core and -plugins-base packages into the base
 # murphy package.
 
-%define _with_icosyscon 1
 
 %{!?_with_debug:%{!?_without_debug:%define _without_debug 0}}
 %{!?_with_lua:%{!?_without_lua:%define _with_lua 1}}
