@@ -421,14 +421,10 @@ CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-monitor"
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-monitor"
 %endif
 
-NUM_CPUS="`cat /proc/cpuinfo | tr -s '\t' ' ' | \
-grep '^processor *:' | wc -l`"
-[ -z "$NUM_CPUS" ] && NUM_CPUS=1
-
-./bootstrap && \
-%configure $CONFIG_OPTIONS --with-dynamic-plugins=$DYNAMIC_PLUGINS && \
-%__make clean && \
-%__make -j$(($NUM_CPUS + 1)) $V
+./bootstrap
+%configure $CONFIG_OPTIONS --with-dynamic-plugins=$DYNAMIC_PLUGINS
+%__make clean
+%__make %{?_smp_mflags} $V
 
 %install
 rm -rf %{buildroot}
