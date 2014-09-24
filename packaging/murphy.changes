@@ -1,3 +1,8 @@
+* Wed Sep 24 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.57
+- packaging: fix postun scripts to handle upgrade correctly.
+- system-controller: wait for both wayland and amd agend before HS startup.
+- system-controller,amb,gam: fix a few bugs discovered by a static analyser.
+
 * Fri Sep 12 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.56
 - rebased on latest upstream master
 - common: initial support for low-level process tracking.
