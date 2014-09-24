@@ -30,7 +30,7 @@
 #include <lualib.h>
 #include <murphy/common.h>
 
-void mrp_user_scripting_init(lua_State *L, const char *config_file,
+bool mrp_user_scripting_init(lua_State *L, const char *config_file,
         const char *lasinfo_dir, mrp_mainloop_t *ml);
 
 void mrp_user_scripting_deinit(lua_State *L);

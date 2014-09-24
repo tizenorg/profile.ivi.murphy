@@ -1095,12 +1095,12 @@ static bool user_deinit()
     return TRUE;
 }
 
-void mrp_user_scripting_init(lua_State *L, const char *config_file,
+bool mrp_user_scripting_init(lua_State *L, const char *config_file,
         const char *lastinfo_dir, mrp_mainloop_t *ml)
 {
     MRP_UNUSED(L);
 
-    user_init(ml, config_file, lastinfo_dir);
+    return user_init(ml, config_file, lastinfo_dir);
 }
 
 void mrp_user_scripting_deinit(lua_State *L)
