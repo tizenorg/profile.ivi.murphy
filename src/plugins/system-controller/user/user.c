@@ -146,6 +146,37 @@ static int user_manager_create(lua_State *L)
     return 1;
 }
 
+static bool mkdir_if_needed(const char *dir)
+{
+    mrp_debug("creating directory '%s'", dir);
+
+    if (mkdir(dir, 0700) == -1) {
+        struct stat buf;
+
+        if (errno != EEXIST) {
+            mrp_log_error("failed to create directory '%s'", dir);
+            goto error;
+        }
+
+        /* there already is a directory or a file of that name */
+
+        if (stat(dir, &buf) == -1) {
+            mrp_log_error("failed to stat directory '%s'", dir);
+            goto error;
+        }
+
+        if (!S_ISDIR(buf.st_mode)) {
+            mrp_log_error("file '%s' exists and isn't a directory", dir);
+            goto error;
+        }
+    }
+    return TRUE;
+
+error:
+    return FALSE;
+}
+
+
 static bool verify_appid(const char *appid)
 {
     /* check if appid contains illegal elements, since it's being used in
@@ -662,6 +693,8 @@ static char *create_home_dir(const char *dir_path, const char *name)
     char user_dir_path[user_dir_path_len + 1];
     struct stat buf;
 
+    mrp_debug("create user home directory: %s, %s", dir_path, name);
+
     if (stat(dir_path, &buf) == -1) {
 
         if (errno != ENOENT) {
@@ -669,7 +702,7 @@ static char *create_home_dir(const char *dir_path, const char *name)
             return NULL;
         }
 
-        if (mkdir(dir_path, 0700) == -1) {
+        if (!mkdir_if_needed(dir_path)) {
             mrp_log_error("could not create user data directory '%s'", dir_path);
             return NULL;
         }
@@ -688,7 +721,7 @@ static char *create_home_dir(const char *dir_path, const char *name)
             return NULL;
         }
 
-        if (mkdir(user_dir_path, 0700) == -1) {
+        if (!mkdir_if_needed(user_dir_path)) {
             mrp_log_error("could not create private user data directory '%s'",
                     user_dir_path);
             return NULL;
@@ -1014,8 +1047,7 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
 
     /* create tmp dir for flag file */
 
-    if (mkdir("/tmp/ico", 0700) == -1) {
-        mrp_log_error("failed to create /tmp/ico directory");
+    if (!mkdir_if_needed("/tmp/ico")) {
         goto error;
     }
 
