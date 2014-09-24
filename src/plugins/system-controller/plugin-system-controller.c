@@ -743,7 +743,10 @@ static int register_lua_bindings(sysctl_t *sc)
     mrp_resclnt_scripting_init(sc->L);
     mrp_application_scripting_init(sc->L);
     mrp_wayland_scripting_init(sc->L);
-    mrp_user_scripting_init(sc->L, sc->user_config_file, sc->user_dir, sc->ctx->ml);
+
+    if (!mrp_user_scripting_init(sc->L, sc->user_config_file, sc->user_dir,
+            sc->ctx->ml))
+        return FALSE;
 
     mrp_lua_create_object_class(sc->L, SYSCTL_LUA_CLASS);
 
@@ -771,6 +774,9 @@ static int plugin_init(mrp_plugin_t *plugin)
         if (strcmp(sc->user_dir, "") == 0) {
             sc->user_dir = tzplatform_mkpath(TZ_USER_HOME, "ico");
         }
+
+        if (!sc->user_dir)
+            goto fail;
 
         if (!transport_create(sc))
             goto fail;
