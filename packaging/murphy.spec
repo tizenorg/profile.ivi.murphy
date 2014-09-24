@@ -1,3 +1,5 @@
+%bcond_with icosyscon
+
 # By default we build with distro-default compilation flags which
 # enables optimizations. If you want to build with full debugging
 # ie. with optimization turned off and full debug info (-O0 -g3)
@@ -7,7 +9,6 @@
 # squashing the -core and -plugins-base packages into the base
 # murphy package.
 
-%define _with_icosyscon 1
 
 %{!?_with_debug:%{!?_without_debug:%define _without_debug 0}}
 %{!?_with_lua:%{!?_without_lua:%define _with_lua 1}}
