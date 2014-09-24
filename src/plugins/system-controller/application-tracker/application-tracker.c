@@ -34,6 +34,10 @@
 #include <string.h>
 #include <errno.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <murphy/common.h>
 
 #include <murphy-db/mdb.h>
@@ -45,6 +49,7 @@
 
 #define AUL_APPLICATION_TABLE_NAME "aul_applications"
 #define DB_BUF_SIZE 1024
+#define MAX_CMD_BUFSZ 1024
 
 /* IMPORTANT: You need to have glib plugin loaded in order for this to work! */
 
@@ -111,7 +116,7 @@ static int add_app_to_db(const char *appid, pid_t pid, const char *category)
     return 0;
 }
 
-static ail_cb_ret_e handle_appinfo(const ail_appinfo_h appinfo, void *user_data)
+static ail_cb_ret_e handle_appinfo(const ail_appinfo_h appinfo, void *user_data, uid_t uid)
 {
     char *val = NULL;
     char **str = user_data;
@@ -128,7 +133,7 @@ static ail_cb_ret_e handle_appinfo(const ail_appinfo_h appinfo, void *user_data)
     return AIL_CB_RET_CANCEL;
 }
 
-static char *get_category(const char *appid)
+static char *get_category(const char *appid, uid_t uid)
 {
     ail_error_e e;
     char *value = NULL;
@@ -146,7 +151,7 @@ static char *get_category(const char *appid)
     if (e != AIL_ERROR_OK)
         goto end;
 
-    e = ail_filter_list_appinfo_foreach(f, handle_appinfo, &value);
+    e = ail_filter_list_usr_appinfo_foreach(f, handle_appinfo, &value, uid);
     if (e != AIL_ERROR_OK)
         goto end;
 
@@ -155,10 +160,27 @@ end:
     return value;
 }
 
+uid_t get_usr_by_pid(int pid)
+{
+    char buf[MAX_CMD_BUFSZ];
+    int ret;
+    uid_t uid;
+    struct stat DirStat;
+    snprintf(buf, sizeof(buf), "/proc/%d", pid);
+    ret = stat(buf, &DirStat);
+    if (ret < 0)
+        uid = (uid_t)-1;
+    else
+        uid = DirStat.st_uid;
+    return uid;
+}
+
+
 static int aul_launch_signal(int pid, void *user_data)
 {
     char appid[512];
     char *category;
+    uid_t uid;
 
     MRP_UNUSED(user_data);
 
@@ -169,8 +191,13 @@ static int aul_launch_signal(int pid, void *user_data)
     if (aul_app_get_appid_bypid(pid, appid, 511) < 0) {
         appid[0] = '\0';
     }
-
-    category = get_category(appid);
+    
+    uid = get_usr_by_pid(pid);
+    if(uid == (uid_t)-1) {
+        mrp_log_info("Unable to reteive the user that launched the process %i, take app by default", pid);
+        uid = 5000;
+    }
+    category = get_category(appid, uid);
 
     add_app_to_db(appid, pid, category);
 
@@ -182,13 +209,18 @@ static int aul_launch_signal(int pid, void *user_data)
 static int aul_iter_app_info(const aul_app_info *ai, void *user_data)
 {
     char *category;
-
+	uid_t uid;
     MRP_UNUSED(user_data);
 
     mrp_log_info("tracker: app info pid %i, appid: %s, pkg_name %s", ai->pid,
             ai->appid ? ai->appid : "NULL", ai->pkg_name);
 
-    category = get_category(ai->appid);
+    uid = get_usr_by_pid(ai->pid);
+    if(uid == (uid_t)-1) {
+        mrp_log_info("Unable to reteive the user that launched the process %i, take app by default", ai->pid);
+        uid = 5000;
+    }
+    category = get_category(ai->appid, uid);
 
     add_app_to_db(ai->appid, ai->pid, category);
 
