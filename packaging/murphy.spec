@@ -1,4 +1,27 @@
+# For information about rpm conditional builds supports
+#
+#    * http://www.rpm.org/wiki/PackagerDocs/ConditionalBuilds
+
+#These options are activated by default and must not be activated in prjconf of the OBS project.
+%bcond_without lua
+%bcond_without pulse
+%bcond_without ecore
+%bcond_without glib
+%bcond_without dbus
+%bcond_without telephony
+%bcond_without audiosession
+%bcond_without websockets
+%bcond_without smack
+%bcond_without sysmon
+%bcond_without squashpkg
+
+#These options are deactivated by default but the prjconf of the OBS project can activate them.
 %bcond_with icosyscon
+#"qt" macro is for qt4 support
+#that is no longer supported in Tizen
+#for the support of qt5, use the macro "qt5"
+%bcond_with qt
+%bcond_with debug
 
 # By default we build with distro-default compilation flags which
 # enables optimizations. If you want to build with full debugging
@@ -9,60 +32,17 @@
 # squashing the -core and -plugins-base packages into the base
 # murphy package.
 
-
-%{!?_with_debug:%{!?_without_debug:%define _without_debug 0}}
-%{!?_with_lua:%{!?_without_lua:%define _with_lua 1}}
-%{!?_with_pulse:%{!?_without_pulse:%define _with_pulse 1}}
-%{!?_with_ecore:%{!?_without_ecore:%define _with_ecore 1}}
-%{!?_with_glib:%{!?_without_glib:%define _with_glib 1}}
-%{!?_with_qt:%{!?_without_qt:%define _without_qt 1}}
-%{!?_with_dbus:%{!?_without_dbus:%define _with_dbus 1}}
-%{!?_with_telephony:%{!?_without_telephony:%define _with_telephony 1}}
-%{!?_with_audiosession:%{!?_without_audiosession:%define _with_audiosession 1}}
-%{!?_with_websockets:%{!?_without_websockets:%define _with_websockets 1}}
-%{!?_with_smack:%{!?_without_smack:%define _with_smack 1}}
-%{!?_with_icosyscon:%{!?_without_icosyscon:%define _without_icosyscon 1}}
-%{!?_with_icoweston:%{!?_without_icoweston:%define _without_icoweston 1}}
-%{!?_with_sysmon:%{!?_without_sysmon:%define _with_sysmon 1}}
-%{!?_with_squashpkg:%{!?_without_squashpkg:%define _with_squashpkg 1}}
-
-#
-# Abnormalize _with_icosyscon to _enable_icosyscon
-#
-# Since some people seem to have a hard time understanding that
-#
-# 1) the right way to disable a conditional _with_* rpm macro is to leave it
-#    undefined as opposed to defining it to 0
-#
-# 2) if you decide to do it the wrong way at least you should be consistent
-#    about it and not randomly change between the conventions
-#
-# we need to roll this butt-ugly hack to make sure that we always go with
-# the wrong convention. We always set up _enable_icosyscon to 1 or 0 depending
-# on how _with_icosyscon happens to be set (or unset).
-#
-
-%if %{!?_with_icosyscon:0}%{?_with_icosyscon:1}
-%if %{_with_icosyscon}
-%define _enable_icosyscon 1
-%else
-%define _enable_icosyscon 0
-%endif
-%else
-%define _enable_icosyscon 0
-%endif
-
 Summary: Resource policy framework
-Name: murphy
+Name:    murphy
 Version: 0.0.64
 Release: 1
 License: BSD-3-Clause
-Group: System/Service
-URL: http://01.org/murphy/
-Source0: %{name}-%{version}.tar.gz
+Group:   System/Service
+URL:     http://01.org/murphy/
+Source0:    %{name}-%{version}.tar.gz
 Source1001: %{name}.manifest
-BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %endif
 
@@ -77,159 +57,197 @@ BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(libsystemd-journal)
 BuildRequires: pkgconfig(libcap)
 BuildRequires: pkgconfig(libtzplatform-config)
-
-%if %{?_with_pulse:1}%{!?_with_pulse:0}
+%if %{with pulse}
 BuildRequires: pkgconfig(libpulse)
 %endif
-%if %{?_with_ecore:1}%{!?_with_ecore:0}
+%if %{with ecore}
 BuildRequires: pkgconfig(ecore)
 BuildRequires: mesa-libEGL
 BuildRequires: mesa-libGLESv2
 %endif
-%if %{?_with_glib:1}%{!?_with_glib:0}
+%if %{with glib}
 BuildRequires: pkgconfig(glib-2.0)
 %endif
-%if %{?_with_qt:1}%{!?_with_qt:0}
+%if %{with qt}
 BuildRequires: pkgconfig(QtCore)
 %endif
-%if %{?_with_dbus:1}%{!?_with_dbus:0}
+%if %{with dbus}
 BuildRequires: pkgconfig(dbus-1)
 %endif
-%if %{?_with_telephony:1}%{!?_with_telephony:0}
+%if %{with telephony}
 BuildRequires: pkgconfig(ofono)
 %endif
-%if %{?_with_audiosession:1}%{!?_with_audiosession:0}
+%if %{with audiosession}
 BuildRequires: pkgconfig(audio-session-mgr)
 BuildRequires: pkgconfig(aul)
 %endif
-%if %{?_with_websockets:1}%{!?_with_websockets:0}
+%if %{with websockets}
 BuildRequires: libwebsockets-devel
 %endif
 BuildRequires: pkgconfig(json)
-
-%if %{?_with_smack:1}%{!?_with_smack:0}
+%if %{with smack}
 BuildRequires: pkgconfig(libsmack)
 %endif
-
-%if %{?_with_icosyscon:1}%{!?_with_icosyscon:0}
-# %%if %%{_with_icosyscon} # gbs can't, so don't bother...
+%if %{with icosyscon}
 BuildRequires: ico-uxf-weston-plugin-devel
 BuildRequires: weston-ivi-shell-devel
 BuildRequires: genivi-shell-devel
 BuildRequires: pkgconfig(ail)
 BuildRequires: pkgconfig(aul)
 BuildRequires: libxml2-devel
-# %%endif
 %endif
 
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%description
+This package contains the basic Murphy daemon.
+
+%if %{with squashpkg}
 %package core
 Summary: Murphy core runtime libraries
 Group: System/Libraries
+
+%description core
+This package contains the core runtime libraries.
 
 %package plugins-base
 Summary: The basic set of Murphy plugins
 Group: System/Service
 Requires: %{name} = %{version}
 Requires: %{name}-core = %{version}
+
+%description plugins-base
+This package contains a basic set of plugins.
 %endif
 
 %package devel
 Summary: The header files and libraries needed for Murphy development
 Group: System/Libraries
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
 Requires: libjson-devel
 
+%description devel
+This package contains header files and libraries necessary for development.
+
 %package doc
 Summary: Documentation for Murphy
 Group: SDK/Documentation
 
-%if %{?_with_pulse:1}%{!?_with_pulse:0}
+%description doc
+This package contains documentation.
+
+%if %{with pulse}
 %package pulse
 Summary: Murphy PulseAudio mainloop integration
 Group: System/Libraries
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description pulse
+This package contains the Murphy PulseAudio mainloop integration runtime files.
 
 %package pulse-devel
 Summary: Murphy PulseAudio mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-pulse = %{version}
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description pulse-devel
+This package contains the Murphy PulseAudio mainloop integration development
+files.
 %endif
 
-%if %{?_with_ecore:1}%{!?_with_ecore:0}
+%if %{with ecore}
 %package ecore
 Summary: Murphy EFL/ecore mainloop integration
 Group: System/Libraries
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description ecore
+This package contains the Murphy EFL/ecore mainloop integration runtime files.
 
 %package ecore-devel
 Summary: Murphy EFL/ecore mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-ecore = %{version}
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description ecore-devel
+This package contains the Murphy EFL/ecore mainloop integration development
+files.
 %endif
 
-%if %{?_with_glib:1}%{!?_with_glib:0}
+%if %{with glib}
 %package glib
 Summary: Murphy glib mainloop integration
 Group: System/Libraries
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description glib
+This package contains the Murphy glib mainloop integration runtime files.
 
 %package glib-devel
 Summary: Murphy glib mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-glib = %{version}
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description glib-devel
+This package contains the Murphy glib mainloop integration development
+files.
 %endif
 
-%if %{?_with_qt:1}%{!?_with_qt:0}
+%if %{with qt}
 %package qt
 Summary: Murphy Qt mainloop integration
 Group: System/Libraries
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description qt
+This package contains the Murphy Qt mainloop integration runtime files.
 
 %package qt-devel
 Summary: Murphy Qt mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-qt = %{version}
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
+
+%description qt-devel
+This package contains the Murphy Qt mainloop integration development
+files.
 %endif
 
 %package gam
@@ -237,26 +255,40 @@ Summary: Murphy support for Genivi Audio Manager
 Group: System/Libraries
 Requires: %{name} = %{version}
 
+%description gam
+This package contains the Murphy plugins for necessary for supporting
+Genivi Audio Manager.
+
 %package gam-devel
 Summary: Murphy support for Genivi Audio Manager development files
 Group: System/Libraries
 Requires: %{name}-gam = %{version}
 
+%description gam-devel
+This package contains development files for Murphy Genivi Audio Manager
+plugins.
+
 %package tests
 Summary: Various test binaries for Murphy
 Group: System/Testing
 Requires: %{name} = %{version}
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
 %endif
 
+%description tests
+This package contains various test binaries for Murphy.
+
 %package ivi-resource-manager
 Summary: Murphy IVI resource manager plugin
 Group: System/Service
 
-%if %{_enable_icosyscon}
+%description ivi-resource-manager
+This package contains the Murphy IVI resource manager plugin.
+
+%if %{with icosyscon}
 %package system-controller
 Summary: Murphy IVI System Controller plugin
 Group: System/Service
@@ -264,89 +296,22 @@ Requires: ico-uxf-homescreen
 Conflicts: murphy-ivi-resource-manager
 Provides: system-controller
 Conflicts: ico-uxf-homescreen-system-controller
-%endif
 
-%description
-This package contains the basic Murphy daemon.
-
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
-%description core
-This package contains the core runtime libraries.
-
-%description plugins-base
-This package contains a basic set of plugins.
-%endif
-
-%description devel
-This package contains header files and libraries necessary for development.
-
-%description doc
-This package contains documentation.
-
-%if %{?_with_pulse:1}%{!?_with_pulse:0}
-%description pulse
-This package contains the Murphy PulseAudio mainloop integration runtime files.
-
-%description pulse-devel
-This package contains the Murphy PulseAudio mainloop integration development
-files.
-%endif
-
-%if %{?_with_ecore:1}%{!?_with_ecore:0}
-%description ecore
-This package contains the Murphy EFL/ecore mainloop integration runtime files.
-
-%description ecore-devel
-This package contains the Murphy EFL/ecore mainloop integration development
-files.
-%endif
-
-%if %{?_with_glib:1}%{!?_with_glib:0}
-%description glib
-This package contains the Murphy glib mainloop integration runtime files.
-
-%description glib-devel
-This package contains the Murphy glib mainloop integration development
-files.
-%endif
-
-%if %{?_with_qt:1}%{!?_with_qt:0}
-%description qt
-This package contains the Murphy Qt mainloop integration runtime files.
-
-%description qt-devel
-This package contains the Murphy Qt mainloop integration development
-files.
-%endif
-
-%description tests
-This package contains various test binaries for Murphy.
-
-%description ivi-resource-manager
-This package contains the Murphy IVI resource manager plugin.
-
-%if %{_enable_icosyscon}
 %description system-controller
 This package contains the Murphy IVI resource manager plugin.
 %endif
 
-%description gam
-This package contains the Murphy plugins for necessary for supporting
-Genivi Audio Manager.
-
-%description gam-devel
-This package contains development files for Murphy Genivi Audio Manager
-plugins.
-
 %prep
 %setup -q
 cp %{SOURCE1001} .
-
-echo "_with_icosyscon:   \"%{_with_icosyscon}\""
-echo "_enable_icosyscon: \"%{_enable_icosyscon}\""
+%if %{with icosyscon}
+echo "Build with icosyscon"
+%else
+echo "Build without icosyscon"
+%endif
 
 %build
-%if %{?_with_debug:1}%{!?_with_debug:0}
+%if %{with debug}
 export CFLAGS="-O0 -g3"
 V="V=1"
 %endif
@@ -354,68 +319,68 @@ V="V=1"
 CONFIG_OPTIONS=""
 DYNAMIC_PLUGINS="domain-control,system-controller,ivi-resource-manager"
 
-%if %{?_with_pulse:1}%{!?_with_pulse:0}
+%if %{with pulse}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-pulse"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-pulse"
 %endif
 
-%if %{?_with_ecore:1}%{!?_with_ecore:0}
+%if %{with ecore}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-ecore"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-ecore"
 %endif
 
-%if %{?_with_glib:1}%{!?_with_glib:0}
+%if %{with glib}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-glib"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-glib"
 %endif
 
-%if %{?_with_qt:1}%{!?_with_qt:0}
+%if %{with qt}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-qt"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-qt"
 %endif
 
-%if %{?_with_dbus:1}%{!?_with_dbus:0}
+%if %{with dbus}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-libdbus"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-libdbus"
 %endif
 
-%if %{?_with_telephony:1}%{!?_with_telephony:0}
+%if %{with telephony}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-telephony"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-telephony"
 %endif
 
-%if %{?_with_audiosession:1}%{!?_with_audiosession:0}
+%if %{with audiosession}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-resource-asm"
 DYNAMIC_PLUGINS="$DYNAMIC_PLUGINS,resource-asm"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-resource-asm"
 %endif
 
-%if %{?_with_websockets:1}%{!?_with_websockets:0}
+%if %{with websockets}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-websockets"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-websockets"
 %endif
 
-%if %{?_with_smack:1}%{!?_with_smack:0}
+%if %{with smack}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-smack"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-smack"
 %endif
 
-%if %{_enable_icosyscon}
+%if %{with icosyscon}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-controller"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-controller"
 %endif
 
-%if %{?_with_sysmon:1}%{!?_with_sysmon:0}
+%if %{with sysmon}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-system-monitor"
 %else
 CONFIG_OPTIONS="$CONFIG_OPTIONS --disable-system-monitor"
@@ -472,11 +437,11 @@ mkdir -p %{buildroot}%{_tmpfilesdir}
 cp packaging.in/murphyd.conf %{buildroot}%{_tmpfilesdir}
 
 # Copy the systemd files in place.
-mkdir -p %{buildroot}%{_unitdir}
+#mkdir -p %%{buildroot}%%{_unitdir}
 mkdir -p %{buildroot}%{_unitdir_user}
 cp packaging.in/murphyd.service %{buildroot}%{_unitdir_user}
 
-%if %{?_with_dbus:1}%{!?_with_dbus:0}
+%if %{with dbus}
 mkdir -p %{buildroot}%{_sysconfdir}/dbus-1/system.d
 sed "s/@TZ_SYS_USER_GROUP@/%{TZ_SYS_USER_GROUP}/g" \
     packaging.in/org.Murphy.conf.in > packaging.in/org.Murphy.conf
@@ -495,23 +460,29 @@ rm -rf %{buildroot}
 %post
 /bin/systemctl --user enable --global murphyd.service
 setcap 'cap_net_admin=+ep' %{_bindir}/murphyd
-
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
-%post core
-%endif
 ldconfig
 
 %postun
 if [ "$1" = "0" ]; then
-/bin/systemctl --user disable --global murphyd.service
+systemctl --user disable --global murphyd.service
 fi
-
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
-%postun core
-%endif
 ldconfig
 
-%if %{?_with_glib:1}%{!?_with_glib:0}
+%if %{with squashpkg}
+%post core
+ldconfig
+
+%postun core
+ldconfig
+
+%post plugins-base
+ldconfig
+
+%postun plugins-base
+ldconfig
+%endif
+
+%if %{with glib}
 %post glib
 ldconfig
 
@@ -519,7 +490,7 @@ ldconfig
 ldconfig
 %endif
 
-%if %{?_with_pulse:1}%{!?_with_pulse:0}
+%if %{with pulse}
 %post pulse
 ldconfig
 
@@ -527,7 +498,7 @@ ldconfig
 ldconfig
 %endif
 
-%if %{?_with_ecore:1}%{!?_with_ecore:0}
+%if %{with ecore}
 %post ecore
 ldconfig
 
@@ -535,7 +506,7 @@ ldconfig
 ldconfig
 %endif
 
-%if %{?_with_qt:1}%{!?_with_qt:0}
+%if %{with qt}
 %post qt
 ldconfig
 
@@ -549,7 +520,7 @@ ldconfig
 %postun gam
 ldconfig
 
-%if %{?_with_squashpkg:1}%{!?_with_squashpkg:0}
+%if %{with squashpkg}
 %files -f filelist.plugins-base
 %else
 %files
@@ -560,18 +531,18 @@ ldconfig
 %config %{_sysconfdir}/murphy
 %{_unitdir_user}/murphyd.service
 %{_tmpfilesdir}/murphyd.conf
-%if %{?_with_audiosession:1}%{!?_with_audiosession:0}
+%if %{with audiosession}
 %{_sbindir}/asm-bridge
 %endif
-%if %{?_with_dbus:1}%{!?_with_dbus:0}
+%if %{with dbus}
 %{_sysconfdir}/dbus-1/system.d
 %config %{_sysconfdir}/dbus-1/system.d/org.Murphy.conf
 %endif
-%if %{?_with_websockets:1}%{!?_with_websockets:0}
+%if %{with websockets}
 %{_datadir}/murphy
 %endif
 
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 %files core
 %defattr(-,root,root,-)
 %endif
@@ -580,19 +551,19 @@ ldconfig
 %{_libdir}/libmurphy-resolver.so.*
 %{_libdir}/libmurphy-resource.so.*
 %{_libdir}/libmurphy-resource-backend.so.*
-%if %{?_with_lua:1}%{!?_with_lua:0}
+%if %{with lua}
 %{_libdir}/libmurphy-lua-utils.so.*
 %{_libdir}/libmurphy-lua-decision.so.*
 %endif
 %{_libdir}/libmurphy-domain-controller.so.*
 %{_libdir}/murphy/*.so.*
 %{_libdir}/libbreedline*.so.*
-%if %{?_with_dbus:1}%{!?_with_dbus:0}
+%if %{with dbus}
 %{_libdir}/libmurphy-libdbus.so.*
 %{_libdir}/libmurphy-dbus-libdbus.so.*
 %endif
 
-%if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
+%if %{with squashpkg}
 %files plugins-base -f filelist.plugins-base
 %defattr(-,root,root,-)
 %endif
@@ -618,7 +589,7 @@ ldconfig
 %{_libdir}/libmurphy-resolver.so
 %{_libdir}/libmurphy-resource.so
 %{_libdir}/libmurphy-resource-backend.so
-%if %{?_with_lua:1}%{!?_with_lua:0}
+%if %{with lua}
 %{_libdir}/libmurphy-lua-utils.so
 %{_libdir}/libmurphy-lua-decision.so
 %endif
@@ -628,7 +599,7 @@ ldconfig
 %{_libdir}/pkgconfig/murphy-core.pc
 %{_libdir}/pkgconfig/murphy-resolver.pc
 # %%{_libdir}/pkgconfig/murphy-resource.pc
-%if %{?_with_lua:1}%{!?_with_lua:0}
+%if %{with lua}
 %{_libdir}/pkgconfig/murphy-lua-utils.pc
 %{_libdir}/pkgconfig/murphy-lua-decision.pc
 %endif
@@ -638,7 +609,7 @@ ldconfig
 %{_includedir}/breedline
 %{_libdir}/libbreedline*.so
 %{_libdir}/pkgconfig/breedline*.pc
-%if %{?_with_dbus:1}%{!?_with_dbus:0}
+%if %{with dbus}
 # %%{_includedir}/murphy/dbus
 %{_libdir}/libmurphy-libdbus.so
 %{_libdir}/libmurphy-dbus-libdbus.so
@@ -648,14 +619,14 @@ ldconfig
 
 %files doc
 %defattr(-,root,root,-)
-%doc %{_docdir}/../murphy/AUTHORS
-%doc %{_docdir}/../murphy/CODING-STYLE
-%doc %{_docdir}/../murphy/ChangeLog
-%doc %{_docdir}/../murphy/NEWS
-%doc %{_docdir}/../murphy/README
+%doc %{_datadir}/doc/murphy/AUTHORS
+%doc %{_datadir}/doc/murphy/CODING-STYLE
+%doc %{_datadir}/doc/murphy/ChangeLog
+%doc %{_datadir}/doc/murphy/NEWS
+%doc %{_datadir}/doc/murphy/README
 %license COPYING LICENSE-BSD
 
-%if %{?_with_pulse:1}%{!?_with_pulse:0}
+%if %{with pulse}
 %files pulse
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-pulse.so.*
@@ -668,7 +639,7 @@ ldconfig
 %{_libdir}/pkgconfig/murphy-pulse.pc
 %endif
 
-%if %{?_with_ecore:1}%{!?_with_ecore:0}
+%if %{with ecore}
 %files ecore
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-ecore.so.*
@@ -681,7 +652,7 @@ ldconfig
 %{_libdir}/pkgconfig/murphy-ecore.pc
 %endif
 
-%if %{?_with_glib:1}%{!?_with_glib:0}
+%if %{with glib}
 %files glib
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-glib.so.*
@@ -694,7 +665,7 @@ ldconfig
 %{_libdir}/pkgconfig/murphy-glib.pc
 %endif
 
-%if %{?_with_qt:1}%{!?_with_qt:0}
+%if %{with qt}
 %files qt
 %defattr(-,root,root,-)
 %{_libdir}/libmurphy-qt.so.*
@@ -734,13 +705,9 @@ ldconfig
 %{_libdir}/murphy/plugins/plugin-ivi-resource-manager.so
 %manifest murphy.manifest
 
-%if %{_enable_icosyscon}
+%if %{with icosyscon}
 %files system-controller
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-system-controller.so
 %manifest murphy.manifest
 %endif
-
-%changelog
-* Tue Nov 27 2012 Krisztian Litkey <krisztian.litkey@intel.com> -
-- Initial build for 2.0alpha.
