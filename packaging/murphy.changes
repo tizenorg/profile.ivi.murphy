@@ -1,4 +1,19 @@
-* Wed Sep 24 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.57
+* Fri Oct 10 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.58
+- system-controller: try to get launching user for an app using ail and pid.
+- system-controller: change the system-controller generated surface id range
+- config: add D-Bus session bus address to systemd service file.
+- system-controller: bail out if creating directories fails.
+- system-controller: do mkdir() calls persistently.
+- packaging: bumped the version.
+- config: Updated murphy.lua to process incoming notification requests.
+- system-controller: save and restore the last user information.
+- system-controller: added code for tracking single files.
+- build: added path-track to build.
+- system-controller: delay user init until weston is running.
+- packaging: do not install ico-homescreen.service.
+- system-controller: use hash instead of pointers to fetch surface objects
+
+* Wed Sep 24 2014 Krisztian Litkey <krisztian.litkey@intel.com> 0.0.57
 - packaging: fix postun scripts to handle upgrade correctly.
 - system-controller: wait for both wayland and amd agend before HS startup.
 - system-controller,amb,gam: fix a few bugs discovered by a static analyser.
