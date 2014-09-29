@@ -54,7 +54,7 @@
 
 Summary: Resource policy framework
 Name: murphy
-Version: 0.0.57
+Version: 0.0.58
 Release: 1
 License: BSD-3-Clause
 Group: System/Service
