@@ -706,6 +706,8 @@ end
 
 m:load_plugin('system-controller')
 
+onscreen_counter = 0
+
 window_manager_operation_names = {
     [1] = "create",
     [2] = "destroy"
@@ -869,6 +871,11 @@ resmgr = resource_manager {
                                  local r = m:JSON({surface = surface,
                                                    visible = 1,
                                                    raise   = 1})
+                                 if ev.appid == onscreen then
+                                     onscreen_counter = onscreen_counter + 1
+                                     wmgr:layer_request(m:JSON({layer = 5, visible = 1}))
+                                 end
+
                                  wmgr:window_request(r,a,0)
                              elseif event == "revoke" then
                                  if verbose > 0 then
@@ -877,6 +884,13 @@ resmgr = resource_manager {
                                  local a = animation({})
                                  local r = m:JSON({surface = ev.surface,
                                                    visible = 0})
+                                 if ev.appid == onscreen then
+                                     onscreen_counter = onscreen_counter - 1
+                                     if onscreen_counter <= 0 then
+                                        onscreen_counter = 0
+                                        wmgr:layer_request(m:JSON({layer = 5, visible = 0}))
+                                     end
+                                 end
                                  wmgr:window_request(r,a,0)
 
                              elseif event == "create" then
@@ -1118,7 +1132,7 @@ wmgr = window_manager {
                               pos_y  = function(w,h) return (h-64-128)/2+64 end,
                               width  = function(w,h) return w end,
                               height = function(w,h) return (h-64-128)/2 end
-                           },                           
+                           },
                            Control = {
                               id     = 14,
                               pos_x  = 0,
@@ -1475,6 +1489,8 @@ connected = false
 homescreen = ""
 onscreen = ""
 
+cids = {}
+
 -- these shoud be before wmgr:connect() is called
 if verbose > 0 then
    print("====== creating applications ======")
@@ -1608,10 +1624,11 @@ if sc then
                 end
             end
 
-	    if not connected and appid == "org.tizen.ico.homescreen" then
+        if not connected and appid == "org.tizen.ico.homescreen" then
                 print('Trying to connect to weston...')
                 connected = wmgr:connect()
             end
+            cids[cid] = appid
         end
     end
 
@@ -1627,7 +1644,7 @@ if sc then
     sc.window_handler = function (self, cid, msg)
         if verbose > 0 then
             print('### ==> received ' ..
-                   command_name(msg.command) .. ' message')
+                   command_name(msg.command) .. ' message from ' .. cids[cid])
             if verbose > 1 then
                 print(tostring(msg))
             end
@@ -1655,7 +1672,7 @@ if sc then
                 end
                 if msg.arg.anim_name then
                     a.show = { msg.arg.anim_name, time }
-                    print('time: ' .. tostring(a.show[2]))
+                    print('time: ' .. tostring(time))
                 end
             end
             if not nores then
@@ -1969,9 +1986,30 @@ if sc then
             end
         end
 
+        getKey = function (msg)
+            -- Field rset.key is an id for distinguishing between rsets. All
+            -- resource types appear to contain a different key. Just pick one
+            -- based on what we have on the message.
+
+            key = nil
+
+            if msg and msg.res then
+                if msg.res.sound then
+                    key = msg.res.sound.id
+                elseif msg.res.input then
+                    key = msg.res.input.name
+                elseif msg.res.window then
+                    key = msg.res.window.resourceId
+                end
+            end
+
+            return key
+        end
+
         createResourceSet = function (ctl, client, msg)
             cb = function(rset, data)
-                print("> resource callback")
+
+                -- m:info("*** resource_cb: client = '" .. msg.appid .. "'")
 
                 -- type is either basic (0) or interrupt (1)
                 requestType = 0
@@ -1979,49 +2017,81 @@ if sc then
                     requestType = msg.res.type
                 end
 
+                if data.filter_first then
+                    data.filter_first = false
+                    return
+                end
+
                 if rset.acquired then
                     cmd = 0x00040001 -- acquire
+
+                    if msg.appid == onscreen then
+                        -- notifications are valid only for a number of seconds
+                        rset.timer = m:Timer({
+                            interval = 5000,
+                            oneshot = true,
+                            callback = function (t, data)
+                                m:info("notification resource set timer expired")
+
+                                -- destroy the internal resource set
+
+                                rset:destroy()
+
+                                -- Send a "RELEASE" message to client.
+                                -- This triggers the resource deletion
+                                -- cycle in OnScreen.
+
+                                reply = m.JSON({
+                                    appid = msg.appid,
+                                    command = cmd,
+                                    res = {
+                                        type = requestType
+                                    }
+                                })
+
+                                if rset.data.window then
+                                    reply.res.window = rset.data.window
+                                end
+
+                                sc:send_message(client, reply)
+                            end
+                        })
+                    end
                 else
                     cmd = 0x00040002 -- release
+                    if rset.timer then
+                       rset.timer.cb = nil
+                    end
                 end
 
                 reply = m.JSON({
-                        appid = data.client,
+                        appid = msg.appid,
                         command = cmd,
                         res = {
                             type = requestType
                         }
                     })
 
-                if rset.resources.audio_playback then
-                    reply.res.sound = {
-                        zone = "driver",
-                        name = msg.appid,
-                        adjust = 0,
-                        -- id = "0"
-                    }
+                if rset.data.sound then
+                    reply.res.sound = rset.data.sound
                 end
 
-                if rset.resources.display then
-                    reply.res.window = {
-                        zone = "driver",
-                        name = msg.appid,
-                        -- id = "0"
-                    }
+                if rset.data.window then
+                    reply.res.window = rset.data.window
                 end
 
-                if rset.resources.input then
-                    reply.res.input = {
-                        name = msg.appid,
-                        event = 0
-                    }
+                if rset.data.input then
+                    reply.res.input = rset.data.input
                 end
-                print("sending message to client: " .. data.client)
 
-                if sc:send_message(data.client, reply) then
-                    print('*** reply OK')
+                if rset.acquired then
+                    m:info("resource cb: 'acquire' reply to client " .. client)
                 else
-                    print('*** reply FAILED')
+                    m:info("resource cb: 'release' reply to client " .. client)
+                end
+
+                if not sc:send_message(client, reply) then
+                    m:info('*** reply FAILED')
                 end
             end
 
@@ -2033,7 +2103,8 @@ if sc then
 
             rset.data = {
                 cid = cid,
-                ctl = ctl
+                ctl = ctl,
+                filter_first = true
             }
 
             if msg.res.sound then
@@ -2045,9 +2116,8 @@ if sc then
                 print("sound name: " .. msg.res.sound.name)
                 print("sound zone:" .. msg.res.sound.zone)
                 print("sound adjust: " .. tostring(msg.res.sound.adjust))
-                if msg.res.sound.id then
-                    print("sound id: " .. msg.res.sound.id)
-                end
+
+                rset.data.sound = msg.res.sound
             end
 
             if msg.res.input then
@@ -2056,22 +2126,32 @@ if sc then
                     })
                 rset.resources.input.attributes.pid = tostring(msg.pid)
                 rset.resources.input.attributes.appid = msg.appid
-                print("input name: " .. msg.res.sound.name)
+                print("input name: " .. msg.res.input.name)
                 print("input event:" .. tostring(msg.res.input.event))
+
+                rset.data.input = msg.res.input
             end
 
             if msg.res.window then
                 rset:addResource({
-                        resource_name = "display"
+                        resource_name = "screen",
+                        shared = true
                     })
-                rset.resources.display.attributes.pid = tostring(msg.pid)
-                rset.resources.display.attributes.appid = msg.appid
-                print("display name: " .. msg.res.display.name)
-                print("display zone:" .. msg.res.display.zone)
-                if msg.res.display.id then
-                    print("display id: " .. msg.res.display.id)
+                rset.resources.screen.attributes.pid = tostring(msg.pid)
+                rset.resources.screen.attributes.appid = msg.appid
+                rset.resources.screen.attributes.surface = msg.res.window.resourceId
+                complete_area = msg.res.window.display .. '.' .. msg.res.window.area
+                rset.resources.screen.attributes.area = complete_area
+                if msg.appid == onscreen then
+                    rset.resources.screen.attributes.classpri = 1
+                else
+                    rset.resources.screen.attributes.classpri = 0
                 end
+
+                rset.data.window = msg.res.window
             end
+
+            rset.key = getKey(msg)
 
             return rset
         end
@@ -2085,35 +2165,63 @@ if sc then
 
         if msg.command == 0x40011 then -- create_res
             print("command CREATE_RES")
+            key = getKey(msg)
 
-            if not sets.cid then
-                sets.cid = createResourceSet(self, cid, msg)
+            if key then
+                if not sets.cid then
+                    sets.cid = {}
+                end
+                sets.cid.key = createResourceSet(self, cid, msg)
             end
 
         elseif msg.command == 0x40012 then -- destroy_res
             print("command DESTROY_RES")
+            key = getKey(msg)
 
-            if sets.cid then
-                sets.cid:release()
+            if key then
+                if sets.cid and sets.cid[key] then
+                    sets.cid[key]:release()
+                    sets.cid[key] = nil -- garbage collecting
+                end
             end
-
-            sets.cid = nil -- garbage collecting
 
         elseif msg.command == 0x40001 then -- acquire_res
             print("command ACQUIRE_RES")
+            key = getKey(msg)
 
-            if not sets.cid then
-                sets.cid = createResourceSet(self, cid, msg)
+            if key then
+                print("key is " .. tostring(key))
+                if not sets.cid then
+                    sets.cid = {}
+                end
+                if not sets.cid[key] then
+                    print("creating a resource set")
+                    sets.cid[key] = createResourceSet(self, cid, msg)
+                end
+                print("acquiring the resource set")
+                sets.cid[key]:acquire()
             end
-
-            sets.cid:acquire()
 
         elseif msg.command == 0x40002 then -- release_res
             print("command RELEASE_RES")
 
-            if sets.cid then
-                sets.cid:release()
+            key = getKey(msg)
+
+            if key then
+                if sets.cid and sets.cid[key] then
+                    sets.cid[key]:release()
+                end
+
+                if msg.appid == onscreen then
+                    -- in case of OnScreen, this actually means that the
+                    -- resource set is never used again; let gc do its job
+                    if sets.cid and sets.cid[key] then
+                        sets.cid[key] = nil -- garbage collecting
+                    end
+                end
+
             end
+
 
         elseif msg.command == 0x40003 then -- deprive_res
             print("command DEPRIVE_RES")
