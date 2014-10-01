@@ -66,7 +66,7 @@
 #define SURFACE_TO_NODE(s)              (((s) >> 16) & 0xFF)
 #define SURFACE_TO_HOST(s)              (((s) >> 24) & 0xFF)
 
-#define SURFACE_ID_OUR_FLAG             0x40000000
+#define SURFACE_ID_OUR_FLAG             0x70000000
 #define SURFACE_ID_MAX                  0x00ffffff
 
 #define VISIBLE                         true
@@ -2255,7 +2255,7 @@ static uint32_t surface_id_generate(void)
 
 static bool surface_id_is_ours(uint32_t id)
 {
-    return (id & SURFACE_ID_OUR_FLAG) ? true : false;
+    return ((id & SURFACE_ID_OUR_FLAG) == SURFACE_ID_OUR_FLAG) ? true : false;
 }
 
 static char *surface_id_print(uint32_t id, char *buf, size_t len)
@@ -2343,7 +2343,7 @@ static void constructor_timeout(mrp_timer_t *timer, void *user_data)
     MRP_ASSERT(timer && c && c->wm, "invalid argument");
     MRP_ASSERT(timer == c->timer.timeout, "confused with data structures");
 
-    mrp_debug("pid=%d title='%s' id_surface=%u state=%s",
+    mrp_debug("pid=%d title='%s' id_surface=%s state=%s",
               c->pid, c->title ? c->title : "",
               surface_id_print(c->id_surface, buf, sizeof(buf)),
               constructor_state_str(c->state));
