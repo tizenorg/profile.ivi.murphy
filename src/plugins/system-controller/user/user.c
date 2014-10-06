@@ -176,7 +176,6 @@ error:
     return FALSE;
 }
 
-
 static bool verify_appid(const char *appid)
 {
     /* check if appid contains illegal elements, since it's being used in
@@ -262,6 +261,77 @@ static int lua_get_userlist(lua_State *L)
     return 2;
 }
 
+
+static bool save_last_user(const char *user_dir, const char *user, int size)
+{
+    int ret;
+    char last_user_file_buf[512];
+    FILE *last_user_file = NULL;
+    bool success = TRUE;
+
+    if (!user)
+        return FALSE;
+
+    ret = snprintf(last_user_file_buf, sizeof(last_user_file_buf),
+            "%s/lastuser.txt", user_dir);
+
+    if (ret < 0 || ret == sizeof(last_user_file_buf)) {
+        success = FALSE;
+        goto end;
+    }
+
+    last_user_file = fopen(last_user_file_buf, "w");
+
+    if (last_user_file) {
+        ret = fwrite(user, size, 1, last_user_file);
+
+        if (ret < 0) {
+            success = FALSE;
+            goto end;
+        }
+
+        mrp_log_info("system-controller: saved last user '%s'", user);
+    }
+
+end:
+    fclose(last_user_file);
+    return success;
+}
+
+static char *get_last_user(const char *user_dir)
+{
+    int ret;
+    char *last_user = NULL;
+    char last_user_buf[512];
+    char last_user_file_buf[512];
+    FILE *last_user_file = NULL;
+
+    ret = snprintf(last_user_file_buf, sizeof(last_user_file_buf),
+            "%s/lastuser.txt", user_dir);
+
+    if (ret < 0 || ret == sizeof(last_user_file_buf)) {
+        goto end;
+    }
+
+    last_user_file = fopen(last_user_file_buf, "r");
+
+    if (last_user_file) {
+        ret = fread(last_user_buf, sizeof(last_user_buf), 1, last_user_file);
+
+        if (ret < 0) {
+            goto end;
+        }
+
+        mrp_log_info("system-controller: last user '%s'", last_user_buf);
+
+        last_user = mrp_strdup(last_user_buf);
+    }
+
+end:
+    if (last_user_file)
+        fclose(last_user_file);
+    return last_user;
+}
 
 static int terminate_app(const aul_app_info *ai, void *user_data)
 {
@@ -421,6 +491,13 @@ static bool change_user(const char *user, const char *passwd)
             if (current_user && strcmp(user, current_user->name) == 0) {
                 mrp_log_warning("user '%s' is already logged in", user);
                 return TRUE;
+            }
+
+            /* save the user as last user */
+
+            if (!save_last_user(ctx->user_dir_base, user, strlen(user))) {
+                /* too bad */
+                mrp_log_error("system-controller: failed to save last user");
             }
 
             /* flag file on */
@@ -954,6 +1031,7 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
         const char *user_dir)
 {
     char *default_user = NULL;
+    char *last_user = NULL;
     current_user = NULL;
     mrp_list_hook_t *p, *n;
     int user_dir_len, ret;
@@ -1006,6 +1084,10 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
         return FALSE;
     }
 
+    /* read the last user file */
+
+    last_user = get_last_user(user_dir);
+
     /* create user dirs and set the default user */
 
     mrp_list_foreach(&users, p, n) {
@@ -1032,17 +1114,23 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
         memcpy(config->runningapp_path+strlen(config->user_dir)+1,
                 "runningapp.info", strlen("runningapp.info"));
 
-#if 0
-        if (!current_user) {
-            /* point to the first user by default */
-            current_user = config;
-        }
-#endif
+        /* If there's a "last user", use that. If not, use "default user". */
 
-        if (default_user && strcmp(default_user, config->name) == 0)
+        if (last_user && strcmp(last_user, config->name) == 0)
+            current_user = config;
+
+        if (!current_user && default_user &&
+                strcmp(default_user, config->name) == 0)
             current_user = config;
     }
 
+    if (current_user && current_user->name && !last_user) {
+        /* if the last user wasn't set, now there will be one */
+        save_last_user(user_dir, current_user->name,
+                strlen(current_user->name));
+    }
+
+    mrp_free(last_user);
     mrp_free(default_user);
 
     /* create tmp dir for flag file */
@@ -1096,6 +1184,13 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
     }
 
     mqi_commit_transaction(tx);
+
+    if (ctx->current_hs_pid <= 0) {
+        create_flag_file(ctx);
+        /* launch it! */
+        launch_hs(ctx);
+        delete_flag_file(ctx);
+    }
 
     return TRUE;
 
