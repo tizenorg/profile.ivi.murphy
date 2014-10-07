@@ -27,6 +27,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/stat.h>
+
 #include <murphy/common/macros.h>
 #include <murphy/common/debug.h>
 #include <murphy/common/log.h>
@@ -50,9 +52,11 @@
 #include "wayland/scripting-wayland.h"
 #include "user/user.h"
 #include "application-tracker/application-tracker.h"
+#include "application-tracker/path-track.h"
 
 #define DEFAULT_ADDRESS "wsck:127.0.0.1:18081/ico_syc_protocol"
 #define DEFAULT_USER_CONFIG "/usr/apps/org.tizen.ico.system-controller/res/config/user.xml"
+#define DEFAULT_WAYLAND_SOCKET "/run/user/5000/wayland-0"
 
 /*
  * plugin argument ids/indices
@@ -62,6 +66,8 @@ enum {
     ARG_ADDRESS,                         /* transport address to use */
     ARG_USER_CONFIG,                     /* user configuration file */
     ARG_USER_DIR,                        /* application stored data dir */
+    ARG_WAYLAND_SOCKET,                  /* wayland socket that we wait for */
+    ARG_AMD_SOCKET,                      /* wayland socket that we wait for */
 };
 
 
@@ -77,6 +83,12 @@ typedef struct {
     const char       *addr;               /* address we listen on */
     const char       *user_config_file;   /* user manager configuration file */
     const char       *user_dir;           /* application stored data dir */
+    char             *wayland_socket;     /* wayland socket path address */
+    char             *amd_socket;         /* amd socket path address */
+    mrp_path_track_t *wl_pt;              /* tracking the wayland socket path */
+    mrp_path_track_t *amd_pt;             /* tracking the amd socket path */
+    bool              wl_initialized;
+    bool              amd_initialized;
     mrp_list_hook_t   clients;            /* connected clients */
     int               id;                 /* next client id */
     sysctl_lua_t     *scl;                /* singleton Lua object */
@@ -725,6 +737,139 @@ static int sc_lua_get(lua_State *L)
 }
 
 
+static bool init_user_scripting_if_ready(sysctl_t *sc)
+{
+    if (!sc->wl_initialized || !sc->amd_initialized) {
+        /* we are still waiting for sockets */
+        return TRUE;
+    }
+
+    if (!mrp_user_scripting_init(sc->L, sc->user_config_file,
+            sc->user_dir, sc->ctx->ml)) {
+        mrp_log_error("failed to initialize users!");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+
+static void wl_socket_cb(mrp_path_track_t *pt, enum mrp_path_track_event e,
+        void *user_data)
+{
+    sysctl_t *sc = (sysctl_t *) user_data;
+
+    switch (e) {
+        case MRP_PATH_CREATED:
+            mrp_log_info("wayland socket appeared");
+            /* can stop listening for these events now */
+            mrp_path_track_destroy(pt);
+            sc->wl_pt = NULL;
+            sc->wl_initialized = TRUE;
+
+            init_user_scripting_if_ready(sc);
+            break;
+        case MRP_PATH_DELETED:
+            /* we should not end here */
+            mrp_log_info("wayland socket removed");
+            /* TODO: could keep listening and survive a weston relaunch? */
+            break;
+        case MRP_PATH_INVALID:
+            mrp_log_error("whole directory we were tracking is gone");
+            mrp_path_track_destroy(pt);
+            sc->wl_pt = NULL;
+            break;
+    }
+
+    return;
+}
+
+
+static void amd_socket_cb(mrp_path_track_t *pt, enum mrp_path_track_event e,
+        void *user_data)
+{
+    sysctl_t *sc = (sysctl_t *) user_data;
+
+    switch (e) {
+        case MRP_PATH_CREATED:
+            mrp_log_info("amd socket appeared");
+            /* can stop listening for these events now */
+            mrp_path_track_destroy(pt);
+            mrp_application_tracker_create();
+            sc->amd_pt = NULL;
+            sc->amd_initialized = TRUE;
+
+            init_user_scripting_if_ready(sc);
+            break;
+        case MRP_PATH_DELETED:
+            /* we should not end here */
+            mrp_log_info("amd socket removed");
+            break;
+        case MRP_PATH_INVALID:
+            mrp_log_error("whole directory we were tracking is gone");
+            mrp_path_track_destroy(pt);
+            sc->amd_pt = NULL;
+            break;
+    }
+
+    return;
+}
+
+
+static void start_watching_sockets(mrp_timer_t *t, void *user_data)
+{
+    struct stat buf;
+    sysctl_t *sc = (sysctl_t *) user_data;
+
+    /* start waiting for the sockets to appear, delaying if need to */
+
+    if (!sc->wl_initialized && !sc->wl_pt) {
+
+        sc->wl_pt = mrp_path_track_create(sc->ctx->ml, sc->wayland_socket,
+            wl_socket_cb, sc);
+
+        if (!sc->wl_pt) {
+            mrp_log_error("error: could not track wayland socket '%s'",
+                sc->wayland_socket);
+        }
+        else if (stat(sc->wayland_socket, &buf) >= 0) {
+            /* already there */
+            mrp_path_track_destroy(sc->wl_pt);
+            sc->wl_pt = NULL;
+            sc->wl_initialized = TRUE;
+        }
+    }
+
+    if (!sc->amd_initialized && !sc->amd_pt) {
+
+        sc->amd_pt = mrp_path_track_create(sc->ctx->ml, sc->amd_socket,
+            amd_socket_cb, sc);
+
+        if (!sc->amd_pt) {
+            mrp_log_error("error: could not track amd socket '%s'",
+                    sc->amd_socket);
+        }
+        else if (stat(sc->amd_socket, &buf) >= 0) {
+            mrp_path_track_destroy(sc->amd_pt);
+
+            /* init the db table for application tracking */
+            mrp_application_tracker_create();
+            sc->amd_pt = NULL;
+            sc->amd_initialized = TRUE;
+        }
+    }
+
+    if (t)
+        mrp_del_timer(t);
+
+    if ((!sc->wl_pt && !sc->wl_initialized)
+            || (!sc->amd_pt && !sc->amd_initialized)) {
+        mrp_log_info("system-controller: delaying socket tracking");
+        mrp_add_timer(sc->ctx->ml, 500, start_watching_sockets, sc);
+    }
+}
+
+
 static int register_lua_bindings(sysctl_t *sc)
 {
     static luaL_reg methods[] = {
@@ -736,17 +881,21 @@ static int register_lua_bindings(sysctl_t *sc)
         .methods = methods,
     };
 
-    if ((sc->L = mrp_lua_get_lua_state()) == NULL)
+    if ((sc->L = mrp_lua_get_lua_state()) == NULL) {
+        mrp_log_error("error: failed to get lua state");
         return FALSE;
+    }
 
     mrp_resmgr_scripting_init(sc->L);
     mrp_resclnt_scripting_init(sc->L);
     mrp_application_scripting_init(sc->L);
     mrp_wayland_scripting_init(sc->L);
 
-    if (!mrp_user_scripting_init(sc->L, sc->user_config_file, sc->user_dir,
-            sc->ctx->ml))
-        return FALSE;
+    /* delay user initialization until weston and amd both are running -- user
+     * information is needed to launch HomeScreen with correct user */
+
+    start_watching_sockets(NULL, sc);
+    init_user_scripting_if_ready(sc);
 
     mrp_lua_create_object_class(sc->L, SYSCTL_LUA_CLASS);
 
@@ -763,6 +912,9 @@ static int plugin_init(mrp_plugin_t *plugin)
     sc = mrp_allocz(sizeof(*sc));
 
     if (sc != NULL) {
+        char buf[512];
+        int ret;
+
         mrp_list_init(&sc->clients);
 
         sc->id      = 1;
@@ -770,22 +922,61 @@ static int plugin_init(mrp_plugin_t *plugin)
         sc->addr    = plugin->args[ARG_ADDRESS].str;
         sc->user_config_file = plugin->args[ARG_USER_CONFIG].str;
         sc->user_dir = plugin->args[ARG_USER_DIR].str;
+        sc->wayland_socket = plugin->args[ARG_WAYLAND_SOCKET].str;
+        sc->amd_socket = plugin->args[ARG_AMD_SOCKET].str;
 
         if (strcmp(sc->user_dir, "") == 0) {
             sc->user_dir = tzplatform_mkpath(TZ_USER_HOME, "ico");
         }
 
-        if (!sc->user_dir)
-            goto fail;
+        if (strcmp(sc->wayland_socket, "") == 0) {
+            /* generate good approximation of Wayland socket path */
 
-        if (!transport_create(sc))
-            goto fail;
+            /* TODO: generate from environment variables -- this is just a
+             * placeholder that replicates the previous systemd behavior */
 
-        /* init the db table for application tracking */
-        mrp_application_tracker_create();
+            ret = snprintf(buf, sizeof(buf), "/run/user/%d/wayland-0",
+                    getuid());
 
-        if (!register_lua_bindings(sc))
+            if (ret < 0 || ret == sizeof(buf)) {
+                mrp_log_error("error: snprintf");
+                goto fail;
+            }
+
+            sc->wayland_socket = mrp_strdup(buf);
+        }
+        else
+            sc->wayland_socket = mrp_strdup(sc->wayland_socket);
+
+        if (strcmp(sc->amd_socket, "") == 0) {
+
+            ret = snprintf(buf, sizeof(buf), "/run/user/%d/amd_agent",
+                    getuid());
+
+            if (ret < 0 || ret == sizeof(buf)) {
+                mrp_log_error("error: snprintf");
+                goto fail;
+            }
+
+            sc->amd_socket = mrp_strdup(buf);
+        }
+        else
+            sc->amd_socket = mrp_strdup(sc->amd_socket);
+
+        if (!sc->user_dir) {
+            mrp_log_error("error: no user dir");
             goto fail;
+        }
+
+        if (!transport_create(sc)) {
+            mrp_log_error("error: transport creation");
+            goto fail;
+        }
+
+        if (!register_lua_bindings(sc)) {
+            mrp_log_error("error: register lua bindings");
+            goto fail;
+        }
 
         scptr = sc;
 
@@ -811,8 +1002,16 @@ static void plugin_exit(mrp_plugin_t *plugin)
 
     mrp_application_tracker_destroy();
 
+    if (sc->wl_pt)
+        mrp_path_track_destroy(sc->wl_pt);
+
+    if (sc->amd_pt)
+        mrp_path_track_destroy(sc->amd_pt);
+
     transport_destroy(sc);
 
+    mrp_free(sc->wayland_socket);
+    mrp_free(sc->amd_socket);
     mrp_free(sc);
 }
 
@@ -827,6 +1026,8 @@ static mrp_plugin_arg_t plugin_args[] = {
     MRP_PLUGIN_ARGIDX(ARG_ADDRESS, STRING, "address", DEFAULT_ADDRESS),
     MRP_PLUGIN_ARGIDX(ARG_USER_CONFIG, STRING, "user_config", DEFAULT_USER_CONFIG),
     MRP_PLUGIN_ARGIDX(ARG_USER_DIR, STRING, "user_dir", ""),
+    MRP_PLUGIN_ARGIDX(ARG_WAYLAND_SOCKET, STRING, "wayland_socket", ""),
+    MRP_PLUGIN_ARGIDX(ARG_AMD_SOCKET, STRING, "amd_socket", ""),
 };
 
 MURPHY_REGISTER_PLUGIN("system-controller",
