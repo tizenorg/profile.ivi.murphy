@@ -1611,6 +1611,7 @@ SYSTEMCTL_PLUGIN_SOURCES =                                             \
 	$(SYSTEMCTL_DIR)/application/application.c                     \
 	$(SYSTEMCTL_DIR)/application/scripting-application.c           \
 	$(SYSTEMCTL_DIR)/application-tracker/application-tracker.c     \
+	$(SYSTEMCTL_DIR)/application-tracker/path-track.c              \
 	$(SYSTEMCTL_DIR)/user/user.c                                   \
 	$(SYSTEMCTL_DIR)/wayland/wayland.c                             \
 	$(SYSTEMCTL_DIR)/wayland/output.c                              \
