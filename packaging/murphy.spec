@@ -476,9 +476,9 @@ mkdir -p %{buildroot}%{_unitdir}
 mkdir -p %{buildroot}%{_unitdir_user}
 cp packaging.in/murphyd.service %{buildroot}%{_unitdir}
 %if %{_enable_icosyscon}
-cp packaging.in/ico-homescreen.service %{buildroot}%{_unitdir_user}
-cp packaging.in/murphy-wait-for-launchpad-ready.path \
-    %{buildroot}%{_unitdir_user}
+# cp packaging.in/ico-homescreen.service %{buildroot}%{_unitdir_user}
+# cp packaging.in/murphy-wait-for-launchpad-ready.path \
+#     %{buildroot}%{_unitdir_user}
 %endif
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
@@ -551,19 +551,19 @@ ldconfig
 %if %{_enable_icosyscon}
 %post system-controller
 # prevent system controller from starting
-rm -f %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+# rm -f %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
 # instead launch just ico-homescreen
-rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
-ln -s %{_unitdir_user}/murphy-wait-for-launchpad-ready.path \
-    %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
+# rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
+# ln -s %{_unitdir_user}/murphy-wait-for-launchpad-ready.path \
+#     %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
 
 %postun system-controller
-if [ "$1" = "0" ]; then
-rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
-if [ -f %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path ]; then
-    ln -sf %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path \
-        %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
-fi
+#if [ "$1" = "0" ]; then
+# rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
+# if [ -f %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path ]; then
+#     ln -sf %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path \
+#         %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
+#fi
 fi
 %endif
 
@@ -761,8 +761,8 @@ ldconfig
 %files system-controller
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-system-controller.so
-%{_unitdir_user}/ico-homescreen.service
-%{_unitdir_user}/murphy-wait-for-launchpad-ready.path
+# %{_unitdir_user}/ico-homescreen.service
+# %{_unitdir_user}/murphy-wait-for-launchpad-ready.path
 %manifest murphy.manifest
 %endif
 
