@@ -55,7 +55,6 @@ static void path_changed(mrp_io_watch_t *wd, int fd, mrp_io_event_t events,
         }
 
         while (processed_bytes < read_bytes) {
-            char *filename = NULL;
 
             /* the kernel doesn't allow to read incomplete events */
             is = (struct inotify_event *) (buf + processed_bytes);
