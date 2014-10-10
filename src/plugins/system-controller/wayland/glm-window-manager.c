@@ -343,9 +343,11 @@ static void window_request(mrp_wayland_window_t *,
 static void buffer_request(mrp_wayland_window_manager_t *, const char *,
                            uint32_t, uint32_t);
 
+static uint32_t wid_hash(const void *);
 static uint32_t sid_hash(const void *);
 static uint32_t lid_hash(const void *);
 static uint32_t oid_hash(const void *);
+static int wid_compare(const void *, const void *);
 static int id_compare(const void *, const void *);
 
 static void get_appid(int32_t, char *, int);
@@ -363,10 +365,25 @@ static layer_defaults_t layer_defaults[MRP_WAYLAND_LAYER_TYPE_MAX] = {
     [ MRP_WAYLAND_LAYER_FULLSCREEN   ] = {      8,  1.000,  HIDDEN     },
 };
 
+static uint32_t    surface_hash_id = 1;
+static mrp_htbl_t *surface_hash;
+
 
 bool mrp_glm_window_manager_register(mrp_wayland_t *wl)
 {
+    mrp_htbl_config_t cfg;
     mrp_wayland_factory_t factory;
+
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.nentry = MRP_WAYLAND_WINDOW_MAX;
+    cfg.comp = wid_compare;
+    cfg.hash = wid_hash;
+    cfg.nbucket = MRP_WAYLAND_WINDOW_BUCKETS;
+
+    if (!(surface_hash = mrp_htbl_create(&cfg))) {
+        mrp_log_error("system-controller: can't create hash for surface IDs");
+        return false;
+    }
 
     factory.size = sizeof(mrp_glm_window_manager_t);
     factory.interface = &ivi_controller_interface;
@@ -696,6 +713,7 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     struct ivi_controller *ctrl;
     struct ivi_controller_surface *ctrl_surface;
     ctrl_surface_t *sf;
+    void *data;
     char appid[1024];
     char id_str[256];
 
@@ -703,6 +721,8 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
 
     wl = wm->interface->wl;
     ctrl = (struct ivi_controller *)wm->proxy;
+    sf = NULL;
+    data = NULL + surface_hash_id++;
 
     surface_id_print(id_surface, id_str, sizeof(id_str));
     get_appid(pid, appid, sizeof(appid));
@@ -739,7 +759,7 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     if (!(sf = mrp_allocz(sizeof(ctrl_surface_t)))) {
         mrp_log_error("system-controller: failed to allocate memory "
                       "for surface %s", id_str);
-        return NULL;
+        goto failed;
     }
 
     sf->wl = wl;
@@ -759,22 +779,22 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     sf->layerid = -1;
 
     if (!mrp_htbl_insert(wm->surfaces, &sf->id, sf)) {
-        mrp_log_error("system-controller: hashmap insertion error when "
-                      "trying to create surface %s ", id_str);
-        mrp_free(sf);
-        return NULL;
+        mrp_log_error("system-controller: hashmap by id: insertion error when "
+                      "trying to create surface %s", id_str);
+        goto failed;
     }
 
-    if (ivi_controller_surface_add_listener(ctrl_surface, &listener, sf) < 0) {
+    if (!mrp_htbl_insert(surface_hash, data, sf)) {
+        mrp_log_error("system-controller: hashmap by data insertion error when"
+                      " trying to create surface %s", id_str);
+        goto failed;
+    }
+
+
+    if (ivi_controller_surface_add_listener(ctrl_surface,&listener,data) < 0) {
         mrp_log_error("system-controller: failed to create surface %s "
                       "(can't listen to surface)", id_str);
-
-        mrp_htbl_remove(wm->surfaces, &sf->id, false);
-
-        mrp_free(sf->title);
-        mrp_free(sf);
-
-        return NULL;
+        goto failed;
     }
 
     if (!sf->title) {
@@ -785,6 +805,16 @@ static ctrl_surface_t *surface_create(mrp_glm_window_manager_t *wm,
     mrp_wayland_flush(wl);
 
     return sf;
+
+  failed:
+    if (sf) {
+        mrp_htbl_remove(wm->surfaces, &sf->id, false);
+        mrp_htbl_remove(surface_hash, data, false);
+        mrp_free(sf->title);
+        mrp_free(sf);
+    }
+
+    return NULL;
 }
 
 
@@ -832,13 +862,19 @@ static void surface_visibility_callback(void *data,
                                  struct ivi_controller_surface *ctrl_surface,
                                  int32_t visibility)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     mrp_wayland_window_update_t u;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: visibility callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -867,13 +903,19 @@ static void surface_opacity_callback(void *data,
                                  struct ivi_controller_surface *ctrl_surface,
                                  wl_fixed_t opacity)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     mrp_wayland_window_update_t u;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: opacity callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -904,12 +946,18 @@ static void surface_source_rectangle_callback(void *data,
 				   int32_t width,
 				   int32_t height)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: source_rectangle callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -930,13 +978,19 @@ static void surface_destination_rectangle_callback(void *data,
 				   int32_t width,
 				   int32_t height)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     mrp_wayland_window_update_t u;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: destination_rectangle callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -1000,12 +1054,18 @@ static void surface_configuration_callback(void *data,
                                    int32_t width,
                                    int32_t height)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: configuration callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -1022,12 +1082,18 @@ static void surface_orientation_callback(void *data,
                                  struct ivi_controller_surface *ctrl_surface,
                                  int32_t orientation)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: orientation callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -1044,12 +1110,18 @@ static void surface_pixelformat_callback(void *data,
                                  struct ivi_controller_surface *ctrl_surface,
                                  int32_t pixelformat)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: pixelformat callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -1081,7 +1153,7 @@ static void surface_added_to_layer_callback(void *data,
                                    struct ivi_controller_surface *ctrl_surface,
                                    struct ivi_controller_layer *ctrl_layer)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     mrp_wayland_layer_t *layer;
@@ -1090,7 +1162,13 @@ static void surface_added_to_layer_callback(void *data,
     mrp_wayland_window_update_t u;
     char id_str[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: added_to_layer callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -1153,12 +1231,18 @@ static void surface_stats_callback(void *data,
                                    uint32_t pid,
                                    const char *process_name)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: stats callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -1184,11 +1268,17 @@ static void surface_stats_callback(void *data,
 static void surface_destroyed_callback(void *data,
                                    struct ivi_controller_surface *ctrl_surface)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     ctrl_layer_t *ly;
     char buf[256];
+
+    if (!(sf = mrp_htbl_remove(surface_hash, data, false))) {
+        mrp_log_error("system-controller: attempt to destroy a nonexistent "
+                      "surface");
+        return;
+    }
 
     MRP_ASSERT(sf && sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
@@ -1218,12 +1308,18 @@ static void surface_content_callback(void *data,
                              struct ivi_controller_surface *ctrl_surface,
                              int32_t content_state)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: content callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -1242,12 +1338,18 @@ static void surface_input_focus_callback(void *data,
                                  uint32_t device,
                                  int32_t enabled)
 {
-    ctrl_surface_t *sf = (ctrl_surface_t *)data;
+    ctrl_surface_t *sf;
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     char buf[256];
 
-    MRP_ASSERT(sf && sf->wl, "invalid argument");
+    if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
+        mrp_log_error("system-controller: input_focus callback "
+                      "for non-existent surface");
+        return;
+    }
+
+    MRP_ASSERT(sf->wl, "invalid argument");
     MRP_ASSERT(ctrl_surface == sf->ctrl_surface,
                "confused with data structures");
 
@@ -3161,6 +3263,12 @@ static void buffer_request(mrp_wayland_window_manager_t *wm,
                     "Genivi Layer Management");
 }
 
+static uint32_t wid_hash(const void *pkey)
+{
+    uint32_t key = (uint32_t)(pkey - NULL);
+
+    return key % MRP_WAYLAND_WINDOW_BUCKETS;
+}
 
 static uint32_t sid_hash(const void *pkey)
 {
@@ -3182,6 +3290,12 @@ static uint32_t oid_hash(const void *pkey)
     uint32_t key = *(uint32_t *)pkey;
 
     return key % MRP_WAYLAND_OUTPUT_BUCKETS;
+}
+
+
+static int wid_compare(const void *pkey1, const void *pkey2)
+{
+    return (pkey1 == pkey2)  ? 0 : (pkey1 < pkey2 ? -1 : +1);
 }
 
 
