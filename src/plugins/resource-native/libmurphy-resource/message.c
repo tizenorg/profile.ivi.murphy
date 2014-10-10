@@ -133,15 +133,15 @@ bool fetch_seqno(mrp_msg_t *msg, void **pcursor, uint32_t *pseqno)
         tag != RESPROTO_SEQUENCE_NO || type != MRP_MSG_FIELD_UINT32)
     {
         *pseqno = 0;
-        return -1;
+        return false;
     }
 
     *pseqno = value.u32;
-    return 0;
+    return true;
 }
 
 
-int fetch_request(mrp_msg_t *msg, void **pcursor, uint16_t *preqtype)
+bool fetch_request(mrp_msg_t *msg, void **pcursor, uint16_t *preqtype)
 {
     uint16_t tag;
     uint16_t type;
@@ -152,11 +152,11 @@ int fetch_request(mrp_msg_t *msg, void **pcursor, uint16_t *preqtype)
         tag != RESPROTO_REQUEST_TYPE || type != MRP_MSG_FIELD_UINT16)
     {
         *preqtype = 0;
-        return -1;
+        return false;
     }
 
     *preqtype = value.u16;
-    return 0;
+    return true;
 }
 
 
@@ -180,8 +180,9 @@ bool fetch_status(mrp_msg_t *msg, void **pcursor, int *pstatus)
 
 
 
-int fetch_attribute_array(mrp_msg_t *msg, void **pcursor,
-                                 size_t dim, mrp_res_attribute_t *arr)
+bool fetch_attribute_array(mrp_msg_t *msg, void **pcursor,
+                                 size_t dim, mrp_res_attribute_t *arr,
+                                 int *n_arr)
 {
     mrp_res_attribute_t *attr;
     uint16_t tag;
@@ -189,6 +190,7 @@ int fetch_attribute_array(mrp_msg_t *msg, void **pcursor,
     mrp_msg_value_t value;
     size_t size;
     size_t i;
+    *n_arr = 0;
 
     i = 0;
 
@@ -199,7 +201,7 @@ int fetch_attribute_array(mrp_msg_t *msg, void **pcursor,
         if (tag  != RESPROTO_ATTRIBUTE_NAME ||
             type != MRP_MSG_FIELD_STRING ||
             i >= dim - 1) {
-            return -1;
+            return false;
         }
 
         attr = arr + i++;
@@ -207,7 +209,7 @@ int fetch_attribute_array(mrp_msg_t *msg, void **pcursor,
 
         if (!mrp_msg_iterate(msg, pcursor, &tag, &type, &value, &size) ||
             tag != RESPROTO_ATTRIBUTE_VALUE) {
-            return -1;
+            return false;
         }
 
         switch (type) {
@@ -228,13 +230,15 @@ int fetch_attribute_array(mrp_msg_t *msg, void **pcursor,
             attr->floating = value.dbl;
             break;
         default:
-            return -1;
+            return false;
         }
     }
 
     memset(arr + i, 0, sizeof(mrp_res_attribute_t));
 
-    return i;
+    *n_arr = i;
+
+    return TRUE;
 }
 
 
@@ -297,10 +301,10 @@ mrp_res_resource_set_t *resource_query_response(mrp_res_context_t *cx,
         dim = 0;
 
         while (fetch_resource_name(msg, pcursor, &rdef[dim].name)) {
-            int n_attrs = fetch_attribute_array(msg, pcursor, ATTRIBUTE_MAX+1,
-                    attrs);
+            int n_attrs = 0;
 
-            if (n_attrs < 0)
+            if (!fetch_attribute_array(msg, pcursor, ATTRIBUTE_MAX+1,
+                    attrs, &n_attrs))
                 goto failed;
 
             if (!(rdef[dim].attrs = mrp_attribute_array_dup(n_attrs, attrs))) {
@@ -557,41 +561,50 @@ int create_resource_set_request(mrp_res_context_t *cx,
         if (res->priv->mandatory)
             res_flags |= RESPROTO_RESFLAG_MANDATORY;
 
-        mrp_msg_append(msg, RESPROTO_RESOURCE_NAME, MRP_MSG_FIELD_STRING,
-                res->name);
-        mrp_msg_append(msg, RESPROTO_RESOURCE_FLAGS, MRP_MSG_FIELD_UINT32,
-                res_flags);
+        if (!mrp_msg_append(msg, RESPROTO_RESOURCE_NAME, MRP_MSG_FIELD_STRING,
+                res->name))
+            goto error;
+
+        if (!mrp_msg_append(msg, RESPROTO_RESOURCE_FLAGS, MRP_MSG_FIELD_UINT32,
+                res_flags))
+            goto error;
 
         for (j = 0; j < res->priv->num_attributes; j++) {
             mrp_res_attribute_t *elem = &res->priv->attrs[j];
             const char *attr_name = elem->name;
 
-            mrp_msg_append(msg, RESPROTO_ATTRIBUTE_NAME, MRP_MSG_FIELD_STRING,
-                    attr_name);
+            if (!mrp_msg_append(msg, RESPROTO_ATTRIBUTE_NAME, MRP_MSG_FIELD_STRING,
+                    attr_name))
+                goto error;
 
             switch (elem->type) {
                 case 's':
-                    mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
-                            MRP_MSG_FIELD_STRING, elem->string);
+                    if (!mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
+                            MRP_MSG_FIELD_STRING, elem->string))
+                        goto error;
                     break;
                 case 'i':
-                    mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
-                            MRP_MSG_FIELD_SINT32, elem->integer);
+                    if (!mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
+                            MRP_MSG_FIELD_SINT32, elem->integer))
+                        goto error;
                     break;
                 case 'u':
-                    mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
-                            MRP_MSG_FIELD_UINT32, elem->unsignd);
+                    if (!mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
+                            MRP_MSG_FIELD_UINT32, elem->unsignd))
+                        goto error;
                     break;
                 case 'f':
-                    mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
-                            MRP_MSG_FIELD_DOUBLE, elem->floating);
+                    if (!mrp_msg_append(msg, RESPROTO_ATTRIBUTE_VALUE,
+                            MRP_MSG_FIELD_DOUBLE, elem->floating))
+                        goto error;
                     break;
                 default:
                     break;
             }
         }
 
-        mrp_msg_append(msg, RESPROTO_SECTION_END, MRP_MSG_FIELD_UINT8, 0);
+        if (!mrp_msg_append(msg, RESPROTO_SECTION_END, MRP_MSG_FIELD_UINT8, 0))
+            goto error;
     }
 
     if (!mrp_transport_send(cx->priv->transp, msg))
