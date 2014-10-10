@@ -240,8 +240,8 @@ bool mrp_wayland_connect(mrp_wayland_t *wl)
         return true; /* we are already connected */
 
     if (!(display = wl_display_connect(wl->display_name))) {
-        mrp_log_error("attempt to connect to display '%s' failed",
-                      get_display_name(wl));
+        mrp_log_error("system-controller: attempt to connect to display '%s' "
+                      "failed", get_display_name(wl));
         return false;
     }
 
