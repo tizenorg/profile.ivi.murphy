@@ -37,13 +37,13 @@
 #include <limits.h>
 #include <errno.h>
 
-#ifdef TZCONFIG_ENABLED
-#    include <tzplatform_config.h>
-#endif
-
 #include <murphy/common.h>
 
 #include "appid.h"
+
+#ifdef TZCONFIG_ENABLED
+#    include <tzplatform_config.h>
+#endif
 
 #define APP_MAX   1024
 
