@@ -316,9 +316,16 @@ static char *get_last_user(const char *user_dir)
     last_user_file = fopen(last_user_file_buf, "r");
 
     if (last_user_file) {
-        ret = fread(last_user_buf, sizeof(last_user_buf), 1, last_user_file);
+
+        memset(last_user_buf, 0, sizeof(last_user_buf));
+
+        ret = fread(last_user_buf, 1, sizeof(last_user_buf), last_user_file);
 
         if (ret < 0) {
+            goto end;
+        }
+        else if (ret == 512) {
+            /* too much data */
             goto end;
         }
 
