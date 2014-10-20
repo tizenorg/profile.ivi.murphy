@@ -702,6 +702,8 @@ static bool manager_request_bridge(lua_State *L,
         }
     }
 
+    mrp_json_unref(json);
+
     return true;
 }
 
@@ -782,6 +784,7 @@ static bool window_request_bridge(lua_State *L,
     mrp_wayland_window_update_t u;
     uint32_t framerate;
     mrp_json_t *json;
+    bool success;
 
     MRP_UNUSED(L);
     MRP_UNUSED(data);
@@ -789,35 +792,41 @@ static bool window_request_bridge(lua_State *L,
     MRP_ASSERT(signature && args && ret_type, "invalid argument");
 
     *ret_type = MRP_FUNCBRIDGE_NO_DATA;
+    json = NULL;
 
     if (strcmp(signature, "oood")) {
         mrp_log_error("system-controller: bad signature: "
                       "expected 'oood' got '%s'",signature);
-        return false;
+        success = false;
+        goto out;
     }
 
     if (!(wl = mrp_wayland_scripting_window_manager_unwrap(args[0].pointer))) {
         mrp_log_error("system-controller: argument 1 is not a "
                       "'window_manager' class object");
-        return false;
+        success = false;
+        goto out;
     }
 
     if (!(json = mrp_json_lua_unwrap(args[1].pointer))) {
         mrp_log_error("system-controller: argument 2 is not a "
                       "'JSON' class object");
-        return false;
+        success = false;
+        goto out;
     }
 
     if (!(anims = mrp_wayland_scripting_animation_unwrap(args[2].pointer))) {
         mrp_log_error("system-controller: argument 3 is not an "
                       "'animation' class object");
-        return false;
+        success = false;
+        goto out;
     }
 
     if ((framerate = args[3].integer) > MRP_WAYLAND_FRAMERATE_MAX) {
         mrp_log_error("system-controller: argument 3 is not valid framerate "
                       "(out of range 0-%d)", MRP_WAYLAND_FRAMERATE_MAX);
-        return false;
+        success = false;
+        goto out;
     }
 
 
@@ -826,7 +835,12 @@ static bool window_request_bridge(lua_State *L,
 
     mrp_wayland_window_request(wl, &u, anims, framerate);
 
-    return true;
+    success = true;
+
+ out:
+    mrp_json_unref(json);
+
+    return success;
 }
 
 
@@ -979,6 +993,8 @@ static bool output_request_bridge(lua_State *L,
 
     mrp_wayland_output_request(wl, &u);
 
+    mrp_json_unref(json);
+
     return true;
 }
 
@@ -1090,6 +1106,8 @@ static bool area_create_bridge(lua_State *L,
 
     mrp_wayland_area_create(wl, &u);
 
+    mrp_json_unref(json);
+
     return true;
 }
 
@@ -1144,6 +1162,8 @@ static bool layer_request_bridge(lua_State *L,
     u.mask = copy_json_fields(wl, json, fields, &u);
 
     mrp_wayland_layer_request(wl, &u);
+
+    mrp_json_unref(json);
 
     return true;
 }
