@@ -751,6 +751,8 @@ static bool send_input_bridge(lua_State *L,
 
     mrp_wayland_send_input(wl, &ev);
 
+    mrp_json_unref(json);
+
     return true;
 }
 
@@ -806,11 +808,13 @@ static bool input_request_bridge(lua_State *L,
                       "'JSON' class object");
         return false;
     }
-        
+
     memset(&u, 0, sizeof(u));
     u.mask = copy_json_fields(wl, json, fields, &u);
 
     mrp_wayland_input_request(wl, &u);
+
+    mrp_json_unref(json);
 
     return true;
 }
@@ -974,6 +978,8 @@ static bool area_create_bridge(lua_State *L,
     u.mask = copy_json_fields(wl, json, fields, &u);
 
     mrp_wayland_area_create(wl, &u);
+
+    mrp_json_unref(json);
 
     return true;
 }
