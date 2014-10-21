@@ -480,7 +480,7 @@ static bool launch_hs(user_manager_config_t *ctx)
         return FALSE;
     }
 
-    bundle_add(b, "HS_PARAM_U", current_user->user_dir);
+    bundle_add(b, "HS_PARAM_U", current_user->name);
     bundle_add(b, "HS_PARAM_D", current_user->runningapp_path);
     bundle_add(b, "HS_PARAM_DD", ctx->defaultapps_path);
     bundle_add(b, "HS_PARAM_FLG", ctx->flag_file_path);
