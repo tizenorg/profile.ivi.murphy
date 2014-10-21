@@ -176,6 +176,79 @@ error:
     return FALSE;
 }
 
+static bool mkdir_recursively_if_needed(const char *orig_path)
+{
+    char *save;
+    char *token;
+    char *path = mrp_strdup(orig_path);
+    char *tokens[256];
+    int n_tokens = 0;
+    int success = FALSE;
+    int i;
+
+    /* only absolute paths allowed */
+    if (!orig_path || !path || strlen(orig_path) == 0 || orig_path[0] != '/')
+        goto end;
+
+    memset(tokens, 0, sizeof(tokens));
+
+    token = strtok_r(path, "/", &save);
+
+    while (token) {
+        if (strcmp(token, ".") == 0) {
+            /* skip */
+        }
+        else if (strcmp(token, "..") == 0) {
+            /* delete last one from the stack */
+            if (n_tokens > 0) {
+                tokens[--n_tokens] = NULL;
+            }
+            else {
+                /* can't start with ".." */
+                goto end;
+            }
+        }
+        else {
+            if (n_tokens == 256) {
+                /* overflow */
+                goto end;
+            }
+            tokens[n_tokens++] = token;
+        }
+
+        token = strtok_r(NULL, "/", &save);
+    }
+
+    for (i = 0; i < n_tokens; i++) {
+        /* generate paths */
+        char buf[1024];
+        int ret;
+        char *p = buf;
+        int j;
+
+        for (j = 0; j <= i; j++) {
+            int remaining = 1024-(p-buf);
+            ret = snprintf(p, remaining, "/%s", tokens[j]);
+            if (ret < 0 || ret == remaining) {
+                goto end;
+            }
+            p += ret;
+        }
+
+        if (!mkdir_if_needed(buf)) {
+            goto end;
+        }
+    }
+
+    success = TRUE;
+
+end:
+    mrp_free(path);
+
+    return success;
+}
+
+
 static bool verify_appid(const char *appid)
 {
     /* check if appid contains illegal elements, since it's being used in
@@ -786,7 +859,7 @@ static char *create_home_dir(const char *dir_path, const char *name)
             return NULL;
         }
 
-        if (!mkdir_if_needed(dir_path)) {
+        if (!mkdir_recursively_if_needed(dir_path)) {
             mrp_log_error("could not create user data directory '%s'", dir_path);
             return NULL;
         }
@@ -805,7 +878,7 @@ static char *create_home_dir(const char *dir_path, const char *name)
             return NULL;
         }
 
-        if (!mkdir_if_needed(user_dir_path)) {
+        if (!mkdir_recursively_if_needed(user_dir_path)) {
             mrp_log_error("could not create private user data directory '%s'",
                     user_dir_path);
             return NULL;
@@ -1142,7 +1215,7 @@ static bool user_init(mrp_mainloop_t *ml, const char *filename,
 
     /* create tmp dir for flag file */
 
-    if (!mkdir_if_needed("/tmp/ico")) {
+    if (!mkdir_recursively_if_needed("/tmp/ico")) {
         goto error;
     }
 
