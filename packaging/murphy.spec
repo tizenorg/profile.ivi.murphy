@@ -474,12 +474,7 @@ cp packaging.in/murphyd.conf %{buildroot}%{_tmpfilesdir}
 # Copy the systemd files in place.
 mkdir -p %{buildroot}%{_unitdir}
 mkdir -p %{buildroot}%{_unitdir_user}
-cp packaging.in/murphyd.service %{buildroot}%{_unitdir}
-%if %{_enable_icosyscon}
-# cp packaging.in/ico-homescreen.service %{buildroot}%{_unitdir_user}
-# cp packaging.in/murphy-wait-for-launchpad-ready.path \
-#     %{buildroot}%{_unitdir_user}
-%endif
+cp packaging.in/murphyd.service %{buildroot}%{_unitdir_user}
 
 %if %{?_with_dbus:1}%{!?_with_dbus:0}
 mkdir -p %{buildroot}%{_sysconfdir}/dbus-1/system.d
@@ -498,7 +493,7 @@ cp packaging.in/gam-*.names packaging.in/gam-*.tree \
 rm -rf %{buildroot}
 
 %post
-/bin/systemctl enable murphyd.service
+/bin/systemctl --user enable --global murphyd.service
 setcap 'cap_net_admin=+ep' %{_bindir}/murphyd
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
@@ -508,7 +503,7 @@ ldconfig
 
 %postun
 if [ "$1" = "0" ]; then
-/bin/systemctl disable murphyd.service
+/bin/systemctl --user disable --global murphyd.service
 fi
 
 %if %{?_with_squashpkg:0}%{!?_with_squashpkg:1}
@@ -563,7 +558,7 @@ ldconfig
 %manifest murphy.manifest
 %{_bindir}/murphyd
 %config %{_sysconfdir}/murphy
-%{_unitdir}/murphyd.service
+%{_unitdir_user}/murphyd.service
 %{_tmpfilesdir}/murphyd.conf
 %if %{?_with_audiosession:1}%{!?_with_audiosession:0}
 %{_sbindir}/asm-bridge
@@ -742,8 +737,6 @@ ldconfig
 %files system-controller
 %defattr(-,root,root,-)
 %{_libdir}/murphy/plugins/plugin-system-controller.so
-# %{_unitdir_user}/ico-homescreen.service
-# %{_unitdir_user}/murphy-wait-for-launchpad-ready.path
 %manifest murphy.manifest
 %endif
 
