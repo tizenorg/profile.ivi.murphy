@@ -3,13 +3,8 @@ Description=Murphy Resource Policy Daemon
 
 [Service]
 Type=simple
-User=app
-Group=app
 ExecStart=/usr/bin/murphyd -t systemd -vvv -f
-SmackExecLabel=User
 KillSignal=SIGTERM
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/dbus/user_bus_socket
-Environment=XDG_RUNTIME_DIR=/run/user/%U
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
