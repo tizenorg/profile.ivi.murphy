@@ -300,6 +300,7 @@ static void event_handler_callback(mrp_resmgr_t *resmgr,
     mrp_funcbridge_t *fb;
     mrp_funcbridge_value_t args[4], ret;
     char t;
+    int top;
 
     MRP_ASSERT(resmgr && event, "invalid argument");
 
@@ -313,6 +314,8 @@ static void event_handler_callback(mrp_resmgr_t *resmgr,
         mrp_log_error("can't deliver resource events: LUA is not initialesed");
         return;
     }
+
+    top = lua_gettop(L);
 
     switch (event->type) {
 
@@ -330,18 +333,18 @@ static void event_handler_callback(mrp_resmgr_t *resmgr,
 
     default:
         mrp_debug("can't deliver resource events to LUA: invalid event type");
-        return;
+        goto out;
     }
 
     if (!sev) {
         mrp_debug("can't deliver %s resource events to LUA: "
                   "failed to create scripting event", type_str);
-        return;
+        goto out;
     }
     if (!fb) {
         mrp_debug("can't deliver %s resource events to LUA: "
                   "no funcbridge", type_str);
-        return;
+        goto out;
     }
 
     args[0].pointer = rm;
@@ -354,6 +357,9 @@ static void event_handler_callback(mrp_resmgr_t *resmgr,
                       "method (%s)", ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+ out:
+    lua_settop(L, top);
 }
 
 
