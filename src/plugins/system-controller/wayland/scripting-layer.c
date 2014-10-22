@@ -98,7 +98,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
-MRP_LUA_CLASS_DEF_SIMPLE (
+MRP_LUA_CLASS_DEF_SIMPLE_FLAGS (
     layer_mask,                 /* class name */
     scripting_layer_mask_t,     /* userdata type */
     layer_mask_destroy,         /* userdata destructor */
@@ -111,7 +111,8 @@ MRP_LUA_CLASS_DEF_SIMPLE (
        MRP_LUA_OVERRIDE_GETFIELD  (layer_mask_getfield)
        MRP_LUA_OVERRIDE_SETFIELD  (layer_mask_setfield)
        MRP_LUA_OVERRIDE_STRINGIFY (layer_mask_stringify)
-    )
+    ),
+    MRP_LUA_CLASS_DYNAMIC
 );
 
 
