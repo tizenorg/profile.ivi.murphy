@@ -256,7 +256,7 @@ static int layer_getfield(lua_State *L)
         case OUTPUTNAME:
             lua_pushstring(L, layer->outputname ? layer->outputname : "");
             break;
-                                                           
+
         case VISIBLE:
             lua_pushboolean(L, layer->visible);
             break;
