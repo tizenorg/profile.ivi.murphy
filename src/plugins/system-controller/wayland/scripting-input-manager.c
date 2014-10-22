@@ -828,6 +828,7 @@ static void input_update_callback(mrp_wayland_t *wl,
     lua_State *L;
     scripting_inpmgr_t *inpmgr;
     mrp_funcbridge_value_t args[4], ret;
+    int top;
     char t;
     bool success;
 
@@ -853,6 +854,8 @@ static void input_update_callback(mrp_wayland_t *wl,
         return;
     }
 
+    top = lua_gettop(L);
+
     args[0].pointer = inpmgr;
     args[1].integer = oper;
     args[2].pointer = inp->scripting_data;
@@ -867,6 +870,8 @@ static void input_update_callback(mrp_wayland_t *wl,
                       "(%s)", inpmgr->name, ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+    lua_settop(L, top);
 }
 
 static void code_update_callback(mrp_wayland_t *wl,
@@ -877,6 +882,7 @@ static void code_update_callback(mrp_wayland_t *wl,
     lua_State *L;
     scripting_inpmgr_t *inpmgr;
     mrp_funcbridge_value_t args[4], ret;
+    int top;
     char t;
     bool success;
 
@@ -902,6 +908,8 @@ static void code_update_callback(mrp_wayland_t *wl,
         return;
     }
 
+    top = lua_gettop(L);
+
     args[0].pointer = inpmgr;
     args[1].integer = oper;
     args[2].pointer = code->scripting_data;
@@ -916,6 +924,8 @@ static void code_update_callback(mrp_wayland_t *wl,
                       "(%s)", inpmgr->name, ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+    lua_settop(L, top);
 }
 
 #if 0

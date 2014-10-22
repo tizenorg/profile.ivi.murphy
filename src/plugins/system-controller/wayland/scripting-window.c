@@ -124,7 +124,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
-MRP_LUA_CLASS_DEF_SIMPLE (
+MRP_LUA_CLASS_DEF_SIMPLE_FLAGS (
     window_mask,                /* class name */
     scripting_window_mask_t,    /* userdata type */
     window_mask_destroy,        /* userdata destructor */
@@ -137,7 +137,8 @@ MRP_LUA_CLASS_DEF_SIMPLE (
        MRP_LUA_OVERRIDE_GETFIELD  (window_mask_getfield)
        MRP_LUA_OVERRIDE_SETFIELD  (window_mask_setfield)
        MRP_LUA_OVERRIDE_STRINGIFY (window_mask_stringify)
-    )
+    ),
+    MRP_LUA_CLASS_DYNAMIC
 );
 
 MRP_LUA_CLASS_DEF_SIMPLE (
