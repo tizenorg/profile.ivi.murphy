@@ -852,6 +852,7 @@ static void window_update_callback(mrp_wayland_t *wl,
     lua_State *L;
     scripting_winmgr_t *winmgr;
     mrp_funcbridge_value_t args[4], ret;
+    int top;
     char t;
     bool success;
 
@@ -877,6 +878,8 @@ static void window_update_callback(mrp_wayland_t *wl,
         return;
     }
 
+    top = lua_gettop(L);
+
     args[0].pointer = winmgr;
     args[1].integer = oper;
     args[2].pointer = win->scripting_data;
@@ -891,6 +894,8 @@ static void window_update_callback(mrp_wayland_t *wl,
                       "(%s)", winmgr->name, ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+    lua_settop(L, top);
 }
 
 static void window_hint_callback(mrp_wayland_t *wl,
@@ -901,6 +906,7 @@ static void window_hint_callback(mrp_wayland_t *wl,
     scripting_winmgr_t *winmgr;
     void *wh;
     mrp_funcbridge_value_t args[4], ret;
+    int top;
     char t;
     bool success;
 
@@ -920,6 +926,8 @@ static void window_hint_callback(mrp_wayland_t *wl,
 
     MRP_ASSERT(wl == winmgr->wl, "confused with data structures");
 
+    top = lua_gettop(L);
+
     if (!(wh = mrp_wayland_scripting_window_hint_create_from_c(L, hint)))
         return;
 
@@ -937,6 +945,8 @@ static void window_hint_callback(mrp_wayland_t *wl,
                       "(%s)", winmgr->name, ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+    lua_settop(L, top);
 }
 
 static bool output_request_bridge(lua_State *L,
@@ -1006,6 +1016,7 @@ static void output_update_callback(mrp_wayland_t *wl,
     lua_State *L;
     scripting_winmgr_t *winmgr;
     mrp_funcbridge_value_t args[4], ret;
+    int top;
     char t;
     bool success;
 
@@ -1030,6 +1041,8 @@ static void output_update_callback(mrp_wayland_t *wl,
         return;
     }
 
+    top = lua_gettop(L);
+
     args[0].pointer = winmgr;
     args[1].integer = oper;
     args[2].pointer = out->scripting_data;
@@ -1044,6 +1057,8 @@ static void output_update_callback(mrp_wayland_t *wl,
                       "(%s)", winmgr->name, ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+    lua_settop(L, top);
 }
 
 static bool area_create_bridge(lua_State *L,
@@ -1176,6 +1191,7 @@ static void layer_update_callback(mrp_wayland_t *wl,
     lua_State *L;
     scripting_winmgr_t *winmgr;
     mrp_funcbridge_value_t args[4], ret;
+    int top;
     char t;
     bool success;
 
@@ -1199,6 +1215,8 @@ static void layer_update_callback(mrp_wayland_t *wl,
         return;
     }
 
+    top = lua_gettop(L);
+
     args[0].pointer = winmgr;
     args[1].integer = oper;
     args[2].pointer = layer->scripting_data;
@@ -1213,6 +1231,8 @@ static void layer_update_callback(mrp_wayland_t *wl,
                       "(%s)", winmgr->name, ret.string ? ret.string : "NULL");
         mrp_free((void *)ret.string);
     }
+
+    lua_settop(L, top);
 }
 
 

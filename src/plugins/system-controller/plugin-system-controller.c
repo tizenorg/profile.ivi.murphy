@@ -274,6 +274,7 @@ static void disconnected_event(client_t *c)
     mrp_funcbridge_value_t args[4];
     mrp_funcbridge_value_t ret;
     char                   rt;
+    int                    top;
 
     /*
      * crate and emit a synthetic disconnection message if the client
@@ -304,6 +305,8 @@ static void disconnected_event(client_t *c)
     h = c->sc->handler.client;
 
     if (h != NULL) {
+        top = lua_gettop(c->sc->L);
+
         args[0].pointer = c->sc->scl;
         args[1].integer = c->id;
         args[2].pointer = mrp_json_lua_wrap(c->sc->L, req);
@@ -314,6 +317,8 @@ static void disconnected_event(client_t *c)
                           ret.string ? ret.string : "<unknown error>");
             mrp_free((void *)ret.string);
         }
+
+        lua_settop(c->sc->L, top);
     }
 
     mrp_json_unref(req);
@@ -435,6 +440,7 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
     mrp_funcbridge_value_t args[4];
     mrp_funcbridge_value_t ret;
     char                   rt;
+    int                    top;
 
     MRP_UNUSED(t);
 
@@ -461,6 +467,8 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
         h = sc->handler.client;
 
         if (h != NULL) {
+            top = lua_gettop(sc->L);
+
             args[0].pointer = sc->scl;
             args[1].integer = c->id;
             args[2].pointer = mrp_json_lua_wrap(sc->L, req);
@@ -471,6 +479,8 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
                               ret.string ? ret.string : "<unknown error>");
                 mrp_free((void *)ret.string);
             }
+
+            lua_settop(sc->L, top);
         }
     }
 
@@ -489,6 +499,8 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
     }
 
     if (h != NULL || (h = sc->handler.generic) != NULL) {
+        top = lua_gettop(sc->L);
+
         args[0].pointer = sc->scl;
         args[1].integer = c->id;
         args[2].pointer = mrp_json_lua_wrap(sc->L, req);
@@ -500,6 +512,8 @@ static void recv_evt(mrp_transport_t *t, void *data, void *user_data)
                           ret.string ? ret.string : "<unknown error>");
             mrp_free((void *)ret.string);
         }
+
+        lua_settop(sc->L, top);
     }
     else
         mrp_debug("No handler for system-controller message of type 0x%x.",
