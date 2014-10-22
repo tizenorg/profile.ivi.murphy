@@ -100,7 +100,7 @@ MRP_LUA_CLASS_DEF_SIMPLE (
     )
 );
 
-MRP_LUA_CLASS_DEF_SIMPLE (
+MRP_LUA_CLASS_DEF_SIMPLE_FLAGS (
     code_mask,                  /* class name */
     scripting_code_mask_t,      /* userdata type */
     code_mask_destroy,          /* userdata destructor */
@@ -113,7 +113,8 @@ MRP_LUA_CLASS_DEF_SIMPLE (
        MRP_LUA_OVERRIDE_GETFIELD  (code_mask_getfield)
        MRP_LUA_OVERRIDE_SETFIELD  (code_mask_setfield)
        MRP_LUA_OVERRIDE_STRINGIFY (code_mask_stringify)
-    )
+    ),
+    MRP_LUA_CLASS_DYNAMIC
 );
 
 
