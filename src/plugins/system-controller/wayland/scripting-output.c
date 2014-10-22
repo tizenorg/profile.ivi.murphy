@@ -159,9 +159,9 @@ void *mrp_wayland_scripting_output_create_from_c(lua_State *L,
     mrp_wayland_t *wl;
 
     MRP_ASSERT(out && out->interface && out->interface->wl, "invald argument");
-    
+
     wl = out->interface->wl;
-    
+
     if (!wl->create_scripting_outputs)
         o = NULL;
     else if (out->scripting_data)
