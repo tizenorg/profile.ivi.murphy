@@ -157,7 +157,7 @@ void *mrp_wayland_scripting_code_create_from_c(lua_State *L,
     int32_t index;
 
     MRP_ASSERT(code, "invald argument");
-    
+
     if (!L && !(L = mrp_lua_get_lua_state())) {
         mrp_log_error("can't create scripting code %d: LUA is "
                       "not initialized", code->id);
@@ -196,9 +196,9 @@ void mrp_wayland_scripting_code_destroy_from_c(lua_State *L,
         mrp_debug("destroy scripting code %d", code->id);
 
         sc->code = NULL;
-        
+
         mrp_lua_destroy_object(L, NULL,sc->index, code->scripting_data);
-        
+
         code->scripting_data = NULL;
     }
 }
