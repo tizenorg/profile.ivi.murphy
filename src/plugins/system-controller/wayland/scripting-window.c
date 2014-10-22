@@ -214,7 +214,7 @@ void *mrp_wayland_scripting_window_create_from_c(lua_State *L,
     scripting_window_t *w;
 
     MRP_ASSERT(win, "invald argument");
-    
+
     if (!L && !(L = mrp_lua_get_lua_state())) {
         mrp_log_error("can't create scripting window %d: LUA is "
                       "not initialized", win->surfaceid);
@@ -642,9 +642,9 @@ void mrp_wayland_scripting_window_map_destroy_from_c(lua_State *L,
         mrp_debug("destroy scripting window map");
 
         swm->map = NULL;
-        
+
         mrp_lua_destroy_object(L, NULL,0, swm);
-        
+
         map->scripting_data = NULL;
     }
 }
