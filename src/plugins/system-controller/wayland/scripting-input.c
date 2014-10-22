@@ -154,7 +154,7 @@ void *mrp_wayland_scripting_input_create_from_c(lua_State *L,
     scripting_input_t *si;
 
     MRP_ASSERT(inp, "invald argument");
-    
+
     if (!L && !(L = mrp_lua_get_lua_state())) {
         mrp_log_error("can't create scripting input %d: LUA is "
                       "not initialized", inp->id);
@@ -192,9 +192,9 @@ void mrp_wayland_scripting_input_destroy_from_c(lua_State *L,
         mrp_debug("destroy scripting input %d", inp->id);
 
         si->inp = NULL;
-        
+
         mrp_lua_destroy_object(L, NULL,inp->id+1, inp->scripting_data);
-        
+
         inp->scripting_data = NULL;
     }
 }
