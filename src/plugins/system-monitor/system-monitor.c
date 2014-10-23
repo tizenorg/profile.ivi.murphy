@@ -91,7 +91,7 @@ MRP_LUA_MEMBER_LIST_TABLE(sysmon_members,
 MRP_LUA_DEFINE_CLASS(sysmon, lua, sysmon_lua_t, sysmon_destroy,
     sysmon_methods, sysmon_overrides, sysmon_members, NULL,
     sysmon_notify , sysmon_tostring , NULL,
-                     MRP_LUA_CLASS_EXTENSIBLE | MRP_LUA_CLASS_PRIVREFS);
+                     MRP_LUA_CLASS_EXTENSIBLE);
 
 MRP_LUA_CLASS_CHECKER(sysmon_lua_t, sysmon_lua, SYSMON_LUA_CLASS);
 

@@ -84,7 +84,7 @@ MRP_LUA_DEFINE_CLASS(process_watch, lua, process_watch_lua_t,
                      process_watch_destroy, process_watch_methods,
                      process_watch_overrides, process_watch_members, NULL,
                      process_watch_changed, process_watch_tostring, NULL,
-                     MRP_LUA_CLASS_EXTENSIBLE | MRP_LUA_CLASS_PRIVREFS);
+                     MRP_LUA_CLASS_EXTENSIBLE);
 
 MRP_LUA_CLASS_CHECKER(process_watch_lua_t, process_watch_lua,
                       PROCESS_WATCH_LUA_CLASS);

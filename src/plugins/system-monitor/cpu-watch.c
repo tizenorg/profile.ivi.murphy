@@ -86,7 +86,7 @@ MRP_LUA_MEMBER_LIST_TABLE(cpu_watch_members,
 MRP_LUA_DEFINE_CLASS(cpu_watch, lua, cpu_watch_lua_t, cpu_watch_destroy,
     cpu_watch_methods, cpu_watch_overrides, cpu_watch_members, NULL,
     cpu_watch_changed, cpu_watch_tostring , NULL,
-                     MRP_LUA_CLASS_EXTENSIBLE | MRP_LUA_CLASS_PRIVREFS);
+                     MRP_LUA_CLASS_EXTENSIBLE);
 
 MRP_LUA_CLASS_CHECKER(cpu_watch_lua_t, cpu_watch_lua, CPU_WATCH_LUA_CLASS);
 
