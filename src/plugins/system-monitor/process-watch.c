@@ -330,7 +330,8 @@ int process_event_mask(lua_State *L, int idx)
     mask = 0;
     MRP_LUA_FOREACH_ALL(L, i, idx, ktype, name, len) {
         if (ktype != LUA_TNUMBER || (type = lua_type(L, -1)) != LUA_TSTRING) {
-            mrp_log_warning("ignoring invalid event (0x%x: 0x%x)", ktype, type);
+            mrp_log_warning("ignoring invalid event (0x%x: 0x%x)", ktype,
+                            ktype == LUA_TNUMBER ? type : 0);
             continue;
         }
         else
