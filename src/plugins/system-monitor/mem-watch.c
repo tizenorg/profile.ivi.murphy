@@ -86,7 +86,7 @@ MRP_LUA_MEMBER_LIST_TABLE(mem_watch_members,
 MRP_LUA_DEFINE_CLASS(mem_watch, lua, mem_watch_lua_t, mem_watch_destroy,
     mem_watch_methods, mem_watch_overrides, mem_watch_members, NULL,
     mem_watch_changed, mem_watch_tostring , NULL,
-                     MRP_LUA_CLASS_EXTENSIBLE | MRP_LUA_CLASS_PRIVREFS);
+                     MRP_LUA_CLASS_EXTENSIBLE);
 
 MRP_LUA_CLASS_CHECKER(mem_watch_lua_t, mem_watch_lua, MEM_WATCH_LUA_CLASS);
 
