@@ -718,7 +718,7 @@ MRP_LUA_MEMBER_LIST_TABLE(cgroup_lua_members,
 MRP_LUA_DEFINE_CLASS(cgroup, lua, cgroup_lua_t, cgroup_lua_destroy,
     cgroup_lua_methods, cgroup_lua_overrides, cgroup_lua_members, NULL,
     cgroup_lua_changed, cgroup_lua_tostring , NULL,
-                     MRP_LUA_CLASS_EXTENSIBLE | MRP_LUA_CLASS_PRIVREFS);
+                     MRP_LUA_CLASS_EXTENSIBLE);
 
 MRP_LUA_CLASS_CHECKER(cgroup_lua_t, cgroup_lua, CGROUP_LUA_CLASS);
 
