@@ -1280,7 +1280,7 @@ wmgr = window_manager {
                           if s == "system" then
                               local a = animation({})
                               local r = m:JSON({surface = win.surface,
-                                                visible = 1,
+                                                visible = 0,
                                                 raise   = 1})
                               self:window_request(r,a,0)
                           else
