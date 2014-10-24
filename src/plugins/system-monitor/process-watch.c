@@ -138,11 +138,14 @@ static void process_watch_notify(process_watch_lua_t *w, lua_State *L,
 {
     mrp_funcbridge_value_t args[3], rv;
     char                            rt;
+    int                             top;
 
     if (L == NULL || w->notify == NULL)
         return;
 
     mrp_debug("notifying process watch %p", w);
+
+    top = lua_gettop(L);
 
     args[0].pointer = w;
     args[1].pointer = event_create(L, e);
@@ -151,6 +154,8 @@ static void process_watch_notify(process_watch_lua_t *w, lua_State *L,
         mrp_log_error("Failed to notify process watch %p.", w);
         mrp_free((char *)rv.string);
     }
+
+    lua_settop(L, top);
 }
 
 
