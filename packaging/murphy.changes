@@ -1,3 +1,16 @@
+* Sat Oct 25 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.60
+- system-controller: fix user name handling.
+- common: support for runtime refcounting error detection.
+- core/lua-utils: support for dynamically collected objects.
+- system-controller: massive memory leak fixes.
+- lua-bindings: mark Lua JSON class as dynamically collected.
+- lua-bindings: Lua JSON refcounting fixes.
+- system-controller: mark masks DYNAMIC, add funcbridge gettop/settop wrappers.
+- system-controller: don't leak unwrapped JSON objects/arguments.
+- system-monitor: plant the necessary funcbridge gettop/settop wrappers.
+- system-controller: don't dereference screen_resource_t after freeing it.
+- domain-controller: update watch stamp after sending notifications.
+
 * Fri Oct 10 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.59
 - common: added and enabled json-c/JSON-Glib symbol clash hackaround.
 
