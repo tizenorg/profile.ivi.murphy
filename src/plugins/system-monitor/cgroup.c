@@ -1126,6 +1126,8 @@ static int cgroup_lua_getparam(lua_State *L)
 
 static int cgroup_lua_setparam(lua_State *L)
 {
+    MRP_UNUSED(cgroup_lua_getparam);
+
     return cgroup_lua_setfield(L);
 }
 
