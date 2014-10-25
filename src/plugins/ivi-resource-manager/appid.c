@@ -72,9 +72,9 @@ mrp_resmgr_appid_t *mrp_resmgr_appid_create(mrp_resmgr_data_t *data)
     mrp_htbl_config_t cfg;
 
 #ifdef TZCONFIG_ENABLED
-    char *app_dir = tzplatform_getenv(TZ_USER_APP);
+    const char *app_dir = tzplatform_getenv(TZ_USER_APP);
 #else
-    char *app_dir = "/usr/app";
+    const char *app_dir = "/usr/app";
 #endif
 
     cfg.nentry = APP_MAX;

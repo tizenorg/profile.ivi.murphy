@@ -341,7 +341,9 @@ static int hash_compare(const void *key1, const void *key2)
 
 static uint32_t hash_function(const void *key)
 {
-    return (uint32_t)(((uint64_t)key >> 4) & 0xffffffff);
+    uint64_t k = (ptrdiff_t)key;
+
+    return (uint32_t)((k >> 4) & 0xffffffff);
 }
 
 
