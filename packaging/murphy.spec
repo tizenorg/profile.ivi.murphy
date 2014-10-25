@@ -548,25 +548,6 @@ ldconfig
 ldconfig
 %endif
 
-%if %{_enable_icosyscon}
-%post system-controller
-# prevent system controller from starting
-# rm -f %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
-# instead launch just ico-homescreen
-# rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
-# ln -s %{_unitdir_user}/murphy-wait-for-launchpad-ready.path \
-#     %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
-
-%postun system-controller
-#if [ "$1" = "0" ]; then
-# rm -f %{_unitdir_user}/weston.target.wants/murphy-wait-for-launchpad-ready.path
-# if [ -f %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path ]; then
-#     ln -sf %{_unitdir_user}/ico-uxf-wait-launchpad-ready.path \
-#         %{_unitdir_user}/weston.target.wants/ico-uxf-wait-launchpad-ready.path
-#fi
-fi
-%endif
-
 %post gam
 ldconfig
 
