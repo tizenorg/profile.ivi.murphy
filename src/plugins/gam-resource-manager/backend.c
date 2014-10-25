@@ -913,7 +913,7 @@ static int decision_cb(void *key, void *object, void *user_data)
 
                 if (src && mrp_resmgr_source_add_resource(src,&ar->source_link)) {
                     resource_print_name(src, ar->connno, buf, sizeof(buf));
-                    mrp_free(ar->name);
+                    mrp_free((void *)ar->name);
 
                     ar->name = mrp_strdup(buf);
                     ar->source = src;
