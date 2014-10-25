@@ -323,7 +323,7 @@ static mrp_list_hook_t *get_priorities_for_application_class(gam_connect_t *ctx,
 
     arr = (char **) ret.array.items;
 
-    for (; i < ret.array.nitem; i++) {
+    for (; i < (int)ret.array.nitem; i++) {
 
         routing_target_t *target = mrp_allocz(sizeof(routing_target_t));
 
@@ -361,7 +361,7 @@ static mrp_list_hook_t *get_priorities_for_application_class(gam_connect_t *ctx,
 error:
     arr = (char **) ret.array.items;
     if (arr) {
-        for (; i < ret.array.nitem; i++) {
+        for (; i < (int)ret.array.nitem; i++) {
             mrp_free(arr[i]);
         }
 
@@ -709,7 +709,6 @@ static int priority_setfield(lua_State *L)
 static void priority_destroy(void *data)
 {
     priority_t *prio = (priority_t *) data;
-    mrp_list_hook_t *p, *n;
 
     MRP_LUA_ENTER;
 
