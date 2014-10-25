@@ -1125,6 +1125,7 @@ static void screen_resource_destroy(mrp_resmgr_screen_t *screen,
     const char *appid;
     int32_t layerid;
     int32_t surfaceid;
+    uint32_t zoneid;
     const char *areaname;
 
     MRP_ASSERT(res && screen && screen->resources, "invalid argument");
@@ -1145,10 +1146,12 @@ static void screen_resource_destroy(mrp_resmgr_screen_t *screen,
         if (surfaceid)
             mrp_htbl_remove(screen->resources, NULL + surfaceid, false);
 
+        zoneid = sr->zoneid;
+
         mrp_list_delete(&sr->link);
         mrp_free(sr);
 
-        mrp_resmgr_notifier_flush_screen_events(screen->resmgr, sr->zoneid);
+        mrp_resmgr_notifier_flush_screen_events(screen->resmgr, zoneid);
     }
 }
 
