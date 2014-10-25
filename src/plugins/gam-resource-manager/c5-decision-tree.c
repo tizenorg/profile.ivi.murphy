@@ -244,7 +244,7 @@ mrp_decision_conf_t *mrp_decision_conf_create_from_file(const char *stem)
     return conf;
 
   failed:
-    mrp_log_error("gam-resource-manager: error in file '%s' line %lu",
+    mrp_log_error("gam-resource-manager: error in file '%s' line %zu",
                   filnam, lineno);
     free(buf);
     fclose(f);
@@ -712,7 +712,7 @@ static size_t attr_print(mrp_decision_attr_t *attr, bool decision,
 
     if (attr && p < e) {
         snprintf(nambuf, sizeof(nambuf), "%2d %s:", attr->id, attr->name);
-        PRINT(" %c %-24s @%03lu  ", decision ? '*':' ', nambuf, attr->offset);
+        PRINT(" %c %-24s @%03zu  ", decision ? '*':' ', nambuf, attr->offset);
 
         switch (attr->attr_type) {
 
@@ -834,7 +834,7 @@ mrp_decision_node_t *mrp_decision_tree_create_from_file(
     return root;
 
  parse_error:
-    mrp_log_error("gam-resource-manager: error in file '%s' line %lu",
+    mrp_log_error("gam-resource-manager: error in file '%s' line %zu",
                   filnam, lineno);
  failed:
     mrp_log_error("gam-resource-manager: failed to parse '%s' file",
