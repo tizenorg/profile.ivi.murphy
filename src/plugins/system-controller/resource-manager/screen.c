@@ -606,7 +606,7 @@ void mrp_resmgr_screen_area_create(mrp_resmgr_screen_t *screen,
 
     if ((zoneid = get_zone_id(zonename))) {
         mrp_log_error("system-controller: can't create resource manager area "
-                      "%d: can't find zone '%s' for it", areaid, zonename);
+                      "%zu: can't find zone '%s' for it", areaid, zonename);
         return;
     }
 
@@ -620,7 +620,7 @@ void mrp_resmgr_screen_area_create(mrp_resmgr_screen_t *screen,
 
     if (screen->areas[areaid]) {
         mrp_log_error("system-controller: attempt to redefine "
-                      "resource manager area %d", areaid);
+                      "resource manager area %zu", areaid);
         return;
     }
 
@@ -678,7 +678,7 @@ void mrp_resmgr_screen_area_create(mrp_resmgr_screen_t *screen,
     }
 
     mrp_log_info("system-controller: resource manager registered screen area "
-                 "%d - '%s'", areaid, name);
+                 "%zu - '%s'", areaid, name);
 }
 
 void mrp_screen_area_destroy(mrp_resmgr_screen_t *screen, int32_t areaid)
