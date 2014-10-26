@@ -189,10 +189,10 @@ static void print_resources_cb(mrp_console_t *c, void *user_data,
         printf("   Zone '%s':\n", zones[zoneid]);
 
         mrp_resmgr_screen_print(resmgr_data->screen, zoneid, buf, sizeof(buf));
-        printf(buf);
+        fputs(buf, stdout);
 
         mrp_resmgr_audio_print(resmgr_data->audio, zoneid, buf, sizeof(buf));
-        printf(buf);
+        fputs(buf, stdout);
     }
 
     printf("\n");
