@@ -905,10 +905,10 @@ static int  domctl_init(gamctl_t *gam);
 static void domctl_exit(gamctl_t *gam);
 static void gamctl_exit(mrp_plugin_t *plugin);
 
-static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
+static int gamctl_route_cb(uint32_t narg, mrp_domctl_arg_t *args,
                            uint32_t *nout, mrp_domctl_arg_t *outs,
                            void *user_data);
-static int gamctl_disconnect_cb(int narg, mrp_domctl_arg_t *args,
+static int gamctl_disconnect_cb(uint32_t narg, mrp_domctl_arg_t *args,
                                 uint32_t *nout, mrp_domctl_arg_t *outs,
                                 void *user_data);
 
@@ -1567,7 +1567,7 @@ static void domctl_exit(gamctl_t *gam)
 }
 
 
-static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
+static int gamctl_route_cb(uint32_t narg, mrp_domctl_arg_t *args,
                            uint32_t *nout, mrp_domctl_arg_t *outs,
                            void *user_data)
 {
@@ -1660,7 +1660,7 @@ static int gamctl_route_cb(int narg, mrp_domctl_arg_t *args,
 }
 
 
-static int gamctl_disconnect_cb(int narg, mrp_domctl_arg_t *args,
+static int gamctl_disconnect_cb(uint32_t narg, mrp_domctl_arg_t *args,
                                 uint32_t *nout, mrp_domctl_arg_t *outs,
                                 void *user_data)
 {
