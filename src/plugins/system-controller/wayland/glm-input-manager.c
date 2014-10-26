@@ -121,6 +121,8 @@ bool mrp_glm_input_manager_register(mrp_wayland_t *wl)
     mrp_wayland_register_interface(wl, &factory);
 #endif
 
+    MRP_UNUSED(wl);
+
     return true;
 }
 
