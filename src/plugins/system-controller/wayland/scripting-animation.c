@@ -156,7 +156,7 @@ static int animation_create(lua_State *L)
     if (hide) {
         mrp_wayland_animation_set(anims, MRP_WAYLAND_ANIMATION_HIDE,
                                   hide->name, hide->time);
-        mrp_free(hide);
+        animation_def_free(hide);
     }
     if (show) {
         mrp_wayland_animation_set(anims, MRP_WAYLAND_ANIMATION_SHOW,
@@ -248,7 +248,7 @@ static int  animation_setfield(lua_State *L)
             mrp_wayland_animation_set(anims, type, def->name, def->time);
             break;
         }
-        mrp_free(def);
+        animation_def_free(def);
     }
     
     MRP_LUA_LEAVE(0);
