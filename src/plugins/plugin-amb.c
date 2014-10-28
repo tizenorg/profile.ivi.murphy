@@ -795,6 +795,7 @@ error:
 
 static void lua_property_handler(mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
 {
+    int top;
 #if 0
     char *variant_sig = NULL;
 #endif
@@ -841,6 +842,8 @@ static void lua_property_handler(mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
     }
 #endif
 
+    top = lua_gettop(w->ctx->L);
+
     /* load the function pointer to the stack */
     lua_rawgeti(w->ctx->L, LUA_REGISTRYINDEX, w->lua_prop->handler_ref);
 
@@ -854,6 +857,8 @@ static void lua_property_handler(mrp_dbus_msg_t *msg, dbus_property_watch_t *w)
     if (lua_pcall(w->ctx->L, 2, 0, 0) != 0) {
         mrp_log_error("AMB: failed to call Lua handler function");
     }
+
+    lua_settop(w->ctx->L, top);
 
     mrp_dbus_msg_exit_container(msg);
 
@@ -1489,15 +1494,21 @@ error:
 
 static int load_config(lua_State *L, const char *path)
 {
+    int success, top;
+
+    top = lua_gettop(L);
+
     if (!luaL_loadfile(L, path) && !lua_pcall(L, 0, 0, 0))
-        return TRUE;
+        success = TRUE;
     else {
         mrp_log_error("AMB: failed to load config file %s.", path);
         mrp_log_error("%s", lua_tostring(L, -1));
-        lua_settop(L, 0);
-
-        return FALSE;
+        success = FALSE;
     }
+
+    lua_settop(L, top);
+
+    return success;
 }
 
 static int unsubscribe_signal_cb(void *key, void *object, void *user_data)
