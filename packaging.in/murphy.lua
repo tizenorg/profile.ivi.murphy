@@ -2060,7 +2060,7 @@ if sc then
                 else
                     cmd = 0x00040002 -- release
                     if rset.timer then
-                       rset.timer.cb = nil
+                       rset.timer.callback = nil
                     end
                 end
 
