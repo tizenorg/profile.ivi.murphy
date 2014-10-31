@@ -1,4 +1,14 @@
-* Tue Oct 30 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.62
+* Fri Oct 31 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.63
+- murphy-db: don't leak result rows in trigger row_event_callbacks.
+- domain-control: switched to use resolver-aware trigger-driver notification.
+- system-controller: fix a crash in inotify watching.
+- system-controller: handle recursive directory creation properly.
+- system-controller: launch HS with user name instead of user dir.
+- packaging: moved murphyd.service to systemd user session.
+- config: create system surfaces on top, but not visible.
+- config: delete timers by setting 'callback', not 'cb' to nil.
+
+* Thu Oct 30 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.62
 - fix TC-1835
 - resource: disconnect, destroy transport when resource connection fails
 - common: try to reject connection if accept fails on stream transports
