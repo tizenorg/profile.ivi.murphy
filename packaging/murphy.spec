@@ -54,7 +54,7 @@
 
 Summary: Resource policy framework
 Name: murphy
-Version: 0.0.62
+Version: 0.0.63
 Release: 1
 License: BSD-3-Clause
 Group: System/Service
@@ -724,6 +724,7 @@ ldconfig
 %{_bindir}/resource-client
 %{_bindir}/resource-api-test
 %{_bindir}/resource-api-fuzz
+%{_bindir}/resource-context-create
 %{_bindir}/test-domain-controller
 %{_bindir}/murphy-console
 %manifest murphy.manifest
