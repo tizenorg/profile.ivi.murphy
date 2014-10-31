@@ -60,6 +60,10 @@ struct mrp_path_track_s {
     mrp_io_watch_t *iow;
 
     char* copies[2];
+
+    /* tracking the deletion inside callbacks */
+    bool processing_data;
+    bool destroyed;
 };
 
 mrp_path_track_t * mrp_path_track_create(mrp_mainloop_t *ml,

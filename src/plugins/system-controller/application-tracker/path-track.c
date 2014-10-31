@@ -29,6 +29,27 @@
 
 #include "path-track.h"
 
+static void path_track_destroy(mrp_path_track_t *pt)
+{
+    if (!pt)
+        return;
+
+    if (pt->iow) {
+        mrp_del_io_watch(pt->iow);
+    }
+
+    if (pt->i_fd && pt->s_fd)
+        inotify_rm_watch(pt->i_fd, pt->s_fd);
+
+    close(pt->i_fd);
+
+    mrp_free(pt->copies[0]);
+    mrp_free(pt->copies[1]);
+
+    mrp_free(pt);
+}
+
+
 static void path_changed(mrp_io_watch_t *wd, int fd, mrp_io_event_t events,
         void *user_data)
 {
@@ -38,9 +59,11 @@ static void path_changed(mrp_io_watch_t *wd, int fd, mrp_io_event_t events,
     mrp_path_track_t *pt;
 
     MRP_UNUSED(wd);
-    MRP_UNUSED(user_data);
 
     pt = (mrp_path_track_t *) user_data;
+
+    /* processing flag for preventing destruction */
+    pt->processing_data = TRUE;
 
     if (events & MRP_IO_EVENT_IN) {
         int read_bytes;
@@ -51,7 +74,7 @@ static void path_changed(mrp_io_watch_t *wd, int fd, mrp_io_event_t events,
         if (read_bytes < 0) {
             mrp_log_error("Failed to read event from inotify: %s",
                     strerror(errno));
-            return;
+            goto end;
         }
 
         while (processed_bytes < read_bytes) {
@@ -61,9 +84,9 @@ static void path_changed(mrp_io_watch_t *wd, int fd, mrp_io_event_t events,
 
             processed_bytes += sizeof(struct inotify_event) + is->len;
 
-            if (is->mask & IN_DELETE_SELF) {
+            if (is->mask & IN_DELETE_SELF && !pt->destroyed) {
                 pt->cb(pt, MRP_PATH_INVALID, pt->user_data);
-                return;
+                goto end;
             }
 
             if (is->len == 0) {
@@ -71,7 +94,7 @@ static void path_changed(mrp_io_watch_t *wd, int fd, mrp_io_event_t events,
                 continue;
             }
 
-            if (strcmp(is->name, pt->file_name) == 0) {
+            if (strcmp(is->name, pt->file_name) == 0 && !pt->destroyed) {
                 if (is->mask & IN_CREATE) {
                     pt->cb(pt, MRP_PATH_CREATED, pt->user_data);
                 }
@@ -81,27 +104,26 @@ static void path_changed(mrp_io_watch_t *wd, int fd, mrp_io_event_t events,
             }
         }
     }
+
+end:
+    pt->processing_data = FALSE;
+
+    if (pt->destroyed)
+        path_track_destroy(pt);
+
+    return;
 }
 
 
-void mrp_path_track_destroy(mrp_path_track_t *t)
+void mrp_path_track_destroy(mrp_path_track_t *pt)
 {
-    if (!t)
+    if (!pt)
         return;
 
-    if (t->iow) {
-        mrp_del_io_watch(t->iow);
-    }
-
-    if (t->i_fd && t->s_fd)
-        inotify_rm_watch(t->i_fd, t->s_fd);
-
-    close(t->i_fd);
-
-    mrp_free(t->copies[0]);
-    mrp_free(t->copies[1]);
-
-    mrp_free(t);
+    if (pt->processing_data)
+        pt->destroyed = TRUE;
+    else
+        path_track_destroy(pt);
 }
 
 
@@ -122,6 +144,9 @@ mrp_path_track_t * mrp_path_track_create(mrp_mainloop_t *ml,
         mrp_log_error("path-track: allocz");
         goto error;
     }
+
+    pt->processing_data = FALSE;
+    pt->destroyed = FALSE;
 
     pt->cb = cb;
     pt->user_data = user_data;
