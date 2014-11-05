@@ -1499,7 +1499,7 @@ static bool screen_allocate(mrp_zone_t *zone,
     mrp_resmgr_screen_t *screen = (mrp_resmgr_screen_t *)userdata;
     uint32_t zoneid;
     const char *zonename;
-    const char *appid = get_appid_for_resource(res);
+    const char *appid;
     screen_resource_t *sr;
     uint32_t grantid;
     bool allocated;
