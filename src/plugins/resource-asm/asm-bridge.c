@@ -385,7 +385,7 @@ error:
     }
 
     if (rd_fd >= 0) {
-        close(wr_fd);
+        close(rd_fd);
     }
 
     return -1;
