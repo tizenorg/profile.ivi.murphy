@@ -332,6 +332,14 @@ static void screen_update_resources(mrp_resmgr_screen_t *screen,
     int i, n;
 
     zoneid = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     classes = screen->classes + zoneid;
 
     mrp_list_foreach_back(classes, centry, cn) {
@@ -393,6 +401,14 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
     screen_resource_t *sr;
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     classes = screen->classes + zoneid;
     grantid = ++screen->grantids[zoneid];
 
@@ -626,6 +642,14 @@ static bool screen_allocate(mrp_zone_t *zone,
     MRP_ASSERT(res && screen, "invalid argument");
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return FALSE;
+    }
+
     grantid = screen->grantids[zoneid];
 
     if ((sr = screen_resource_lookup(screen, res))) {
