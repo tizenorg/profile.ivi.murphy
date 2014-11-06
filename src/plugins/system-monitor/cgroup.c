@@ -267,7 +267,7 @@ static control_descr_t freezer_controls[] = {
  * per controller filesystem entries
  */
 
-static control_descr_t *controls[] = {
+static control_descr_t *controls[CGROUP_TYPE_MAX] = {
     [CGROUP_TYPE_MEMORY ] = memory_controls,
     [CGROUP_TYPE_CPU    ] = cpu_controls,
     [CGROUP_TYPE_CPUACCT] = cpuacct_controls,
