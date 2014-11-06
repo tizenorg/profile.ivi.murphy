@@ -3346,8 +3346,8 @@ static int32_t get_parent_pid(int32_t pid)
 static void get_binary_basename(int32_t pid, char *buf, int len)
 {
     int fd;
-    char path[256];
-    char cmdline[1024];
+    char path[PATH_MAX];
+    char cmdline[PATH_MAX];
     char *bnam;
     ssize_t size;
 
@@ -3367,7 +3367,12 @@ static void get_binary_basename(int32_t pid, char *buf, int len)
 
     close(fd);
 
-    cmdline[size] = 0;
+    /* If we read more than allocated, truncate */
+    if (size >= PATH_MAX)
+        cmdline[PATH_MAX - 1] = 0;
+    else
+        cmdline[size] = 0;
+
     bnam = basename(cmdline);
 
     strncpy(buf, bnam, len-1);
