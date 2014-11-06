@@ -367,7 +367,9 @@ static bool save_last_user(const char *user_dir, const char *user, int size)
     }
 
 end:
-    fclose(last_user_file);
+    if (last_user_file)
+        fclose(last_user_file);
+
     return success;
 }
 
