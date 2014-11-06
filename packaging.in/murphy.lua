@@ -576,12 +576,24 @@ end
 function regulateApplications(t, regulation)
     for k,v in pairs(ft(t)) do
 
-        -- iterate through the undefined and entertainment apps, see if
-        -- they have been overruled in local config
+        whitelisted = false
 
+        -- our local application config, which takes precedence
         local conf = getApplication(v.appid)
 
-        if conf and conf.resource_class ~= "player" then
+        if conf then
+            if conf.resource_class ~= "player" then
+                whitelisted = true
+            end
+
+	       if conf.requisites and conf.requisites.screen then
+                if conf.requisites.screen.driving then
+                    whitelisted = true
+                end
+            end
+        end
+
+        if whitelisted then
             -- override, don't disable
             resmgr:disable_screen_by_appid("*", "*", v.appid, false, false)
         else
@@ -934,14 +946,27 @@ resmgr = resource_manager {
                                     -- our local application config, which takes precedence
                                     local conf = getApplication(ev.appid)
 
-                                    -- disable only non-whitelisted applications
-                                    if not conf or conf.resource_class == "player" then
-                                        if blacklisted then
-                                            if verbose > 0 then
-                                                print("disabling screen for " .. ev.appid)
-                                            end
-                                            resmgr:disable_screen_by_appid("*", "*", ev.appid, true, true)
+                                    if not conf then
+                                        blacklisted = true
+                                    else
+                                        if conf.resource_class == "player" then
+                                            blacklisted = true
                                         end
+
+                                        -- check the exceptions
+                                        if conf.requisites and conf.requisites.screen then
+                                            if conf.requisites.screen.driving then
+                                                blacklisted = false
+                                            end
+                                        end
+                                    end
+
+                                    -- disable only non-whitelisted applications
+				                    if blacklisted then
+                                        if verbose > 0 then
+                                            print("disabling screen for " .. ev.appid)
+                                        end
+                                        resmgr:disable_screen_by_appid("*", "*", ev.appid, true, true)
                                     end
                                 end
 
@@ -1575,8 +1600,47 @@ application {
     area            = "Center.Full",
     privileges      = { screen = "none", audio = "none" },
     resource_class  = "system",
+    requisites      = { screen = "driving", audio = "none" },
     screen_priority = 30
 }
+
+application {
+    appid           = "MediaPlayer",
+    area            = "Center.Full",
+    privileges      = { screen = "none", audio = "none" },
+    requisites      = { screen = "driving", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 0
+}
+
+application {
+    appid           = "MyMediaPlayer",
+    area            = "Center.Full",
+    privileges      = { screen = "none", audio = "none" },
+    requisites      = { screen = "driving", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 0
+}
+
+application {
+    appid           = "MeterWidget",
+    area            = "Center.Full",
+    privileges      = { screen = "none", audio = "none" },
+    requisites      = { screen = "driving", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 0
+}
+
+application {
+    appid           = "org.tizen.ico.app-soundsample",
+    area            = "Center.Full",
+    privileges      = { screen = "none", audio = "none" },
+    -- uncomment the next line to make the app exempt from regulation
+    -- requisites      = { screen = "driving", audio = "none" },
+    resource_class  = "player",
+    screen_priority = 0
+}
+
 
 if sc then
     sc.client_handler = function (self, cid, msg)
