@@ -333,7 +333,11 @@ static const char *find_mount_point(cgroup_type_t type)
     if ((fd = open("/proc/mounts", O_RDONLY)) < 0)
         return NULL;
 
-    if ((l = read(fd, mounts, sizeof(mounts) - 1)) <= 0)
+    l = read(fd, mounts, sizeof(mounts) - 1);
+
+    close(fd);
+
+    if (l <= 0)
         return NULL;
     else
         mounts[l] = '\0';
