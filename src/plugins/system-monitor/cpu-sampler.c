@@ -606,10 +606,10 @@ int cpu_register_cgroup(const char *name)
     return cgrp->id;
 
  fail:
-    if (cgrp != NULL)
+    if (cgrp != NULL) {
         unregister_cgroup(cgrp);
-    else
         cgroup_unref(cg);
+    }
 
     return -1;
 }
