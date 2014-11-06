@@ -181,6 +181,7 @@ void tel_watcher(int event, tel_call_t *call, void *data)
       case TEL_CALL_LISTED:
         /* call was present when connected to the service/modem */
         mrp_debug("query for listing all calls on service %s", service);
+        /* intentional fallthrough */
 
       case TEL_CALL_ADDED:
         /* add the call to Murphy DB */
