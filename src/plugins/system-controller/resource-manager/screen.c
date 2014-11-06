@@ -1286,11 +1286,19 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
 
     zoneid   = mrp_zone_get_id(zone);
     zonename = mrp_zone_get_name(zone);
-    areas    = screen->zones + zoneid;
-    grantid  = ++(screen->grantids[zoneid]);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
 
     if (!zonename)
         zonename = "<unknown>";
+
+    areas    = screen->zones + zoneid;
+    grantid  = ++(screen->grantids[zoneid]);
 
     mrp_list_foreach(areas, aentry, an) {
         area = mrp_list_entry(aentry, mrp_resmgr_screen_area_t, link);
@@ -1341,6 +1349,14 @@ static void screen_queue_events(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
 
     zoneid   = mrp_zone_get_id(zone);
     zonename = mrp_zone_get_name(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     areas    = screen->zones + zoneid;
     grantid  = screen->grantids[zoneid];
 
@@ -1478,6 +1494,13 @@ static void screen_init(mrp_zone_t *zone, void *userdata)
     zoneid   = mrp_zone_get_id(zone);
     zonename = mrp_zone_get_name(zone);
 
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     if (!zonename)
         zonename = "<unknown>";
 
@@ -1507,6 +1530,14 @@ static bool screen_allocate(mrp_zone_t *zone,
     MRP_ASSERT(zone && res && screen && screen->resmgr, "invalid argument");
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return FALSE;
+    }
+
     grantid = screen->grantids[zoneid];
 
     if (!(zonename = mrp_zone_get_name(zone)))
@@ -1576,6 +1607,13 @@ static void screen_commit(mrp_zone_t *zone, void *userdata)
     MRP_ASSERT(zone && screen && screen->resmgr, "invalid argument");
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
 
     if (!(zonename = mrp_zone_get_name(zone)))
         zonename = "<unknown>";
