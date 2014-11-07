@@ -645,11 +645,19 @@ static void audio_grant_resources(mrp_resmgr_audio_t *audio,
 
     zoneid = mrp_zone_get_id(zone);
     zonename = mrp_zone_get_name(zone);
-    resources = audio->zones + zoneid;
-    grantid = ++(audio->grantids[zoneid]);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
 
     if (!zonename)
         zonename = "<unknown>";
+
+    resources = audio->zones + zoneid;
+    grantid = ++(audio->grantids[zoneid]);
 
     mrp_list_foreach_back(resources, rentry, rn) {
         ar = mrp_list_entry(rentry, audio_resource_t, link);
@@ -689,6 +697,14 @@ static void audio_queue_events(mrp_resmgr_audio_t *audio, mrp_zone_t *zone)
 
     zoneid    = mrp_zone_get_id(zone);
     zonename  = mrp_zone_get_name(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     resources = audio->zones + zoneid;
     grantid   = audio->grantids[zoneid];
     
@@ -813,6 +829,13 @@ static void audio_init(mrp_zone_t *zone, void *userdata)
     zoneid   = mrp_zone_get_id(zone);
     zonename = mrp_zone_get_name(zone);
 
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     if (!zonename)
         zonename = "<unknown>";
 
@@ -841,6 +864,14 @@ static bool audio_allocate(mrp_zone_t *zone,
     MRP_ASSERT(zone && res && audio && audio->resmgr, "invalid argument");
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return FALSE;
+    }
+
     grantid = audio->grantids[zoneid];
 
     if (!(zonename = mrp_zone_get_name(zone)))
@@ -910,6 +941,13 @@ static void audio_commit(mrp_zone_t *zone, void *userdata)
     MRP_ASSERT(zone && audio && audio->resmgr, "invalid argument");
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
 
     if (!(zonename = mrp_zone_get_name(zone)))
         zonename = "<unknown>";
