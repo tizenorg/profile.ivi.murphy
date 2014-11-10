@@ -2063,6 +2063,7 @@ if sc then
                 elseif msg.res.input then
                     key = msg.res.input.name
                 elseif msg.res.window then
+                    -- alarm! this appars to be non-unique?
                     key = msg.res.window.resourceId
                 end
             end
@@ -2071,7 +2072,7 @@ if sc then
         end
 
         createResourceSet = function (ctl, client, msg)
-            cb = function(rset, data)
+            cb = function(rset)
 
                 -- m:info("*** resource_cb: client = '" .. msg.appid .. "'")
 
@@ -2081,8 +2082,8 @@ if sc then
                     requestType = msg.res.type
                 end
 
-                if data.filter_first then
-                    data.filter_first = false
+                if rset.data.filter_first then
+                    rset.data.filter_first = false
                     return
                 end
 
@@ -2094,12 +2095,15 @@ if sc then
                         rset.timer = m:Timer({
                             interval = 5000,
                             oneshot = true,
-                            callback = function (t, data)
-                                m:info("notification resource set timer expired")
+                            callback = function (t)
+                                m:info("notification timer expired")
 
-                                -- destroy the internal resource set
+                                if rset.data then
+                                    reply.res.window = rset.data.window
+                                end
 
-                                rset:destroy()
+                                rset:release()
+                                rset.timer = nil
 
                                 -- Send a "RELEASE" message to client.
                                 -- This triggers the resource deletion
@@ -2113,10 +2117,6 @@ if sc then
                                     }
                                 })
 
-                                if rset.data.window then
-                                    reply.res.window = rset.data.window
-                                end
-
                                 sc:send_message(client, reply)
                             end
                         })
@@ -2125,6 +2125,7 @@ if sc then
                     cmd = 0x00040002 -- release
                     if rset.timer then
                        rset.timer.callback = nil
+                       rset.timer = nil
                     end
                 end
 
@@ -2159,7 +2160,7 @@ if sc then
                 end
             end
 
-            rset = m:ResourceSet({
+            local rset = m:ResourceSet({
                     application_class = "player",
                     zone = "driver", -- msg.zone ("full")
                     callback = cb
@@ -2235,7 +2236,7 @@ if sc then
                 if not sets.cid then
                     sets.cid = {}
                 end
-                sets.cid.key = createResourceSet(self, cid, msg)
+                sets.cid[key] = createResourceSet(self, cid, msg)
             end
 
         elseif msg.command == 0x40012 then -- destroy_res
@@ -2245,6 +2246,7 @@ if sc then
             if key then
                 if sets.cid and sets.cid[key] then
                     sets.cid[key]:release()
+                    sets.cid[key].timer = nil
                     sets.cid[key] = nil -- garbage collecting
                 end
             end
@@ -2254,12 +2256,10 @@ if sc then
             key = getKey(msg)
 
             if key then
-                print("key is " .. tostring(key))
                 if not sets.cid then
                     sets.cid = {}
                 end
                 if not sets.cid[key] then
-                    print("creating a resource set")
                     sets.cid[key] = createResourceSet(self, cid, msg)
                 end
                 print("acquiring the resource set")
@@ -2274,18 +2274,15 @@ if sc then
             if key then
                 if sets.cid and sets.cid[key] then
                     sets.cid[key]:release()
-                end
 
-                if msg.appid == onscreen then
-                    -- in case of OnScreen, this actually means that the
-                    -- resource set is never used again; let gc do its job
-                    if sets.cid and sets.cid[key] then
+                    if msg.appid == onscreen then
+                        -- in case of OnScreen, this actually means that the
+                        -- resource set is never used again; let gc do its job
+                        sets.cid[key].timer = nil
                         sets.cid[key] = nil -- garbage collecting
                     end
                 end
-
             end
-
 
         elseif msg.command == 0x40003 then -- deprive_res
             print("command DEPRIVE_RES")
