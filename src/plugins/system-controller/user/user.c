@@ -487,10 +487,9 @@ static bool launch_hs(user_manager_config_t *ctx)
     bundle_add(b, "HS_PARAM_DD", ctx->defaultapps_path);
     bundle_add(b, "HS_PARAM_FLG", ctx->flag_file_path);
 
-    mrp_log_info("launching new homescreen for %s, parameters: %s %s %s %s",
-            current_user->name, current_user->user_dir,
-            current_user->runningapp_path, ctx->defaultapps_path,
-            ctx->flag_file_path);
+    mrp_log_info("launching new homescreen, parameters: %s %s %s %s",
+            current_user->name, current_user->runningapp_path,
+            ctx->defaultapps_path, ctx->flag_file_path);
 
     ctx->current_hs_pid = aul_launch_app(current_user->homescreen, b);
 
