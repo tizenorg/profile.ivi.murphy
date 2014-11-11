@@ -1726,8 +1726,10 @@ if sc then
                 local time = 200
                 if  msg.arg.anim_time then
                     local t = msg.arg.anim_time
+                    -- the actual time for the animation
                     time = m:AND(t, time_mask)
-                    nores = not m:AND(t, nores_mask)
+                    -- flag for ignoring resource control
+                    nores = m:AND(t, nores_mask)
                     if m:AND(t, raise_mask) then
                         msg.arg.raise = 1
                     elseif m:AND(t, lower_mask) then
@@ -1770,8 +1772,10 @@ if sc then
                 local time = 200
                 if msg.arg.anim_time then
                     local t = msg.arg.anim_time
+                    -- the actual time for the animation
                     time = m:AND(t, time_mask)
-                    nores = not m:AND(t, nores_mask)
+                    -- flag for ignoring resource control
+                    nores = m:AND(t, nores_mask)
                 end
                 if msg.arg.anim_name then
                     a.hide = { msg.arg.anim_name, time }
