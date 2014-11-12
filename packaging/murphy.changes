@@ -1,3 +1,11 @@
+* Fri Nov 14 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.67
+- system-controller: fix scripting-notifier memory leaks.
+- system-controller: fix out-of-bounds access in audio.c.
+- system-controller: fix inverted bit field check.
+- system-controller: grab screen resource when forcing a window to be shown.
+- system-controller: fix a few debug printouts.
+- system-controller: limit resource set acquisitions to non-system surfaces.
+
 * Wed Nov 12 2014 Ismo Puustinen <ismo.puustinen@intel.com> - 0.0.66
 - config: fix notification handling.
 - system-controller: change logging to be less misleading.
