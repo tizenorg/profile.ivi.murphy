@@ -102,7 +102,7 @@ static scripting_audio_event_t *audio_event_check(lua_State *, int);
 
 static const char *eventid_str(mrp_resmgr_eventid_t);
 
-MRP_LUA_CLASS_DEF_SIMPLE (
+MRP_LUA_CLASS_DEF_SIMPLE_FLAGS (
     generic_event,                  /* class name */
     scripting_generic_event_t,      /* userdata type */
     generic_event_destroy_from_lua, /* userdata destructor */
@@ -114,10 +114,11 @@ MRP_LUA_CLASS_DEF_SIMPLE (
        MRP_LUA_OVERRIDE_GETFIELD  (generic_event_getfield)
        MRP_LUA_OVERRIDE_SETFIELD  (generic_event_setfield)
        MRP_LUA_OVERRIDE_STRINGIFY (generic_event_stringify)
-    )
+    ),
+    MRP_LUA_CLASS_DYNAMIC
 );
 
-MRP_LUA_CLASS_DEF_SIMPLE (
+MRP_LUA_CLASS_DEF_SIMPLE_FLAGS (
     screen_event,                  /* class name */
     scripting_screen_event_t,      /* userdata type */
     screen_event_destroy_from_lua, /* userdata destructor */
@@ -129,10 +130,11 @@ MRP_LUA_CLASS_DEF_SIMPLE (
        MRP_LUA_OVERRIDE_GETFIELD  (screen_event_getfield)
        MRP_LUA_OVERRIDE_SETFIELD  (screen_event_setfield)
        MRP_LUA_OVERRIDE_STRINGIFY (screen_event_stringify)
-    )
+    ),
+    MRP_LUA_CLASS_DYNAMIC
 );
 
-MRP_LUA_CLASS_DEF_SIMPLE (
+MRP_LUA_CLASS_DEF_SIMPLE_FLAGS (
     audio_event,                   /* class name */
     scripting_audio_event_t,       /* userdata type */
     audio_event_destroy_from_lua,  /* userdata destructor */
@@ -144,7 +146,8 @@ MRP_LUA_CLASS_DEF_SIMPLE (
        MRP_LUA_OVERRIDE_GETFIELD  (audio_event_getfield)
        MRP_LUA_OVERRIDE_SETFIELD  (audio_event_setfield)
        MRP_LUA_OVERRIDE_STRINGIFY (audio_event_stringify)
-    )
+    ),
+    MRP_LUA_CLASS_DYNAMIC
 );
 
 void mrp_resmgr_scripting_notifier_init(lua_State *L)
@@ -263,7 +266,6 @@ static void generic_event_destroy_from_lua(void *data)
 
     if (gev) {
         mrp_free((void *)gev->zone);
-        mrp_free((void *)gev);
     }
 
     MRP_LUA_LEAVE_NOARG;
@@ -399,7 +401,6 @@ static void screen_event_destroy_from_lua(void *data)
         mrp_free((void *)sev->zone);
         mrp_free((void *)sev->appid);
         mrp_free((void *)sev->area);
-        mrp_free((void *)sev);
     }
 
     MRP_LUA_LEAVE_NOARG;
@@ -527,7 +528,6 @@ static void audio_event_destroy_from_lua(void *data)
     if (aev) {
         mrp_free((void *)aev->zone);
         mrp_free((void *)aev->appid);
-        mrp_free((void *)aev);
     }
 
     MRP_LUA_LEAVE_NOARG;
