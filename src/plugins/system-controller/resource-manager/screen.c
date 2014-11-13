@@ -1289,7 +1289,7 @@ static void screen_grant_resources(mrp_resmgr_screen_t *screen,
 
     /* We got a nonsense zone id */
     if (zoneid >= MRP_ZONE_MAX) {
-        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
                   "bailing", zoneid, MRP_ZONE_MAX);
         return;
     }
@@ -1352,7 +1352,7 @@ static void screen_queue_events(mrp_resmgr_screen_t *screen, mrp_zone_t *zone)
 
     /* We got a nonsense zone id */
     if (zoneid >= MRP_ZONE_MAX) {
-        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
                   "bailing", zoneid, MRP_ZONE_MAX);
         return;
     }
@@ -1496,7 +1496,7 @@ static void screen_init(mrp_zone_t *zone, void *userdata)
 
     /* We got a nonsense zone id */
     if (zoneid >= MRP_ZONE_MAX) {
-        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
                   "bailing", zoneid, MRP_ZONE_MAX);
         return;
     }
@@ -1533,7 +1533,7 @@ static bool screen_allocate(mrp_zone_t *zone,
 
     /* We got a nonsense zone id */
     if (zoneid >= MRP_ZONE_MAX) {
-        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
                   "bailing", zoneid, MRP_ZONE_MAX);
         return FALSE;
     }
@@ -1610,7 +1610,7 @@ static void screen_commit(mrp_zone_t *zone, void *userdata)
 
     /* We got a nonsense zone id */
     if (zoneid >= MRP_ZONE_MAX) {
-        mrp_debug("invalid zoneid '" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
+        mrp_debug("invalid zoneid '%" PRIu32 "' is larger than MRP_ZONE_MAX (%d), "
                   "bailing", zoneid, MRP_ZONE_MAX);
         return;
     }
