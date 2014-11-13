@@ -1755,10 +1755,13 @@ if sc then
                 print('### ==> SHOW')
                 print(tostring(msg.arg))
             end
+
+            local surface = msg.arg.surface
+
             if nores then
                 wmgr:window_request(msg.arg, a, 0)
+                resclnt:resource_set_acquire("screen", surface)
             else
-                local surface = msg.arg.surface
                 resclnt:resource_set_acquire("screen", surface)
                 resmgr:window_raise(msg.appid, surface, 1)
             end
