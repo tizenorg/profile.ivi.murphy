@@ -1721,7 +1721,14 @@ if sc then
             local lower_mask = 0x02000000
             local nores_mask = 0x40000000
             local time_mask  = 0x00ffffff
+
+            local surface        = msg.arg.surface
+            local system_surface = false
+            local appdb          = wmgr:application(msg.appid)
+            system_surface       = appdb.privileges.screen == "system"
+
             msg.arg.visible = 1
+
             if msg.arg then
                 local time = 200
                 if  msg.arg.anim_time then
@@ -1741,26 +1748,27 @@ if sc then
                     print('time: ' .. tostring(time))
                 end
             end
-            if not nores then
-                local p = wmgr:application(msg.appid)
-                local s = p.privileges.screen
-                if s == "system" then
-                    nores = true
-                    if not msg.arg.raise then
-                        msg.arg.raise = 1
-                    end
+
+            -- all show messages from system surfaces are forced
+            if not nores and system_surface then
+                nores = true
+                if not msg.arg.raise then
+                    msg.arg.raise = 1
                 end
             end
+
             if verbose > 2 then
                 print('### ==> SHOW')
-                print(tostring(msg.arg))
+                print(tostring(msg.arg) .. ", system_surface=" .. tostring(system_surface))
             end
-
-            local surface = msg.arg.surface
 
             if nores then
                 wmgr:window_request(msg.arg, a, 0)
-                resclnt:resource_set_acquire("screen", surface)
+
+                -- only non-system surfaces have resource sets
+                if not system_surface then
+                    resclnt:resource_set_acquire("screen", surface)
+                end
             else
                 resclnt:resource_set_acquire("screen", surface)
                 resmgr:window_raise(msg.appid, surface, 1)
