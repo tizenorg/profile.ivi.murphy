@@ -356,6 +356,14 @@ static void audio_update_resources(mrp_resmgr_audio_t *audio,
     int i;
 
     zoneid = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' >= MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     classes = audio->classes + zoneid;
 
     mrp_list_foreach_back(classes, centry, cn) {
@@ -408,6 +416,14 @@ static void audio_grant_resources(mrp_resmgr_audio_t *audio,
     audio_resource_t *ar;
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' >= MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return;
+    }
+
     classes = audio->classes + zoneid;
     grantid = ++audio->grantids[zoneid];
 
@@ -733,6 +749,14 @@ static bool audio_allocate(mrp_zone_t *zone,
     MRP_ASSERT(res && audio, "invalid argument");
 
     zoneid  = mrp_zone_get_id(zone);
+
+    /* We got a nonsense zone id */
+    if (zoneid >= MRP_ZONE_MAX) {
+        mrp_debug("invalid zoneid '%" PRIu32 "' >= MRP_ZONE_MAX (%d), "
+                  "bailing", zoneid, MRP_ZONE_MAX);
+        return FALSE;
+    }
+
     zonenam = mrp_zone_get_name(zone);
     grantid = audio->grantids[zoneid];
 
