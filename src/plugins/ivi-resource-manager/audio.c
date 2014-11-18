@@ -742,7 +742,7 @@ static bool audio_allocate(mrp_zone_t *zone,
 {
     mrp_resmgr_audio_t *audio = (mrp_resmgr_audio_t *)userdata;
     uint32_t zoneid;
-    const char *zonenam = mrp_zone_get_name(zone);
+    const char *zonenam;
     audio_resource_t *ar;
     uint32_t grantid;
 
