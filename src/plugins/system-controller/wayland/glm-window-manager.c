@@ -983,6 +983,7 @@ static void surface_destination_rectangle_callback(void *data,
     mrp_glm_window_manager_t *wm;
     mrp_wayland_window_update_t u;
     char buf[256];
+    bool commit_needed = false;
 
     if (!(sf = mrp_htbl_lookup(surface_hash, data))) {
         mrp_log_error("system-controller: destination_rectangle callback "
@@ -1033,6 +1034,8 @@ static void surface_destination_rectangle_callback(void *data,
             ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface,
                                     sf->requested_x, sf->requested_y,
                                     sf->requested_width, sf->requested_height);
+
+            commit_needed = true;
         }
 
         memset(&u, 0, sizeof(u));
@@ -1046,6 +1049,13 @@ static void surface_destination_rectangle_callback(void *data,
         u.height    =  sf->height;
 
         mrp_wayland_window_update(sf->win, MRP_WAYLAND_WINDOW_CONFIGURE, &u);
+
+        if (commit_needed) {
+            mrp_debug("calling ivi_controller_commit_changes()");
+            ivi_controller_commit_changes((struct ivi_controller *)wm->proxy);
+        }
+
+        mrp_wayland_flush(wl);
     }
 }
 
