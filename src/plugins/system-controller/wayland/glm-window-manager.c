@@ -1020,7 +1020,7 @@ static void surface_destination_rectangle_callback(void *data,
          * loop ...
          */
         if ((sf->requested_x <= MAX_COORDINATE && x != sf->requested_x ) ||
-            (sf->requested_y <= MAX_COORDINATE && x != sf->requested_y ) ||
+            (sf->requested_y <= MAX_COORDINATE && y != sf->requested_y ) ||
             (sf->requested_width  > 0 && width  != sf->requested_width ) ||
             (sf->requested_height > 0 && height != sf->requested_height)  )
         {
