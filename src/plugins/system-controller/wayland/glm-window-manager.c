@@ -1022,20 +1022,38 @@ static void surface_destination_rectangle_callback(void *data,
          */
         if ((sf->requested_x <= MAX_COORDINATE && x != sf->requested_x ) ||
             (sf->requested_y <= MAX_COORDINATE && y != sf->requested_y ) ||
-            (sf->requested_width  > 0 && width  != sf->requested_width ) ||
-            (sf->requested_height > 0 && height != sf->requested_height)  )
+            (width != sf->requested_width) || (height != sf->requested_height))
         {
-            mrp_debug("calling ivi_controller_surface_set_destination_"
-                      "rectangle(ivi_controller_surface=%p, x=%d, y=%d, "
-                      "width=%d height=%d)", sf->ctrl_surface,
-                      sf->requested_x, sf->requested_y,
-                      sf->requested_width, sf->requested_height);
+            /*
+             * If our original requested width/height are zero,
+             * override them with the values from the surface's
+             * window's area, if available.
+             */
+            if (!sf->requested_width || !sf->requested_height) {
+                if (sf->win && sf->win->area) {
+                    mrp_debug("overriding requested parameters: width %d -> %d, height %d -> %d",
+                              sf->requested_width, sf->win->area->width,
+                              sf->requested_height, sf->win->area->height);
 
-            ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface,
-                                    sf->requested_x, sf->requested_y,
-                                    sf->requested_width, sf->requested_height);
+                    sf->requested_width  = sf->win->area->width;
+                    sf->requested_height = sf->win->area->height;
+                }
+            }
 
-            commit_needed = true;
+            /* Only rescale if width and height are nonzero */
+            if (sf->requested_width && sf->requested_height) {
+                mrp_debug("calling ivi_controller_surface_set_destination_"
+                          "rectangle(ivi_controller_surface=%p, x=%d, y=%d, "
+                          "width=%d height=%d)", sf->ctrl_surface,
+                          sf->requested_x, sf->requested_y,
+                          sf->requested_width, sf->requested_height);
+
+                ivi_controller_surface_set_destination_rectangle(sf->ctrl_surface,
+                                        sf->requested_x, sf->requested_y,
+                                        sf->requested_width, sf->requested_height);
+
+                commit_needed = true;
+            }
         }
 
         memset(&u, 0, sizeof(u));
