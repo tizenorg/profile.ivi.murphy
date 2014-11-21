@@ -768,7 +768,7 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
 
     mrp_debug("found application '%s'", win->application->appid);
 
-    mask |= MRP_WAYLAND_WINDOW_APP_MASK; 
+    mask |= MRP_WAYLAND_WINDOW_APP_MASK;
 
     memset(&u2, 0, sizeof(u2));
 
@@ -797,17 +797,13 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
 
     u2.mask |= MRP_WAYLAND_WINDOW_AREA_MASK;
 
-    if (!(mask & MRP_WAYLAND_WINDOW_POSITION_MASK)) {
-        u2.mask |= MRP_WAYLAND_WINDOW_POSITION_MASK;
-        u2.x = u2.area->x;
-        u2.y = u2.area->y;
-    }
+    u2.mask |= MRP_WAYLAND_WINDOW_POSITION_MASK;
+    u2.x = u2.area->x;
+    u2.y = u2.area->y;
 
-    if (!(mask & MRP_WAYLAND_WINDOW_SIZE_MASK)) {
-        u2.mask |= MRP_WAYLAND_WINDOW_SIZE_MASK;
-        u2.width  = u2.area->width;
-        u2.height = u2.area->height;
-    }
+    u2.mask |= MRP_WAYLAND_WINDOW_SIZE_MASK;
+    u2.width  = u2.area->width;
+    u2.height = u2.area->height;
 
     if ((u->mask & MRP_WAYLAND_WINDOW_LAYERTYPE_MASK) && win->layer) {
         u2.mask |= MRP_WAYLAND_WINDOW_LAYER_MASK;
@@ -821,11 +817,16 @@ static mrp_wayland_window_update_mask_t set_appid(mrp_wayland_window_t *win,
         win->x = u2.x;
         win->y = u2.y;
     }
-                
+
     if ((u2.mask & MRP_WAYLAND_WINDOW_SIZE_MASK)) {
         mask |= MRP_WAYLAND_WINDOW_SIZE_MASK;
         win->width  = u2.width;
         win->height = u2.height;
+    }
+
+    if ((u2.mask & MRP_WAYLAND_WINDOW_AREA_MASK)) {
+        mask |= MRP_WAYLAND_WINDOW_AREA_MASK;
+        win->area = u2.area;
     }
 
     return mask;
