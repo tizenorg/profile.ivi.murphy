@@ -2860,9 +2860,16 @@ static bool set_window_layer(mrp_wayland_window_t *win,
     if (changed) {
         memset(&u2, 0, sizeof(u2));
         u2.mask = MRP_WAYLAND_WINDOW_SURFACEID_MASK |
+                  MRP_WAYLAND_WINDOW_LAYER_MASK |
                   MRP_WAYLAND_WINDOW_RAISE_MASK;
         u2.surfaceid = win->surfaceid;
+        u2.layer = u->layer;
         u2.raise = 1;
+
+        mrp_debug("calling mrp_wayland_window_update(surface=%s, layer=%d,"
+                  "raise=%d)", surface_id_print(u2.surfaceid,
+                                                buf, sizeof(buf)),
+                  u2.layer, u2.raise);
 
         mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_VISIBLE, &u2);
     }
