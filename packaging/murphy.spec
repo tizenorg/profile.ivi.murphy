@@ -9,7 +9,6 @@
 %bcond_without websockets
 %bcond_without smack
 %bcond_without sysmon
-%bcond_without squashpkg
 
 # These are off by default, unless explicitly enabled.
 #
@@ -19,7 +18,7 @@
 #   ie. with optimization turned off and full debug info (-O0 -g3)
 #   pass '--with debug' to rpmbuild on the command line. Similary
 #   you can chose to compile with/without pulse, ecore, glib, qt,
-#   dbus, and telephony support. --without squashpkg will prevent
+#   dbus, and telephony support. --with subpkgs will prevent
 #   squashing the -core and -plugins-base packages into the base
 #   murphy package.
 #
@@ -27,9 +26,11 @@
 #   in Tizen any more. qt5 is the corrsponding macro for controlling
 #   Qt5 support.
 #
+%bcond_with subpkgs
 %bcond_with icosyscon
 %bcond_with qt
 %bcond_with debug
+
 
 Summary: Resource policy framework
 Name: murphy
@@ -41,7 +42,7 @@ URL: http://01.org/murphy/
 Source0: %{name}-%{version}.tar.gz
 Source1001: %{name}.manifest
 
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %endif
 
@@ -99,7 +100,7 @@ BuildRequires: libxml2-devel
 %description
 This package contains the basic Murphy daemon.
 
-%if %{with squashpkg}
+%if %{with subpkgs}
 %package core
 Summary: Murphy core runtime libraries
 Group: System/Libraries
@@ -120,7 +121,7 @@ This package contains a basic set of plugins.
 %package devel
 Summary: The header files and libraries needed for Murphy development
 Group: System/Libraries
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -141,7 +142,7 @@ This package contains documentation.
 %package pulse
 Summary: Murphy PulseAudio mainloop integration
 Group: System/Libraries
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -154,7 +155,7 @@ This package contains the Murphy PulseAudio mainloop integration runtime files.
 Summary: Murphy PulseAudio mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-pulse = %{version}
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -169,7 +170,7 @@ files.
 %package ecore
 Summary: Murphy EFL/ecore mainloop integration
 Group: System/Libraries
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -182,7 +183,7 @@ This package contains the Murphy EFL/ecore mainloop integration runtime files.
 Summary: Murphy EFL/ecore mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-ecore = %{version}
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -197,7 +198,7 @@ files.
 %package glib
 Summary: Murphy glib mainloop integration
 Group: System/Libraries
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -210,7 +211,7 @@ This package contains the Murphy glib mainloop integration runtime files.
 Summary: Murphy glib mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-glib = %{version}
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -225,7 +226,7 @@ files.
 %package qt
 Summary: Murphy Qt mainloop integration
 Group: System/Libraries
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -238,7 +239,7 @@ This package contains the Murphy Qt mainloop integration runtime files.
 Summary: Murphy Qt mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-qt = %{version}
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -271,7 +272,7 @@ plugins.
 Summary: Various test binaries for Murphy
 Group: System/Testing
 Requires: %{name} = %{version}
-%if %{with squashpkg}
+%if %{with subpkgs}
 Requires: %{name}-core = %{version}
 %else
 Requires: %{name} = %{version}
@@ -406,20 +407,20 @@ rm -f %{buildroot}%{_libdir}/murphy/*.la
 
 # Generate list of linkedin plugins (depends on the configuration).
 outdir="`pwd`"
-cd %{buildroot}
+pushd %{buildroot}
 find ./%{_libdir} -name libmurphy-plugin-*.so* | \
 sed 's#^./*#/#g' > $outdir/filelist.plugins-base
-cd $(outdir)
+popd
 echo "Found the following linked-in plugin files:"
 cat $outdir/filelist.plugins-base | sed 's/^/    /g'
 
 # Generate list of header files, filtering ones that go to subpackages.
 outdir="`pwd`"
-cd %{buildroot}
+pushd %{buildroot}
 find ./%{_includedir}/murphy | \
 grep -E -v '((pulse)|(ecore)|(glib)|(qt))-glue' | \
 sed 's#^./*#/#g' > $outdir/filelist.devel-includes
-cd $(outdir)
+popd
 
 # Replace the default sample/test config files with the packaging ones.
 rm -f %{buildroot}%{_sysconfdir}/murphy/*
@@ -467,7 +468,7 @@ systemctl --user disable --global murphyd.service
 fi
 ldconfig
 
-%if %{with squashpkg}
+%if %{with subpkgs}
 %post core
 ldconfig
 
@@ -519,10 +520,10 @@ ldconfig
 %postun gam
 ldconfig
 
-%if %{with squashpkg}
-%files -f filelist.plugins-base
-%else
+%if %{with subpkgs}
 %files
+%else
+%files -f filelist.plugins-base
 %endif
 %defattr(-,root,root,-)
 %manifest murphy.manifest
@@ -541,7 +542,7 @@ ldconfig
 %{_datadir}/murphy
 %endif
 
-%if %{with squashpkg}
+%if %{with subpkgs}
 %files core
 %defattr(-,root,root,-)
 %endif
@@ -561,8 +562,11 @@ ldconfig
 %{_libdir}/libmurphy-libdbus.so.*
 %{_libdir}/libmurphy-dbus-libdbus.so.*
 %endif
+%if %{with sysmon}
+%{_libdir}/libmurphy-libdbus.so.*
+%endif
 
-%if %{with squashpkg}
+%if %{with subpkgs}
 %files plugins-base -f filelist.plugins-base
 %defattr(-,root,root,-)
 %endif
