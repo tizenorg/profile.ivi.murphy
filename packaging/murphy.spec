@@ -18,15 +18,12 @@
 #   ie. with optimization turned off and full debug info (-O0 -g3)
 #   pass '--with debug' to rpmbuild on the command line. Similary
 #   you can chose to compile with/without pulse, ecore, glib, qt,
-#   dbus, and telephony support. --with subpkgs will prevent
-#   squashing the -core and -plugins-base packages into the base
-#   murphy package.
+#   dbus, and telephony support.
 #
 #   qt is the macro for controlling Qt4 support, which is not supported
 #   in Tizen any more. qt5 is the corrsponding macro for controlling
 #   Qt5 support.
 #
-%bcond_with subpkgs
 %bcond_with icosyscon
 %bcond_with qt
 %bcond_with debug
@@ -41,10 +38,6 @@ Group: System/Service
 URL: http://01.org/murphy/
 Source0: %{name}-%{version}.tar.gz
 Source1001: %{name}.manifest
-
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%endif
 
 Requires(post): /bin/systemctl
 Requires(post): libcap-tools
@@ -100,32 +93,10 @@ BuildRequires: libxml2-devel
 %description
 This package contains the basic Murphy daemon.
 
-%if %{with subpkgs}
-%package core
-Summary: Murphy core runtime libraries
-Group: System/Libraries
-
-%description core
-This package contains the core runtime libraries.
-
-%package plugins-base
-Summary: The basic set of Murphy plugins
-Group: System/Service
-Requires: %{name} = %{version}
-Requires: %{name}-core = %{version}
-
-%description plugins-base
-This package contains a basic set of plugins.
-%endif
-
 %package devel
 Summary: The header files and libraries needed for Murphy development
 Group: System/Libraries
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 Requires: libjson-devel
 
 %description devel
@@ -142,11 +113,7 @@ This package contains documentation.
 %package pulse
 Summary: Murphy PulseAudio mainloop integration
 Group: System/Libraries
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description pulse
 This package contains the Murphy PulseAudio mainloop integration runtime files.
@@ -155,11 +122,7 @@ This package contains the Murphy PulseAudio mainloop integration runtime files.
 Summary: Murphy PulseAudio mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-pulse = %{version}
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description pulse-devel
 This package contains the Murphy PulseAudio mainloop integration development
@@ -170,11 +133,7 @@ files.
 %package ecore
 Summary: Murphy EFL/ecore mainloop integration
 Group: System/Libraries
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description ecore
 This package contains the Murphy EFL/ecore mainloop integration runtime files.
@@ -183,11 +142,7 @@ This package contains the Murphy EFL/ecore mainloop integration runtime files.
 Summary: Murphy EFL/ecore mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-ecore = %{version}
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description ecore-devel
 This package contains the Murphy EFL/ecore mainloop integration development
@@ -198,11 +153,7 @@ files.
 %package glib
 Summary: Murphy glib mainloop integration
 Group: System/Libraries
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description glib
 This package contains the Murphy glib mainloop integration runtime files.
@@ -211,11 +162,7 @@ This package contains the Murphy glib mainloop integration runtime files.
 Summary: Murphy glib mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-glib = %{version}
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description glib-devel
 This package contains the Murphy glib mainloop integration development
@@ -226,11 +173,7 @@ files.
 %package qt
 Summary: Murphy Qt mainloop integration
 Group: System/Libraries
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description qt
 This package contains the Murphy Qt mainloop integration runtime files.
@@ -239,11 +182,7 @@ This package contains the Murphy Qt mainloop integration runtime files.
 Summary: Murphy Qt mainloop integration development files
 Group: System/Libraries
 Requires: %{name}-qt = %{version}
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description qt-devel
 This package contains the Murphy Qt mainloop integration development
@@ -272,11 +211,7 @@ plugins.
 Summary: Various test binaries for Murphy
 Group: System/Testing
 Requires: %{name} = %{version}
-%if %{with subpkgs}
-Requires: %{name}-core = %{version}
-%else
 Requires: %{name} = %{version}
-%endif
 
 %description tests
 This package contains various test binaries for Murphy.
@@ -468,20 +403,6 @@ systemctl --user disable --global murphyd.service
 fi
 ldconfig
 
-%if %{with subpkgs}
-%post core
-ldconfig
-
-%postun core
-ldconfig
-
-%post plugins-base
-ldconfig
-
-%postun plugins-base
-ldconfig
-%endif
-
 %if %{with glib}
 %post glib
 ldconfig
@@ -520,11 +441,7 @@ ldconfig
 %postun gam
 ldconfig
 
-%if %{with subpkgs}
-%files
-%else
 %files -f filelist.plugins-base
-%endif
 %defattr(-,root,root,-)
 %manifest murphy.manifest
 %{_bindir}/murphyd
@@ -542,10 +459,6 @@ ldconfig
 %{_datadir}/murphy
 %endif
 
-%if %{with subpkgs}
-%files core
-%defattr(-,root,root,-)
-%endif
 %{_libdir}/libmurphy-common.so.*
 %{_libdir}/libmurphy-core.so.*
 %{_libdir}/libmurphy-resolver.so.*
@@ -566,26 +479,12 @@ ldconfig
 %{_libdir}/libmurphy-libdbus.so.*
 %endif
 
-%if %{with subpkgs}
-%files plugins-base -f filelist.plugins-base
-%defattr(-,root,root,-)
-%endif
 %{_libdir}/murphy/plugins/plugin-domain-control.so
 %{_libdir}/murphy/plugins/plugin-resource-asm.so
 %{_libdir}/murphy/plugins/plugin-resource-native.so
 
 %files devel -f filelist.devel-includes
 %defattr(-,root,root,-)
-# %%{_includedir}/murphy/config.h
-# %%{_includedir}/murphy/common.h
-# %%{_includedir}/murphy/core.h
-# %%{_includedir}/murphy/common
-# %%{_includedir}/murphy/core
-# %%{_includedir}/murphy/resolver
-# %%{_includedir}/murphy/resource
-# # hmmm... should handle disabled plugins properly.
-# %%{_includedir}/murphy/domain-control
-# %%{_includedir}/murphy/plugins
 %{_includedir}/murphy-db
 %{_libdir}/libmurphy-common.so
 %{_libdir}/libmurphy-core.so
@@ -601,7 +500,6 @@ ldconfig
 %{_libdir}/pkgconfig/murphy-common.pc
 %{_libdir}/pkgconfig/murphy-core.pc
 %{_libdir}/pkgconfig/murphy-resolver.pc
-# %%{_libdir}/pkgconfig/murphy-resource.pc
 %if %{with lua}
 %{_libdir}/pkgconfig/murphy-lua-utils.pc
 %{_libdir}/pkgconfig/murphy-lua-decision.pc
@@ -613,7 +511,6 @@ ldconfig
 %{_libdir}/libbreedline*.so
 %{_libdir}/pkgconfig/breedline*.pc
 %if %{with dbus}
-# %%{_includedir}/murphy/dbus
 %{_libdir}/libmurphy-libdbus.so
 %{_libdir}/libmurphy-dbus-libdbus.so
 %{_libdir}/pkgconfig/murphy-libdbus.pc
