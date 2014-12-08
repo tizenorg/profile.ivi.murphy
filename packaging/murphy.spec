@@ -216,13 +216,6 @@ Requires: %{name} = %{version}
 %description tests
 This package contains various test binaries for Murphy.
 
-%package ivi-resource-manager
-Summary: Murphy IVI resource manager plugin
-Group: System/Service
-
-%description ivi-resource-manager
-This package contains the Murphy IVI resource manager plugin.
-
 %if %{with icosyscon}
 %package system-controller
 Summary: Murphy IVI System Controller plugin
@@ -252,7 +245,7 @@ V="V=1"
 %endif
 
 CONFIG_OPTIONS=""
-DYNAMIC_PLUGINS="domain-control,system-controller,ivi-resource-manager"
+DYNAMIC_PLUGINS="domain-control,system-controller"
 
 %if %{with pulse}
 CONFIG_OPTIONS="$CONFIG_OPTIONS --enable-gpl --enable-pulse"
@@ -598,11 +591,6 @@ ldconfig
 %{_bindir}/resource-context-create
 %{_bindir}/test-domain-controller
 %{_bindir}/murphy-console
-%manifest murphy.manifest
-
-%files ivi-resource-manager
-%defattr(-,root,root,-)
-%{_libdir}/murphy/plugins/plugin-ivi-resource-manager.so
 %manifest murphy.manifest
 
 %if %{with icosyscon}
