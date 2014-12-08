@@ -1324,36 +1324,6 @@ resource_client_CFLAGS  = $(AM_CFLAGS)
 resource_client_LDADD   =  libmurphy-common.la
 endif
 
-# IVI resource manager plugin
-if BUILD_RESOURCES
-PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES = 				    \
-		plugins/ivi-resource-manager/plugin-ivi-resource-manager.c  \
-		plugins/ivi-resource-manager/class.c 			    \
-		plugins/ivi-resource-manager/screen.c			    \
-		plugins/ivi-resource-manager/audio.c                        \
-		plugins/ivi-resource-manager/appid.c
-PLUGIN_IVI_RESOURCE_MANAGER_SOURCES = 					    \
-		$(PLUGIN_IVI_RESOURCE_MANAGER_REGULAR_SOURCES)
-PLUGIN_IVI_RESOURCE_MANAGER_CFLAGS =					    \
-		$(LUA_CFLAGS)										\
-		$(TZCONFIG_CFLAGS)
-
-PLUGIN_IVI_RESOURCE_MANAGER_LIBS =       				    \
-		libmurphy-common.la									\
-		$(RESOURCE_LIBRARY)                   			    \
-		$(LUA_LIBS) 										\
-		$(TZCONFIG_LIBS)
-
-plugin_ivi_resource_manager_la_SOURCES = $(PLUGIN_IVI_RESOURCE_MANAGER_SOURCES)
-plugin_ivi_resource_manager_la_CFLAGS  = $(PLUGIN_IVI_RESOURCE_MANAGER_CFLAGS)\
-					 $(MURPHY_CFLAGS) $(AM_CFLAGS)	      \
-					 $(JSON_CFLAGS)
-plugin_ivi_resource_manager_la_LDFLAGS = -module -avoid-version
-plugin_ivi_resource_manager_la_LIBADD  = $(PLUGIN_IVI_RESOURCE_MANAGER_LIBS)
-
-plugin_LTLIBRARIES += plugin-ivi-resource-manager.la
-endif
-
 #
 # GAM support:
 # - decision-tree library
