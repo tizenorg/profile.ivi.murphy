@@ -2869,7 +2869,7 @@ static bool set_window_layer(mrp_wayland_window_t *win,
         mrp_debug("calling mrp_wayland_window_update(surface=%s, layer=%d,"
                   "raise=%d)", surface_id_print(u2.surfaceid,
                                                 buf, sizeof(buf)),
-                  u2.layer, u2.raise);
+                  u2.layer->layerid, u2.raise);
 
         mrp_wayland_window_update(win, MRP_WAYLAND_WINDOW_VISIBLE, &u2);
     }
