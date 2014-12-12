@@ -389,8 +389,8 @@ int mem_watch_update(mem_watch_lua_t *w, lua_State *L)
         double       value = ewma_add(&w->value, sample);
         mem_limit_t *l;
 
-        mrp_debug("%s sample=%d, estimate=%.2f", get_sample_name(w->sample),
-                  sample, value);
+        mrp_debug("%s sample=%llu, estimate=%.2f", get_sample_name(w->sample),
+                  (unsigned long long)sample, value);
 
         change = FALSE;
         for (l = w->limits; l->label != NULL; l++) {
@@ -410,7 +410,8 @@ int mem_watch_update(mem_watch_lua_t *w, lua_State *L)
         mrp_funcbridge_value_t args[2], rv;
         char                            rt;
 
-        mrp_debug("%s sample=%d", get_sample_name(w->sample), sample);
+        mrp_debug("%s sample=%llu", get_sample_name(w->sample),
+                  (unsigned long long)sample);
 
         args[0].pointer = w;
         args[1].integer = sample;
