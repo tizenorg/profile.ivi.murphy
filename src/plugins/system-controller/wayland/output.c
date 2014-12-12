@@ -242,8 +242,8 @@ static void geometry_callback(void *data,
     wl = out->interface->wl;
 
     mrp_debug("x=%d y=%d width=%d height=%d subpixel=%d make='%s' model='%s' "
-              "transorm=%d", pixel_x,pixel_y, physical_width,physical_height,
-              subpixel, make ? make : "", model ? model : "");
+              "transform=%d", pixel_x,pixel_y, physical_width,physical_height,
+              subpixel, make ? make : "", model ? model : "", transform);
 
     switch (transform) {
     default:
