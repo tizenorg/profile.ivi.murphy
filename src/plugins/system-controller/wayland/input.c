@@ -252,7 +252,7 @@ void mrp_wayland_input_request(mrp_wayland_t *wl,mrp_wayland_input_update_t *u)
 
         if (!inp) {
             mrp_debug("can't find input: device:'%s' id:%d",
-                      u->device, u->id);
+                      u->device.name, u->id);
             return;
         }
 
@@ -269,7 +269,7 @@ void mrp_wayland_input_request(mrp_wayland_t *wl,mrp_wayland_input_update_t *u)
     }
     else {
         mrp_debug("can't find input: device:'%s'; "
-                  "neither id nor name is present");
+                  "neither id nor name is present", u->device.name);
         return;
     }
 
@@ -277,7 +277,7 @@ void mrp_wayland_input_request(mrp_wayland_t *wl,mrp_wayland_input_update_t *u)
     im = inp->device->im;
 
     mrp_wayland_input_request_print(u, rbuf,sizeof(rbuf));
-    mrp_debug("input '%s'/%s%s", u->device, inbuf, rbuf);
+    mrp_debug("input '%s'/%s%s", u->device.name, inbuf, rbuf);
 
     im->input_request(inp, u);
 }

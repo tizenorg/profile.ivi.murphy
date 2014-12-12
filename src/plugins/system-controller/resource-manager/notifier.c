@@ -282,7 +282,7 @@ void mrp_resmgr_notifier_flush_events(mrp_resmgr_t *resmgr,
         return;
     }
 
-    mrp_debug("%s %s%d%s events in zone %u",
+    mrp_debug("%s %s%zu%s events in zone %u",
               notifier->callback ? "forwarding" : "throwing away",
               str1, nevent, str2, zoneid);
 
