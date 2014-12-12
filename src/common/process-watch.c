@@ -688,31 +688,34 @@ static inline int bpf_copy(bpf_t *b, int from, int to)
 #define PIDOFFS     EVNTOFFS(exec, process_pid)
 #define TIDOFFS     EVNTOFFS(exec, process_tgid)
 
-#define STMT(b, stmt, k) do {                                             \
-        mrp_debug("@0x%4.4lx: %s, 0x%x", (b)->ip - (b)->insns, #stmt,     \
-                  (unsigned int)k);                                       \
-        if (bpf_ensure(b, 1) < 0) {                                       \
-            mrp_log_error("Failed to allocate BPF code buffer.");         \
-            exit(1);                                                      \
-        }                                                                 \
-        *(b)->ip++ = (struct sock_filter)BPF_STMT(stmt, k);               \
+#define STMT(b, stmt, k) do {                                           \
+        mrp_debug("@0x%4.4x: %s, 0x%x",                                 \
+                  (unsigned int)((b)->ip - (b)->insns),                 \
+                  #stmt,                                                \
+                  (unsigned int)k);                                     \
+        if (bpf_ensure(b, 1) < 0) {                                     \
+            mrp_log_error("Failed to allocate BPF code buffer.");       \
+            exit(1);                                                    \
+        }                                                               \
+        *(b)->ip++ = (struct sock_filter)BPF_STMT(stmt, k);             \
     } while (0)
 
 
-#define JUMP(b, test, k, jtrue, jfalse) do {                             \
-        int offs = (b)->ip - (b)->insns;                                 \
-                                                                         \
-        mrp_debug("@0x%4.4x: %s, 0x%x, $0x%x : @0x%x", offs,             \
-                  #test,                                                 \
-                  (unsigned int)k,                                       \
-                  (unsigned  int)offs + jtrue + 1,                       \
-                  (unsigned int)offs + jfalse + 1);                      \
-        if (bpf_ensure(b, 1) < 0) {                                      \
-            mrp_log_error("Failed to allocate BPF code buffer.");        \
-            exit(1);                                                     \
-        }                                                                \
-        *(b)->ip++ = (struct sock_filter)BPF_JUMP(test, k,               \
-                                                  jtrue, jfalse);        \
+#define JUMP(b, test, k, jtrue, jfalse) do {                            \
+        int offs = (b)->ip - (b)->insns;                                \
+                                                                        \
+        mrp_debug("@0x%4.4x: %s, 0x%x, $0x%x : @0x%x",                  \
+                  (unsigned int)offs,                                   \
+                  #test,                                                \
+                  (unsigned int)k,                                      \
+                  (unsigned int)offs + jtrue + 1,                       \
+                  (unsigned int)offs + jfalse + 1);                     \
+        if (bpf_ensure(b, 1) < 0) {                                     \
+            mrp_log_error("Failed to allocate BPF code buffer.");       \
+            exit(1);                                                    \
+        }                                                               \
+        *(b)->ip++ = (struct sock_filter)BPF_JUMP(test, k,              \
+                                                  jtrue, jfalse);       \
     } while (0)
 
 
