@@ -146,7 +146,7 @@ bool parse_dbus_value(mrp_dbus_msg_t * msg,
             *((char***)spe->valptr) = copy;
         }
 
-        mrp_debug("Parsed string array of size %d", n);
+        mrp_debug("Parsed string array of size %zu", n);
 #else
         int n = 1;
         char ** ap = NULL;

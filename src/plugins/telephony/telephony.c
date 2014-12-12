@@ -174,7 +174,7 @@ void tel_watcher(int event, tel_call_t *call, void *data)
 
         n = MQI_DELETE(tel_calls, where);
         mrp_debug("%d call on service/modem %s removed from Murphy DB",
-                  service, n);
+                  n, service);
         break;
       }
 
