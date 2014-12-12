@@ -142,12 +142,15 @@ static int read_usage(mem_usage_t *m)
 
 static void dump_usage(char *msg, mem_usage_t *m)
 {
-    mrp_debug("%s: MemTotal=%llu, MemFree=%llu",
-              msg, m->mem_total, m->mem_free);
-    mrp_debug("%s: SwapTotal=%llu, SwapFree=%llu",
-              msg, m->swap_total, m->swap_free);
-    mrp_debug("%s: dirty=%llu, writeback=%llu",
-              msg, m->dirty, m->writeback);
+    mrp_debug("%s: MemTotal=%llu, MemFree=%llu", msg,
+              (unsigned long long)m->mem_total,
+              (unsigned long long)m->mem_free);
+    mrp_debug("%s: SwapTotal=%llu, SwapFree=%llu", msg,
+              (unsigned long long)m->swap_total,
+              (unsigned long long) m->swap_free);
+    mrp_debug("%s: dirty=%llu, writeback=%llu", msg,
+              (unsigned long long)m->dirty,
+              (unsigned long long)m->writeback);
 }
 
 
