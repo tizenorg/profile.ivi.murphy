@@ -35,7 +35,6 @@
 #include <murphy/common/debug.h>
 #include <murphy/core/plugin.h>
 #include <murphy/core/console.h>
-#include <murphy/core/event.h>
 #include <murphy/core/context.h>
 
 
