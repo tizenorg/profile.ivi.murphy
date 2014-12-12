@@ -1,3 +1,10 @@
+* Fri Dec 12 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.68
+- ivi-resource-manager: fix a few bugs discovered by static analysis.
+- system-controller: several window/surface/layer management fixes.
+- packaging: adjusted spec file for yocto-tizen synchronization.
+- packaging: get rid of unused finer-grained subpackaging.
+- ivi-resource-manager: removed as unused/deprecated.
+
 * Fri Nov 14 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.67
 - system-controller: fix scripting-notifier memory leaks.
 - system-controller: fix out-of-bounds access in audio.c.
