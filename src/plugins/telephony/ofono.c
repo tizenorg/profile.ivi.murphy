@@ -864,7 +864,7 @@ static int call_changed_cb(mrp_dbus_t *dbus,
     FAIL_IF_NULL(ofono->notify, FALSE, "notify is NULL");
 
     mrp_debug("calling notify TEL_CALL_CHANGED on call %s, modem %s",
-              (tel_call_t*)call->call_id, modem->modem_id);
+              call->call_id, modem->modem_id);
 
 #if _NOTIFY_MDB
     ofono->notify(TEL_CALL_CHANGED, (tel_call_t*)call, modem->modem_id);
@@ -910,7 +910,7 @@ static int call_endreason_cb(mrp_dbus_t *dbus,
 
     FAIL_IF_NULL(ofono->notify, FALSE, "notify is NULL");
     mrp_debug("calling notify TEL_CALL_CHANGED on call %s, modem %s",
-              (tel_call_t*)call->call_id, modem->modem_id);
+              call->call_id, modem->modem_id);
 #if _NOTIFY_MDB
     ofono->notify(TEL_CALL_CHANGED, (tel_call_t*)call, modem->modem_id);
 #else
@@ -969,7 +969,7 @@ static void call_query_cb(mrp_dbus_t *dbus,
     mrp_list_foreach(&modem->calls, p, n) {
         call = mrp_list_entry(p, ofono_call_t, hook);
         mrp_debug("calling notify TEL_CALL_LISTED on call %s, modem %s",
-                  (tel_call_t*)call->call_id, modem->modem_id);
+                  call->call_id, modem->modem_id);
 #if _NOTIFY_MDB
             ofono->notify(TEL_CALL_LISTED, (tel_call_t*)call, modem->modem_id);
 #else
@@ -1008,7 +1008,7 @@ static int call_removed_cb(mrp_dbus_t *dbus,
     FAIL_IF_NULL(ofono->notify, FALSE, "notify is NULL");
 
     mrp_debug("calling notify TEL_CALL_REMOVED on call %s, modem %s",
-               (tel_call_t*)call->call_id, modem->modem_id);
+               call->call_id, modem->modem_id);
 #if _NOTIFY_MDB
     ofono->notify(TEL_CALL_REMOVED, (tel_call_t*)call, modem->modem_id);
 #else
@@ -1040,7 +1040,7 @@ static int call_added_cb(mrp_dbus_t *dbus, mrp_dbus_msg_t *msg, void *user_data)
         if((call = parse_call_msg(msg, modem)) != NULL)
             if(ofono->notify) {
                 mrp_debug("calling notify TEL_CALL_ADDED on call %s, modem %s",
-                          (tel_call_t*)call->call_id, modem->modem_id);
+                          call->call_id, modem->modem_id);
             #if _NOTIFY_MDB
                 ofono->notify(TEL_CALL_ADDED,
                               (tel_call_t*)call,
