@@ -105,7 +105,7 @@ typedef struct {
     mrp_htbl_t *pqs; /* "application_class" -> priority_t */
 
     mrp_event_watch_t *w;
-    int events[4];
+    uint32_t events[4];
 } gam_connect_t;
 
 typedef struct {
@@ -539,14 +539,16 @@ static bool register_sink_with_gam(gam_connect_t *ctx, mrp_resource_set_t *rset,
     return TRUE;
 }
 
-static void resource_set_event(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
-        void *user_data)
+static void resource_set_event(mrp_event_watch_t *w, uint32_t id, int format,
+                               void *data, void *user_data)
 {
     gam_connect_t *ctx = (gam_connect_t *) user_data;
+    mrp_msg_t *event_data = (mrp_msg_t *)data;
     uint32_t rset_id;
     uint16_t tag = MRP_RESOURCE_TAG_RSET_ID;
 
     MRP_UNUSED(w);
+    MRP_UNUSED(format);
 
     mrp_msg_get(event_data, MRP_MSG_TAG_UINT32(tag, &rset_id), NULL);
 
@@ -722,8 +724,9 @@ static void priority_destroy(void *data)
 
 static int gam_connect_init(mrp_plugin_t *plugin)
 {
+    mrp_event_mask_t mask = MRP_MASK_EMPTY;
+    mrp_event_bus_t *bus = MRP_GLOBAL_BUS;
     gam_connect_t *ctx;
-    mrp_event_mask_t mask = 0;
     mrp_htbl_config_t conf;
 
     if (!plugin->args[ARG_MURPHY_CONNECTS].bln) {
@@ -732,8 +735,6 @@ static int gam_connect_init(mrp_plugin_t *plugin)
     }
 
     ctx = mrp_allocz(sizeof(gam_connect_t));
-
-    mrp_reset_event_mask(&mask);
 
     if (!ctx)
         return FALSE;
@@ -757,21 +758,15 @@ static int gam_connect_init(mrp_plugin_t *plugin)
 
     /* subscribe to the events coming from resource library */
 
-    mrp_add_named_event(&mask, MURPHY_RESOURCE_EVENT_CREATED);
-    mrp_add_named_event(&mask, MURPHY_RESOURCE_EVENT_ACQUIRE);
-    mrp_add_named_event(&mask, MURPHY_RESOURCE_EVENT_RELEASE);
-    mrp_add_named_event(&mask, MURPHY_RESOURCE_EVENT_DESTROYED);
+    ctx->events[CREATED] = mrp_event_id(MURPHY_RESOURCE_EVENT_CREATED);
+    ctx->events[ACQUIRE] = mrp_event_id(MURPHY_RESOURCE_EVENT_ACQUIRE);
+    ctx->events[RELEASE] = mrp_event_id(MURPHY_RESOURCE_EVENT_RELEASE);
+    ctx->events[DESTROYED] = mrp_event_id(MURPHY_RESOURCE_EVENT_DESTROYED);
 
-    ctx->events[CREATED] = mrp_get_event_id(MURPHY_RESOURCE_EVENT_CREATED, 1);
-    ctx->events[ACQUIRE] = mrp_get_event_id(MURPHY_RESOURCE_EVENT_ACQUIRE, 1);
-    ctx->events[RELEASE] = mrp_get_event_id(MURPHY_RESOURCE_EVENT_RELEASE, 1);
-    ctx->events[DESTROYED] = mrp_get_event_id(MURPHY_RESOURCE_EVENT_DESTROYED,
-            1);
-
-    mrp_add_event(&mask, ctx->events[CREATED]);
-    mrp_add_event(&mask, ctx->events[ACQUIRE]);
-    mrp_add_event(&mask, ctx->events[RELEASE]);
-    mrp_add_event(&mask, ctx->events[DESTROYED]);
+    mrp_mask_set(&mask, ctx->events[CREATED]);
+    mrp_mask_set(&mask, ctx->events[ACQUIRE]);
+    mrp_mask_set(&mask, ctx->events[RELEASE]);
+    mrp_mask_set(&mask, ctx->events[DESTROYED]);
 
     conf.comp = mrp_string_comp;
     conf.hash = mrp_string_hash;
@@ -784,7 +779,7 @@ static int gam_connect_init(mrp_plugin_t *plugin)
     if (!ctx->pqs)
         goto error;
 
-    ctx->w = mrp_add_event_watch(&mask, resource_set_event, ctx);
+    ctx->w = mrp_event_add_watch_mask(bus, &mask, resource_set_event, ctx);
     if (!ctx->w)
         goto error;
 
@@ -797,7 +792,7 @@ error:
     mrp_log_error("Unable to do Genivi Audio Manager connections!");
 
     if (ctx->w)
-        mrp_del_event_watch(ctx->w);
+        mrp_event_del_watch(ctx->w);
 
     if (ctx->pqs)
         mrp_htbl_destroy(ctx->pqs, FALSE);
@@ -827,7 +822,7 @@ static void gam_connect_exit(mrp_plugin_t *plugin)
     ctx = (gam_connect_t *) plugin->data;
 
     if (ctx->w)
-        mrp_del_event_watch(ctx->w);
+        mrp_event_del_watch(ctx->w);
 
     if (ctx->pqs)
         mrp_htbl_destroy(ctx->pqs, FALSE);
@@ -1766,7 +1761,7 @@ static void print_usecase_cb(mrp_console_t *, void *, int, char **);
 static mrp_resmgr_config_t *config_create(mrp_plugin_t *);
 static void config_destroy(mrp_resmgr_config_t *);
 
-static void event_cb(mrp_event_watch_t *, int, mrp_msg_t *, void *);
+static void event_cb(mrp_event_watch_t *, uint32_t, int, void *, void *);
 static int subscribe_events(mrp_resmgr_t *);
 static void unsubscribe_events(mrp_resmgr_t *);
 
@@ -1976,15 +1971,16 @@ static void config_destroy(mrp_resmgr_config_t *config)
 }
 
 
-static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
+static void event_cb(mrp_event_watch_t *w, uint32_t id, int format, void *data,
                      void *user_data)
 {
-    mrp_plugin_t      *plugin   = (mrp_plugin_t *)user_data;
+    mrp_plugin_t      *plugin     = (mrp_plugin_t *)user_data;
+    mrp_msg_t         *event_data = (mrp_msg_t *)data;
 #if 0
     mrp_plugin_arg_t  *args     = plugin->args;
 #endif
     mrp_resmgr_t      *resmgr   = (mrp_resmgr_t *)plugin->data;
-    const char        *event    = mrp_get_event_name(id);
+    const char        *event    = mrp_event_name(id);
     uint16_t           tag_inst = MRP_PLUGIN_TAG_INSTANCE;
     uint16_t           tag_name = MRP_PLUGIN_TAG_PLUGIN;
     const char        *inst;
@@ -1992,6 +1988,7 @@ static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
     int                success;
 
     MRP_UNUSED(w);
+    MRP_UNUSED(format);
 
     mrp_log_info("%s: got event 0x%x (%s):", plugin->instance, id, event);
 
@@ -2013,18 +2010,18 @@ static void event_cb(mrp_event_watch_t *w, int id, mrp_msg_t *event_data,
 static int subscribe_events(mrp_resmgr_t *resmgr)
 {
     mrp_plugin_t *plugin = resmgr->plugin;
-    mrp_event_mask_t events;
+    mrp_mainloop_t *ml = plugin->ctx->ml;
+    mrp_event_bus_t *bus = mrp_event_bus_get(ml, MRP_PLUGIN_BUS);
+    mrp_event_mask_t events = MRP_MASK_EMPTY;
 
-    mrp_set_named_events(&events,
-                         MRP_PLUGIN_EVENT_LOADED,
-                         MRP_PLUGIN_EVENT_STARTED,
-                         MRP_PLUGIN_EVENT_FAILED,
-                         MRP_PLUGIN_EVENT_STOPPING,
-                         MRP_PLUGIN_EVENT_STOPPED,
-                         MRP_PLUGIN_EVENT_UNLOADED,
-                         NULL);
+    mrp_mask_set(&events, mrp_event_id(MRP_PLUGIN_EVENT_LOADED));
+    mrp_mask_set(&events, mrp_event_id(MRP_PLUGIN_EVENT_STARTED));
+    mrp_mask_set(&events, mrp_event_id(MRP_PLUGIN_EVENT_FAILED));
+    mrp_mask_set(&events, mrp_event_id(MRP_PLUGIN_EVENT_STOPPING));
+    mrp_mask_set(&events, mrp_event_id(MRP_PLUGIN_EVENT_STOPPED));
+    mrp_mask_set(&events, mrp_event_id(MRP_PLUGIN_EVENT_UNLOADED));
 
-    resmgr->w = mrp_add_event_watch(&events, event_cb, plugin);
+    resmgr->w = mrp_event_add_watch_mask(bus, &events, event_cb, plugin);
 
     return (resmgr->w != NULL);
 }
@@ -2033,7 +2030,7 @@ static int subscribe_events(mrp_resmgr_t *resmgr)
 static void unsubscribe_events(mrp_resmgr_t *resmgr)
 {
     if (resmgr->w) {
-        mrp_del_event_watch(resmgr->w);
+        mrp_event_del_watch(resmgr->w);
         resmgr->w = NULL;
     }
 }
