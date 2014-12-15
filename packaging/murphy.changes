@@ -1,3 +1,7 @@
+* Mon Dec 15 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.69
+- common: more C++-friendly bitmask handling for GenIVI Audio Manager.
+- process-watch: get rid of mrp_debug formatting warnings.
+
 * Fri Dec 12 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.68
 - ivi-resource-manager: fix a few bugs discovered by static analysis.
 - system-controller: several window/surface/layer management fixes.
