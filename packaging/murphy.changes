@@ -1,3 +1,6 @@
+* Mon Dec 17 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.71
+- config: add missing name attribute definition for audio resources.
+
 * Mon Dec 15 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.70
 - common: use decltype as an approximation of typeof for C++.
 
