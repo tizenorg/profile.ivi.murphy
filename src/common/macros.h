@@ -37,6 +37,10 @@
 #    define TRUE (!FALSE)
 #endif
 
+#ifdef __cplusplus
+#  define typeof decltype
+#endif
+
 /** Align ptr to multiple of align. */
 #define MRP_ALIGN(ptr, align) (((ptr) + ((align)-1)) & ~((align)-1))
 
