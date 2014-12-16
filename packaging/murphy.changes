@@ -1,6 +1,8 @@
+* Mon Dec 15 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.70
+- common: use decltype as an approximation of typeof for C++.
+
 * Mon Dec 15 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.69
 - common: more C++-friendly bitmask handling for GenIVI Audio Manager.
-- common: try using decltype as typeof for C++ (for AMB).
 - process-watch: get rid of mrp_debug formatting warnings.
 
 * Fri Dec 12 2014 Krisztian Litkey <krisztian.litkey@intel.com> - 0.0.68
