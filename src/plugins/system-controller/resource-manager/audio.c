@@ -171,6 +171,7 @@ static mrp_attr_def_t audio_attrs[] = {
     ATTRIBUTE("role"     , string , "music"      ),
     ATTRIBUTE("pid"      , string , "<unknown>"  ),
     ATTRIBUTE("policy"   , string , "relaxed"    ),
+    ATTRIBUTE("name"     , string , "<unknown>"  ),
     ATTR_END
 };
 

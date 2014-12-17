@@ -51,6 +51,7 @@
 #include "resource-lua.h"
 
 #define NAME_LENGTH          24
+#define ATTR_LENGTH          64
 
 #define ZONE_ID_IDX          0
 #define ZONE_NAME_IDX        1
@@ -140,7 +141,7 @@ int mrp_resource_owner_create_database_table(mrp_resource_def_t *rdef)
 
         col->name   = atd->name;
         col->type   = atd->type;
-        col->length = (col->type == mqi_string) ? NAME_LENGTH : 0;
+        col->length = (col->type == mqi_string) ? ATTR_LENGTH : 0;
         col->flags  = 0;
     }
 
