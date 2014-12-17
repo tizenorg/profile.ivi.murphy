@@ -253,11 +253,12 @@ then
         name = "audio_playback",
         shareable = true,
         attributes = {
-            role = { mdb.string, "music", "rw" },
-            pid = { mdb.string, "<unknown>", "rw" },
-            policy = { mdb.string, "relaxed", "rw" },
-            source = { mdb.string, "webkit", "rw" },
-            conn_id = { mdb.unsigned, 0, "rw" }
+            role    = { mdb.string, "music", "rw" },
+            pid     = { mdb.string, "<unknown>", "rw" },
+            policy  = { mdb.string, "relaxed", "rw" },
+            source  = { mdb.string, "webkit", "rw" },
+            conn_id = { mdb.unsigned, 0, "rw" },
+            name    = { mdb.string, "<unknown>", "rw" },
         }
    }
 end
@@ -269,7 +270,8 @@ if not m:plugin_exists('gam-resource-manager') then
         attributes = {
              role   = { mdb.string, "music"    , "rw" },
              pid    = { mdb.string, "<unknown>", "rw" },
-             policy = { mdb.string, "relaxed"  , "rw" }
+             policy = { mdb.string, "relaxed"  , "rw" },
+             name   = { mdb.string, "<unknown>", "rw" },
          }
     }
 end
