@@ -50,6 +50,7 @@
 #define RESOURCE_MAX        (sizeof(mrp_resource_mask_t) * 8)
 #define ATTRIBUTE_MAX       (sizeof(mrp_attribute_mask_t) * 8)
 #define NAME_LENGTH          24
+#define ATTR_LENGTH          64
 
 #define RSETID_IDX           0
 #define AUTOREL_IDX          1
@@ -695,7 +696,7 @@ static int resource_user_create_table(mrp_resource_def_t *rdef)
 
         col->name   = atd->name;
         col->type   = atd->type;
-        col->length = (col->type == mqi_string) ? NAME_LENGTH : 0;
+        col->length = (col->type == mqi_string) ? ATTR_LENGTH : 0;
         col->flags  = 0;
     }
 
