@@ -178,7 +178,7 @@ application_class {
     name     = "phone",
     priority = 6 ,
     modal    = false,
-    share    = true ,
+    share    = false,
     order    = "lifo"
 }
 application_class {
