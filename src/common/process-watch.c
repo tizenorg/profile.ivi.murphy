@@ -1283,7 +1283,10 @@ static void post_task_events(mrp_list_hook_t *list, mrp_proc_event_type_t events
             e->what = PROC_EVENT_COMM;
             e->event_data.comm.process_pid  = pid;
             e->event_data.comm.process_tgid = tgid;
-            strcpy(e->event_data.comm.comm, comm);
+
+            /* Copy the string and make sure we are null-terminated */
+            strncpy(e->event_data.comm.comm, comm, sizeof(e->event_data.comm.comm));
+            e->event_data.comm.comm[sizeof(e->event_data.comm.comm) - 1] = '\0';
 
             mrp_list_append(list, &evt->hook);
         }
