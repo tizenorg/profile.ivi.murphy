@@ -32,7 +32,7 @@
 Summary: Resource policy framework
 Name: murphy
 Version: 0.0.74
-Release: 1
+Release: 0
 License: BSD-3-Clause
 Group: System/Service
 URL: http://01.org/murphy/
@@ -96,7 +96,7 @@ This package contains the basic Murphy daemon.
 %package devel
 Summary: The header files and libraries needed for Murphy development
 Group: System/Libraries
-Requires: %{name} = %{version}
+Requires: %{name} = %{version}-%{release}
 Requires: libjson-devel
 
 %description devel
@@ -113,7 +113,7 @@ This package contains documentation.
 %package pulse
 Summary: Murphy PulseAudio mainloop integration
 Group: System/Libraries
-Requires: %{name} = %{version}
+Requires: %{name} = %{version}-%{release}
 
 %description pulse
 This package contains the Murphy PulseAudio mainloop integration runtime files.
@@ -121,8 +121,8 @@ This package contains the Murphy PulseAudio mainloop integration runtime files.
 %package pulse-devel
 Summary: Murphy PulseAudio mainloop integration development files
 Group: System/Libraries
-Requires: %{name}-pulse = %{version}
-Requires: %{name} = %{version}
+Requires: %{name}-pulse = %{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 
 %description pulse-devel
 This package contains the Murphy PulseAudio mainloop integration development
@@ -133,7 +133,7 @@ files.
 %package ecore
 Summary: Murphy EFL/ecore mainloop integration
 Group: System/Libraries
-Requires: %{name} = %{version}
+Requires: %{name} = %{version}-%{release}
 
 %description ecore
 This package contains the Murphy EFL/ecore mainloop integration runtime files.
@@ -141,8 +141,8 @@ This package contains the Murphy EFL/ecore mainloop integration runtime files.
 %package ecore-devel
 Summary: Murphy EFL/ecore mainloop integration development files
 Group: System/Libraries
-Requires: %{name}-ecore = %{version}
-Requires: %{name} = %{version}
+Requires: %{name}-ecore = %{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 
 %description ecore-devel
 This package contains the Murphy EFL/ecore mainloop integration development
@@ -153,7 +153,7 @@ files.
 %package glib
 Summary: Murphy glib mainloop integration
 Group: System/Libraries
-Requires: %{name} = %{version}
+Requires: %{name} = %{version}-%{release}
 
 %description glib
 This package contains the Murphy glib mainloop integration runtime files.
@@ -161,8 +161,8 @@ This package contains the Murphy glib mainloop integration runtime files.
 %package glib-devel
 Summary: Murphy glib mainloop integration development files
 Group: System/Libraries
-Requires: %{name}-glib = %{version}
-Requires: %{name} = %{version}
+Requires: %{name}-glib = %{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 
 %description glib-devel
 This package contains the Murphy glib mainloop integration development
@@ -173,7 +173,7 @@ files.
 %package qt
 Summary: Murphy Qt mainloop integration
 Group: System/Libraries
-Requires: %{name} = %{version}
+Requires: %{name} = %{version}-%{release}
 
 %description qt
 This package contains the Murphy Qt mainloop integration runtime files.
@@ -181,8 +181,8 @@ This package contains the Murphy Qt mainloop integration runtime files.
 %package qt-devel
 Summary: Murphy Qt mainloop integration development files
 Group: System/Libraries
-Requires: %{name}-qt = %{version}
-Requires: %{name} = %{version}
+Requires: %{name}-qt = %{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 
 %description qt-devel
 This package contains the Murphy Qt mainloop integration development
@@ -192,7 +192,7 @@ files.
 %package gam
 Summary: Murphy support for Genivi Audio Manager
 Group: System/Libraries
-Requires: %{name} = %{version}
+Requires: %{name} = %{version}-%{release}
 
 %description gam
 This package contains the Murphy plugins for necessary for supporting
@@ -201,7 +201,7 @@ Genivi Audio Manager.
 %package gam-devel
 Summary: Murphy support for Genivi Audio Manager development files
 Group: System/Libraries
-Requires: %{name}-gam = %{version}
+Requires: %{name}-gam = %{version}-%{release}
 
 %description gam-devel
 This package contains development files for Murphy Genivi Audio Manager
@@ -210,8 +210,8 @@ plugins.
 %package tests
 Summary: Various test binaries for Murphy
 Group: System/Testing
-Requires: %{name} = %{version}
-Requires: %{name} = %{version}
+Requires: %{name} = %{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 
 %description tests
 This package contains various test binaries for Murphy.
