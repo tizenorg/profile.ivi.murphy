@@ -1020,9 +1020,10 @@ static void surface_destination_rectangle_callback(void *data,
          * wayland messages but hopefully will not end up in a infinite
          * loop ...
          */
-        if ((sf->requested_x <= MAX_COORDINATE && x != sf->requested_x ) ||
-            (sf->requested_y <= MAX_COORDINATE && y != sf->requested_y ) ||
-            (width != sf->requested_width) || (height != sf->requested_height))
+        if (sf->layerid == 1 /* "Application" */ &&
+            ((sf->requested_x <= MAX_COORDINATE && x != sf->requested_x ) ||
+             (sf->requested_y <= MAX_COORDINATE && y != sf->requested_y ) ||
+             (width != sf->requested_width) || (height != sf->requested_height)))
         {
             /*
              * If our original requested width/height are zero,
