@@ -982,6 +982,8 @@ static void surface_destination_rectangle_callback(void *data,
     mrp_wayland_t *wl;
     mrp_glm_window_manager_t *wm;
     mrp_wayland_window_update_t u;
+    mrp_wayland_layer_t *layer;
+    mrp_wayland_layer_type_t layer_type;
     char buf[256];
     bool commit_needed = false;
 
@@ -1020,9 +1022,16 @@ static void surface_destination_rectangle_callback(void *data,
          * wayland messages but hopefully will not end up in a infinite
          * loop ...
          */
-        if ((sf->requested_x <= MAX_COORDINATE && x != sf->requested_x ) ||
-            (sf->requested_y <= MAX_COORDINATE && y != sf->requested_y ) ||
-            (width != sf->requested_width) || (height != sf->requested_height))
+        if ((layer = mrp_wayland_layer_find_by_id(wl, sf->layerid)))
+            layer_type = layer->type;
+        else
+            layer_type = MRP_WAYLAND_LAYER_TYPE_UNKNOWN;
+
+
+        if ((layer_type == MRP_WAYLAND_LAYER_APPLICATION) &&
+            ((sf->requested_x <= MAX_COORDINATE && x != sf->requested_x ) ||
+             (sf->requested_y <= MAX_COORDINATE && y != sf->requested_y ) ||
+             (width != sf->requested_width)||(height != sf->requested_height)))
         {
             /*
              * If our original requested width/height are zero,
